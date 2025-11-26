@@ -36,12 +36,12 @@ interface ProfessorFormProps {
 }
 
 const ProfessorForm: React.FC<ProfessorFormProps> = ({ professor, onSave, onClose }) => {
-  const { academies, graduations } = useContext(AppContext);
+  const { academies, graduations, user } = useContext(AppContext);
   const [formData, setFormData] = useState({
     name: '',
     fjjpe_registration: '',
     cpf: '',
-    academyId: '',
+    academyId: user?.role === 'academy_admin' ? user.academyId || '' : (professor?.academyId || ''),
     graduationId: '',
     blackBeltDate: '',
     ...professor,
@@ -79,13 +79,15 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({ professor, onSave, onClos
         <Input label="CPF" name="cpf" value={formData.cpf} onChange={handleChange} required />
         {cpfError && <p className="text-sm text-red-500 mt-1">{cpfError}</p>}
       </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Academia</label>
-        <select name="academyId" value={formData.academyId} onChange={handleChange} required className={selectStyles}>
-          <option value="">Selecione a Academia</option>
-          {academies.map(ac => <option key={ac.id} value={ac.id}>{ac.name}</option>)}
-        </select>
-      </div>
+      {user?.role === 'general_admin' && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Academia</label>
+            <select name="academyId" value={formData.academyId} onChange={handleChange} required className={selectStyles}>
+              <option value="">Selecione a Academia</option>
+              {academies.map(ac => <option key={ac.id} value={ac.id}>{ac.name}</option>)}
+            </select>
+          </div>
+      )}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Graduação</label>
         <select name="graduationId" value={formData.graduationId} onChange={handleChange} required className={selectStyles}>

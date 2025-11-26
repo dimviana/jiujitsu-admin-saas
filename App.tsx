@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { AppProvider, AppContext } from './context/AppContext';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
@@ -19,6 +19,13 @@ type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financ
 const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
   const { user, themeSettings, students, users, schedules, graduations, updateStudentPayment, logout } = useContext(AppContext);
+
+  // Redirecionar para dashboard após login
+  useEffect(() => {
+    if (user && (page === 'home' || page === 'login')) {
+        setPage('dashboard');
+    }
+  }, [user, page]);
 
   // Not logged in logic
   if (!user) {

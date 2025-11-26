@@ -38,7 +38,7 @@ interface StudentFormProps {
 }
 
 const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) => {
-    const { academies, graduations } = useContext(AppContext);
+    const { academies, graduations, user } = useContext(AppContext);
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -49,7 +49,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
         phone: '',
         address: '',
         beltId: '',
-        academyId: '',
+        academyId: user?.role === 'academy_admin' ? user.academyId || '' : (student?.academyId || ''),
         firstGraduationDate: '',
         lastPromotionDate: '',
         paymentDueDateDay: 10,
@@ -127,13 +127,15 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
                     {graduations.sort((a,b) => a.rank - b.rank).map(grad => <option key={grad.id} value={grad.id}>{grad.name}</option>)}
                 </select>
             </div>
-             <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Academia</label>
-                <select name="academyId" value={formData.academyId} onChange={handleChange} required className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-md px-3 py-2 focus:ring-amber-500 focus:border-amber-500">
-                    <option value="">Selecione a Academia</option>
-                    {academies.map(ac => <option key={ac.id} value={ac.id}>{ac.name}</option>)}
-                </select>
-            </div>
+             {user?.role === 'general_admin' && (
+                 <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Academia</label>
+                    <select name="academyId" value={formData.academyId} onChange={handleChange} required className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-md px-3 py-2 focus:ring-amber-500 focus:border-amber-500">
+                        <option value="">Selecione a Academia</option>
+                        {academies.map(ac => <option key={ac.id} value={ac.id}>{ac.name}</option>)}
+                    </select>
+                </div>
+             )}
             <Input label="Data da Primeira Graduação" name="firstGraduationDate" type="date" value={formData.firstGraduationDate} onChange={handleChange} required />
             <Input label="Data da Última Promoção" name="lastPromotionDate" type="date" value={formData.lastPromotionDate} onChange={handleChange} />
             <Input label="Dia do Vencimento da Mensalidade" name="paymentDueDateDay" type="number" min="1" max="31" value={formData.paymentDueDateDay} onChange={handleChange} required />
@@ -600,14 +602,7 @@ const StudentsPage: React.FC = () => {
                     title={`Dashboard de ${dashboardStudent.name}`}
                     size="4xl"
                 >
-                    <StudentDashboard 
-                        student={dashboardStudent} 
-                        students={students}
-                        graduations={graduations}
-                        schedules={schedules}
-                        themeSettings={themeSettings}
-                        updateStudentPayment={updateStudentPayment}
-                    />
+                    <StudentDashboard student={dashboardStudent} />
                 </Modal>
             )}
         </div>
