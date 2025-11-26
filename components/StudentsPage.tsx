@@ -499,7 +499,9 @@ const StudentsPage: React.FC = () => {
                                                     <span className="font-medium text-slate-700">{belt.name}</span>
                                                     {/* Visual Indicator for Kids Belt */}
                                                     {belt.type === 'kids' && (
-                                                        <Baby className="w-4 h-4 ml-1 text-pink-400" title="Graduação Infantil" />
+                                                        <span title="Graduação Infantil">
+                                                            <Baby className="w-4 h-4 ml-1 text-pink-400" />
+                                                        </span>
                                                     )}
                                                 </div>
                                             </div>
