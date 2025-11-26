@@ -14,8 +14,9 @@ import AttendancePage from './components/AttendancePage';
 import Login from './components/Login';
 import { SCHEDULES } from './constants'; // Fallback
 import Notification from './components/ui/Notification';
+import ProfilePage from './components/ProfilePage';
 
-type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'student-schedule' | 'student-financial' | 'student-progress' | 'settings';
+type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'settings' | 'profile';
 
 const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
@@ -34,7 +35,10 @@ const AppContent: React.FC = () => {
           if (page === 'login') {
               return <Login />;
           }
-          return <PublicPage settings={themeSettings} schedules={schedules.length ? schedules : SCHEDULES} onLoginClick={() => setPage('login')} />;
+          if (themeSettings.publicPageEnabled) {
+             return <PublicPage settings={themeSettings} schedules={schedules.length ? schedules : SCHEDULES} onLoginClick={() => setPage('login')} />;
+          }
+          return <Login />;
       }
       // Logged in logic
       return (
@@ -67,8 +71,7 @@ const AppContent: React.FC = () => {
             {page === 'graduation' && <GraduationsPage />}
             {page === 'ai-coach' && <AICoach students={students} />}
             {page === 'settings' && <SettingsPage />}
-            
-            {(page === 'student-schedule') && <SchedulesPage />}
+            {page === 'profile' && <ProfilePage />}
           </Layout>
       );
   }
