@@ -139,30 +139,42 @@ const deleteHandler = (table) => async (req, res) => {
 };
 
 app.post('/api/students', async (req, res) => {
-    const s = req.body;
+    const data = req.body;
     try {
-        // Handle medals serialization
-        if (s.medals && typeof s.medals === 'object') {
-            s.medals = JSON.stringify(s.medals);
+        // --- Data Sanitization ---
+        if (data.medals && typeof data.medals === 'object') {
+            data.medals = JSON.stringify(data.medals);
+        }
+        for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate']) {
+            if (data[key] === '') data[key] = null;
+        }
+        if (data.hasOwnProperty('isCompetitor')) {
+            data.isCompetitor = data.isCompetitor ? 1 : 0;
         }
 
-        if (s.id) { // UPDATE logic
-            const { id, ...studentData } = s;
-            if (!studentData.password) {
-                delete studentData.password; // Don't wipe password if not provided
+        if (data.id) { // UPDATE logic
+            const { id, ...updateData } = data;
+            if (updateData.password === '' || updateData.password === undefined) {
+                delete updateData.password;
             }
-
-            const updateFields = Object.keys(studentData).map(key => `\`${key}\` = ?`).join(', ');
-            const updateValues = Object.values(studentData);
+            const updateFields = Object.keys(updateData).map(key => `\`${key}\` = ?`).join(', ');
+            const updateValues = Object.values(updateData);
 
             if (updateFields) {
                 await pool.query(`UPDATE students SET ${updateFields} WHERE id = ?`, [...updateValues, id]);
             }
             res.json({ success: true, id });
+
         } else { // INSERT logic
             const id = `student_${Date.now()}`;
-            const studentData = { ...s, id, paymentStatus: s.paymentStatus || 'unpaid' };
-            
+            const studentData = { 
+                paymentStatus: 'unpaid', 
+                stripes: 0,
+                isCompetitor: 0,
+                medals: '{}',
+                ...data,
+                id, 
+            };
             const keys = Object.keys(studentData).map(key => `\`${key}\``).join(',');
             const placeholders = Object.keys(studentData).map(() => '?').join(',');
             const values = Object.values(studentData);
@@ -171,8 +183,8 @@ app.post('/api/students', async (req, res) => {
             res.json({ success: true, id });
         }
     } catch(e) { 
-        console.error("Error saving student:", e); 
-        res.status(500).send(e.message); 
+        console.error("Error saving student:", e.message); 
+        res.status(500).json({ message: e.message }); 
     }
 });
 app.delete('/api/students/:id', deleteHandler('students'));
