@@ -18,7 +18,6 @@ app.use(cors());
 app.use(express.json());
 
 // Serve static files from the React build
-// Explicitly set Content-Type for .js/.mjs files to avoid MIME type errors (application/octet-stream)
 app.use(express.static(path.join(__dirname, 'dist'), {
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
@@ -42,41 +41,27 @@ const pool = mysql.createPool({
 
 // --- API Routes ---
 
-// Auth
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     try {
-        // Check Users table
         const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
-        
         if (users.length > 0) {
-            // In production, check hashed password here
             await pool.query('INSERT INTO activity_logs (id, actorId, action, timestamp, details) VALUES (?, ?, ?, ?, ?)', 
-                [`log_${Date.now()}`, users[0].id, 'Login', new Date(), 'Login realizado com sucesso.']);
-            
+                [`log_${Date.now()}`, users[0].id, 'Login', new Date(), 'Login successful.']);
             return res.json({ user: users[0] });
         }
 
-        // Check Students (for student portal)
         const [students] = await pool.query('SELECT * FROM students WHERE email = ? OR cpf = ?', [email, email]);
         if (students.length > 0 && (students[0].password === password || !students[0].password)) {
              const student = students[0];
-             const userObj = {
-                id: `user_${student.id}`,
-                name: student.name,
-                email: student.email,
-                role: 'student',
-                academyId: student.academyId,
-                studentId: student.id,
-                birthDate: student.birthDate
-            };
+             const userObj = { id: `user_${student.id}`, name: student.name, email: student.email, role: 'student', academyId: student.academyId, studentId: student.id, birthDate: student.birthDate };
             return res.json({ user: userObj });
         }
 
-        res.status(401).json({ message: 'Usuário ou senha inválidos' });
+        res.status(401).json({ message: 'User or password invalid' });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Erro no servidor' });
+        res.status(500).json({ message: 'Server error' });
     }
 });
 
@@ -88,41 +73,26 @@ app.post('/api/register', async (req, res) => {
         const academyId = `academy_${Date.now()}`;
         const userId = `user_${Date.now()}`;
 
-        await conn.query(
-            'INSERT INTO academies (id, name, address, responsible, responsibleRegistration, email, password) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [academyId, name, address, responsible, responsibleRegistration, email, password]
-        );
-
-        await conn.query(
-            'INSERT INTO users (id, name, email, role, academyId) VALUES (?, ?, ?, ?, ?)',
-            [userId, responsible, email, 'academy_admin', academyId]
-        );
+        await conn.query('INSERT INTO academies (id, name, address, responsible, responsibleRegistration, email, password) VALUES (?, ?, ?, ?, ?, ?, ?)', [academyId, name, address, responsible, responsibleRegistration, email, password]);
+        await conn.query('INSERT INTO users (id, name, email, role, academyId) VALUES (?, ?, ?, ?, ?)', [userId, responsible, email, 'academy_admin', academyId]);
 
         await conn.commit();
         res.json({ success: true });
     } catch (error) {
         await conn.rollback();
         console.error(error);
-        res.status(500).json({ message: 'Erro ao registrar academia' });
+        res.status(500).json({ message: 'Error registering academy' });
     } finally {
         conn.release();
     }
 });
 
-// Data Getters
 app.get('/api/initial-data', async (req, res) => {
     try {
         const [students] = await pool.query('SELECT * FROM students');
-        const parsedStudents = students.map(s => ({
-            ...s,
-            isCompetitor: Boolean(s.isCompetitor),
-            medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 }
-        }));
-
+        const parsedStudents = students.map(s => ({ ...s, isCompetitor: Boolean(s.isCompetitor), medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 } }));
         const [payments] = await pool.query('SELECT * FROM payment_history');
-        parsedStudents.forEach(s => {
-            s.paymentHistory = payments.filter(p => p.studentId === s.id);
-        });
+        parsedStudents.forEach(s => { s.paymentHistory = payments.filter(p => p.studentId === s.id); });
 
         const [users] = await pool.query('SELECT * FROM users');
         const [academies] = await pool.query('SELECT * FROM academies');
@@ -130,48 +100,28 @@ app.get('/api/initial-data', async (req, res) => {
         const [professors] = await pool.query('SELECT * FROM professors');
         const [schedules] = await pool.query('SELECT * FROM class_schedules');
         const [assistants] = await pool.query('SELECT * FROM schedule_assistants');
-        
-        const parsedSchedules = schedules.map(s => ({
-            ...s,
-            assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId)
-        }));
+        const parsedSchedules = schedules.map(s => ({ ...s, assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId) }));
 
         const [attendance] = await pool.query('SELECT * FROM attendance_records');
         const [logs] = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100');
         const [settings] = await pool.query('SELECT * FROM theme_settings LIMIT 1');
-
+        
         let parsedSettings = settings[0] || {};
-        parsedSettings.useGradient = Boolean(parsedSettings.useGradient);
-        parsedSettings.publicPageEnabled = Boolean(parsedSettings.publicPageEnabled);
-        parsedSettings.socialLoginEnabled = Boolean(parsedSettings.socialLoginEnabled);
+        parsedSettings = { ...parsedSettings, useGradient: Boolean(parsedSettings.useGradient), publicPageEnabled: Boolean(parsedSettings.publicPageEnabled), socialLoginEnabled: Boolean(parsedSettings.socialLoginEnabled) };
 
-        res.json({
-            students: parsedStudents,
-            users,
-            academies,
-            graduations,
-            professors,
-            schedules: parsedSchedules,
-            attendanceRecords: attendance,
-            activityLogs: logs,
-            themeSettings: parsedSettings
-        });
+        res.json({ students: parsedStudents, users, academies, graduations, professors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Erro ao buscar dados' });
+        res.status(500).json({ message: 'Error fetching data' });
     }
 });
 
-// Generic CRUD Helpers
 const createHandler = (table) => async (req, res) => {
     try {
         const data = req.body;
-        // FIX: Escape column names with backticks to support reserved keywords like 'rank' or 'name'
         const keys = Object.keys(data).map(key => `\`${key}\``);
         const values = Object.values(data).map(v => typeof v === 'object' ? JSON.stringify(v) : v);
-        const placeholders = keys.map(() => '?').join(',');
-        
-        await pool.query(`REPLACE INTO ${table} (${keys.join(',')}) VALUES (${placeholders})`, values);
+        await pool.query(`REPLACE INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values);
         res.json({ success: true });
     } catch (error) {
         console.error(`Error in ${table}:`, error);
@@ -188,20 +138,42 @@ const deleteHandler = (table) => async (req, res) => {
     }
 };
 
-// --- Specific Entity Routes ---
-
 app.post('/api/students', async (req, res) => {
     const s = req.body;
-    const medals = JSON.stringify(s.medals || {});
-    const id = s.id || `student_${Date.now()}`;
     try {
-        await pool.query(
-            `REPLACE INTO students (id, name, email, password, birthDate, cpf, fjjpe_registration, phone, address, beltId, academyId, firstGraduationDate, lastPromotionDate, paymentStatus, paymentDueDateDay, imageUrl, stripes, isCompetitor, lastCompetition, medals) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, s.name, s.email, s.password, s.birthDate, s.cpf, s.fjjpe_registration, s.phone, s.address, s.beltId, s.academyId, s.firstGraduationDate, s.lastPromotionDate, s.paymentStatus, s.paymentDueDateDay, s.imageUrl, s.stripes, s.isCompetitor, s.lastCompetition, medals]
-        );
-        res.json({ success: true, id });
-    } catch(e) { console.error(e); res.status(500).send(e.message); }
+        // Handle medals serialization
+        if (s.medals && typeof s.medals === 'object') {
+            s.medals = JSON.stringify(s.medals);
+        }
+
+        if (s.id) { // UPDATE logic
+            const { id, ...studentData } = s;
+            if (!studentData.password) {
+                delete studentData.password; // Don't wipe password if not provided
+            }
+
+            const updateFields = Object.keys(studentData).map(key => `\`${key}\` = ?`).join(', ');
+            const updateValues = Object.values(studentData);
+
+            if (updateFields) {
+                await pool.query(`UPDATE students SET ${updateFields} WHERE id = ?`, [...updateValues, id]);
+            }
+            res.json({ success: true, id });
+        } else { // INSERT logic
+            const id = `student_${Date.now()}`;
+            const studentData = { ...s, id, paymentStatus: s.paymentStatus || 'unpaid' };
+            
+            const keys = Object.keys(studentData).map(key => `\`${key}\``).join(',');
+            const placeholders = Object.keys(studentData).map(() => '?').join(',');
+            const values = Object.values(studentData);
+            
+            await pool.query(`INSERT INTO students (${keys}) VALUES (${placeholders})`, values);
+            res.json({ success: true, id });
+        }
+    } catch(e) { 
+        console.error("Error saving student:", e); 
+        res.status(500).send(e.message); 
+    }
 });
 app.delete('/api/students/:id', deleteHandler('students'));
 
@@ -212,9 +184,7 @@ app.post('/api/students/payment', async (req, res) => {
         await conn.beginTransaction();
         await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', [status, studentId]);
         if (status === 'paid') {
-            const payId = `pay_${Date.now()}`;
-            await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', 
-                [payId, studentId, new Date(), amount]);
+            await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', [`pay_${Date.now()}`, studentId, new Date(), amount]);
         }
         await conn.commit();
         res.json({ success: true });
@@ -226,24 +196,15 @@ app.post('/api/students/payment', async (req, res) => {
     }
 });
 
-// Professor Handler: Manages ID generation and date formatting
 app.post('/api/professors', async (req, res) => {
     try {
         const data = req.body;
-        // Generate ID if missing
-        if (!data.id) {
-            data.id = `prof_${Date.now()}`;
-        }
-        // Handle empty date string for SQL compatibility
-        if (!data.blackBeltDate) {
-            data.blackBeltDate = null;
-        }
-
-        const keys = Object.keys(data).map(key => `\`${key}\``);
-        const values = Object.values(data).map(v => typeof v === 'object' ? JSON.stringify(v) : v);
-        const placeholders = keys.map(() => '?').join(',');
+        if (!data.id) data.id = `prof_${Date.now()}`;
+        if (!data.blackBeltDate) data.blackBeltDate = null;
         
-        await pool.query(`REPLACE INTO professors (${keys.join(',')}) VALUES (${placeholders})`, values);
+        const keys = Object.keys(data).map(key => `\`${key}\``);
+        const values = Object.values(data);
+        await pool.query(`REPLACE INTO professors (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values);
         res.json({ success: true });
     } catch (error) {
         console.error(`Error in professors:`, error);
@@ -302,18 +263,8 @@ app.post('/api/graduations/reorder', async (req, res) => {
 app.post('/api/settings', async (req, res) => {
     const s = req.body;
     try {
-        await pool.query(`UPDATE theme_settings SET 
-            systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, 
-            cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?,
-            useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?,
-            publicPageEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?,
-            socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?
-            WHERE id = 1`,
-            [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
-             s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
-             s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount,
-             s.publicPageEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs,
-             s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion]
+        await pool.query(`UPDATE theme_settings SET systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?, useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?, publicPageEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?, socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=? WHERE id = 1`,
+            [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2, s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount, s.publicPageEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs, s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion]
         );
         res.json({ success: true });
     } catch(e) { console.error(e); res.status(500).send(e.message); }
@@ -321,7 +272,6 @@ app.post('/api/settings', async (req, res) => {
 
 app.post('/api/attendance', createHandler('attendance_records'));
 
-// Catch-all for React Router
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
