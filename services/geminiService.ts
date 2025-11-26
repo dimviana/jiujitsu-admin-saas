@@ -3,7 +3,8 @@ import { Student } from "../types";
 
 // Read API Key from Vite environment variables (compatible with REACT_APP_ prefix)
 // Using safe access with optional chaining to prevent runtime crashes
-const apiKey = import.meta.env?.REACT_APP_API_KEY || (typeof process !== 'undefined' && process.env?.REACT_APP_API_KEY) || ""; 
+// Cast import.meta to any to avoid TS error when vite types aren't globally available
+const apiKey = (import.meta as any).env?.REACT_APP_API_KEY || (typeof process !== 'undefined' && process.env?.REACT_APP_API_KEY) || ""; 
 const ai = new GoogleGenAI({ apiKey });
 
 export const generateStudentFeedback = async (student: Student, performanceNote: string) => {
