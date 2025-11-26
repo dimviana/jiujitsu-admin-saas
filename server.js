@@ -166,7 +166,8 @@ app.get('/api/initial-data', async (req, res) => {
 const createHandler = (table) => async (req, res) => {
     try {
         const data = req.body;
-        const keys = Object.keys(data);
+        // FIX: Escape column names with backticks to support reserved keywords like 'rank' or 'name'
+        const keys = Object.keys(data).map(key => `\`${key}\``);
         const values = Object.values(data).map(v => typeof v === 'object' ? JSON.stringify(v) : v);
         const placeholders = keys.map(() => '?').join(',');
         
