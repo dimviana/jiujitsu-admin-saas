@@ -37,7 +37,7 @@ export const generateStudentFeedback = async (student: Student, performanceNote:
 export const generateClassPlan = async (level: string, focus: string) => {
     // FIX: Removed API key check as per guidelines assuming it's pre-configured.
     try {
-        const model = 'gemini-2.5-pro';
+        const model = 'gemini-2.5-flash'; // Using flash for this task
         const prompt = `
             Create a Jiu-Jitsu class plan (90 minutes).
             Level: ${level}
@@ -64,3 +64,32 @@ export const generateClassPlan = async (level: string, focus: string) => {
         return null;
     }
 }
+
+export const generateWorkoutPlan = async (student: Student, goal: string, equipment: string) => {
+    try {
+        const model = 'gemini-2.5-flash';
+        const prompt = `
+            Create a personalized physical conditioning workout plan for a Jiu-Jitsu student.
+            
+            Student Profile:
+            Name: ${student.name}
+            Rank: ${student.beltId}
+            Goal: ${goal}
+            Available Equipment: ${equipment}
+
+            Structure the response as a list of exercises with sets and reps.
+            Include a brief explanation of why this plan suits their Jiu-Jitsu game.
+            Output in Portuguese.
+        `;
+
+        const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+        });
+        
+        return response.text;
+    } catch (error) {
+        console.error("Error generating workout plan:", error);
+        return "Não foi possível gerar o plano de treino no momento.";
+    }
+};
