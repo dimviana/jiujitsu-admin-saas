@@ -1,6 +1,8 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
+import { PhotoUploadModal } from './ui/PhotoUploadModal'; // FIX: Changed from alias to relative path
+import { Student } from '../types';
 
 const calculateTrainingTime = (startDateString?: string): string => {
     if (!startDateString) return "N/A";
@@ -25,7 +27,8 @@ const calculateTrainingTime = (startDateString?: string): string => {
 
 
 const ProfilePage: React.FC = () => {
-    const { user, students, academies, graduations, loading } = useContext(AppContext);
+    const { user, students, academies, graduations, loading, saveStudent } = useContext(AppContext);
+    const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
     if (loading) {
         return <div className="text-center text-slate-800">Carregando perfil...</div>;
@@ -40,13 +43,36 @@ const ProfilePage: React.FC = () => {
     const graduation = graduations.find(g => g.id === studentData.beltId);
     const trainingTime = calculateTrainingTime(studentData.firstGraduationDate);
 
+    const handleSavePhoto = async (base64Image: string) => {
+        // When saving from profile page, we update the student immediately
+        await saveStudent({
+            ...studentData,
+            imageUrl: base64Image
+        });
+        setIsPhotoModalOpen(false);
+    };
+
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-slate-800">Meu Perfil</h1>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <Card className="lg:col-span-1">
                     <div className="flex flex-col items-center text-center">
-                        <img className="w-24 h-24 rounded-full mb-4 border-2 border-amber-500" src={studentData.imageUrl || `https://ui-avatars.com/api/?name=${studentData.name}`} alt="User" />
+                        <button 
+                            onClick={() => setIsPhotoModalOpen(true)}
+                            className="relative group mb-4 rounded-full overflow-hidden border-2 border-amber-500 w-32 h-32 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+                            title="Alterar foto de perfil"
+                        >
+                            <img 
+                                className="w-full h-full object-cover" 
+                                src={studentData.imageUrl || `https://ui-avatars.com/api/?name=${studentData.name}`} 
+                                alt="User" 
+                            />
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-all duration-200">
+                                <span className="text-white opacity-0 group-hover:opacity-100 font-medium text-sm">Alterar</span>
+                            </div>
+                        </button>
+                        
                         <h2 className="text-2xl font-bold text-slate-800">{studentData.name}</h2>
                         <p className="text-slate-500">{academy?.name}</p>
                         <div className="mt-4 flex items-center bg-slate-100 px-3 py-1 rounded-full">
@@ -73,6 +99,16 @@ const ProfilePage: React.FC = () => {
                     </div>
                 </Card>
             </div>
+
+            {isPhotoModalOpen && (
+                <PhotoUploadModal
+                    isOpen={isPhotoModalOpen}
+                    onClose={() => setIsPhotoModalOpen(false)}
+                    onSave={handleSavePhoto}
+                    currentImage={studentData.imageUrl}
+                    title="Atualizar Foto de Perfil"
+                />
+            )}
         </div>
     );
 };
