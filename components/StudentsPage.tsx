@@ -6,7 +6,9 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward } from 'lucide-react';
+import { Award as IconAward, FileText } from 'lucide-react'; // Import FileText icon
+import { PhotoUploadModal } from './ui/PhotoUploadModal'; // Import reusable modal
+import { generateCertificate } from '../services/certificateService'; // Import service
 
 const validateCPF = (cpf: string): boolean => {
     if (typeof cpf !== 'string') return false;
@@ -39,6 +41,9 @@ interface StudentFormProps {
 
 const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) => {
     const { academies, graduations, user } = useContext(AppContext);
+    const [preview, setPreview] = useState<string | null>(student?.imageUrl || null);
+    const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -96,11 +101,25 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
             setCpfError('Por favor, insira um CPF válido.');
             return;
         }
-        onSave(formData as any);
+        onSave({ ...formData, imageUrl: preview || undefined } as any);
     };
 
     return (
+        <>
         <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-col items-center mb-4">
+                <div className="relative w-24 h-24 rounded-full overflow-hidden bg-slate-100 border-2 border-slate-200 mb-2">
+                    {preview ? (
+                        <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-slate-400">Sem Foto</div>
+                    )}
+                </div>
+                <Button type="button" variant="secondary" size="sm" onClick={() => setIsPhotoModalOpen(true)}>
+                    Alterar Foto
+                </Button>
+            </div>
+
             <Input label="Nome" name="name" value={formData.name} onChange={handleChange} required />
             <Input label="Email" name="email" type="email" value={formData.email} onChange={handleChange} required />
             <Input 
@@ -173,64 +192,17 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
                 <Button type="submit" disabled={!!cpfError}>Salvar</Button>
             </div>
         </form>
+        {isPhotoModalOpen && (
+            <PhotoUploadModal
+                isOpen={isPhotoModalOpen}
+                onClose={() => setIsPhotoModalOpen(false)}
+                onSave={(img) => { setPreview(img); }}
+                currentImage={preview || undefined}
+            />
+        )}
+        </>
     );
 };
-
-interface PhotoUploadModalProps {
-    student: Student;
-    onSave: (student: Student, imageUrl: string) => void;
-    onClose: () => void;
-}
-
-const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({ student, onSave, onClose }) => {
-    const [preview, setPreview] = useState<string | null>(student.imageUrl || null);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const selectedFile = e.target.files[0];
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setPreview(reader.result as string);
-            };
-            reader.readAsDataURL(selectedFile);
-        }
-    };
-
-    const handleSaveClick = () => {
-        if (preview) {
-            onSave(student, preview);
-        }
-    };
-
-    return (
-        <Modal isOpen={true} onClose={onClose} title={`Alterar foto de ${student.name}`}>
-            <div className="flex flex-col items-center">
-                <img
-                    src={preview || `https://i.pravatar.cc/150?u=${student.cpf}`}
-                    alt="Preview"
-                    className="w-40 h-40 rounded-full object-cover mb-4 border-4 border-slate-200"
-                />
-                <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    ref={fileInputRef}
-                    className="hidden"
-                />
-                <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
-                    Escolher Arquivo
-                </Button>
-                <p className="text-sm text-slate-500 mt-2">Selecione uma imagem do seu computador.</p>
-            </div>
-            <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-slate-200">
-                <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
-                <Button type="button" onClick={handleSaveClick} disabled={!preview}>Salvar Foto</Button>
-            </div>
-        </Modal>
-    );
-};
-
 
 const calculateAge = (birthDate: string): number => {
     if (!birthDate) return 0;
@@ -386,6 +358,18 @@ const StudentsPage: React.FC = () => {
             };
             await saveStudent(promotedStudentData);
         }
+    };
+
+    const handleGenerateCertificate = (student: Student) => {
+        const graduation = graduations.find(g => g.id === student.beltId);
+        const academy = academies.find(a => a.id === student.academyId);
+        
+        if (!graduation || !academy) {
+            alert("Dados de graduação ou academia não encontrados.");
+            return;
+        }
+        
+        generateCertificate(student, graduation, academy);
     };
 
     const handleOpenModal = (student: Partial<Student> | null = null) => {
@@ -569,6 +553,14 @@ const StudentsPage: React.FC = () => {
                                         <div className="mt-4 pt-4 border-t border-slate-200/60 flex justify-end gap-2">
                                             <Button size="sm" variant="secondary" onClick={() => setDashboardStudent(student)}>Dashboard</Button>
                                             <Button size="sm" variant="secondary" onClick={() => handleOpenModal(student)}>Editar</Button>
+                                            <Button 
+                                                size="sm" 
+                                                variant="secondary" 
+                                                onClick={() => handleGenerateCertificate(student)} 
+                                                title="Gerar Certificado"
+                                            >
+                                                <FileText className="w-4 h-4" />
+                                            </Button>
                                             <Button size="sm" variant="danger" onClick={() => handleDeleteStudent(student.id)}>Excluir</Button>
                                         </div>
                                     </div>
