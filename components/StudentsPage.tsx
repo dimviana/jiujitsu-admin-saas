@@ -602,7 +602,14 @@ const StudentsPage: React.FC = () => {
                     title={`Dashboard de ${dashboardStudent.name}`}
                     size="4xl"
                 >
-                    <StudentDashboard student={dashboardStudent} />
+                    <StudentDashboard 
+                        student={dashboardStudent} 
+                        students={students} 
+                        graduations={graduations} 
+                        schedules={schedules} 
+                        themeSettings={themeSettings} 
+                        updateStudentPayment={updateStudentPayment} 
+                    />
                 </Modal>
             )}
         </div>
