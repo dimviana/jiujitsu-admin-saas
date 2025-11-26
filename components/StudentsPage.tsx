@@ -101,6 +101,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
             setCpfError('Por favor, insira um CPF válido.');
             return;
         }
+        // Include the preview image in the saved data
         onSave({ ...formData, imageUrl: preview || undefined } as any);
     };
 
@@ -116,7 +117,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
                     )}
                 </div>
                 <Button type="button" variant="secondary" size="sm" onClick={() => setIsPhotoModalOpen(true)}>
-                    Alterar Foto
+                    {preview ? 'Alterar Foto' : 'Adicionar Foto'}
                 </Button>
             </div>
 
@@ -192,12 +193,18 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
                 <Button type="submit" disabled={!!cpfError}>Salvar</Button>
             </div>
         </form>
+        
+        {/* Image Upload Modal specifically for the Form context */}
         {isPhotoModalOpen && (
             <PhotoUploadModal
                 isOpen={isPhotoModalOpen}
                 onClose={() => setIsPhotoModalOpen(false)}
-                onSave={(img) => { setPreview(img); }}
+                onSave={(img) => { 
+                    setPreview(img); 
+                    setIsPhotoModalOpen(false);
+                }}
                 currentImage={preview || undefined}
+                title="Selecionar Foto do Aluno"
             />
         )}
         </>
