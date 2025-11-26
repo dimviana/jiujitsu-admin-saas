@@ -219,19 +219,37 @@ app.post('/api/students/payment', async (req, res) => {
     }
 });
 
+// FIX: Updated Professor Handler to use INSERT ... ON DUPLICATE KEY UPDATE
+// This prevents foreign key errors caused by REPLACE INTO deleting referenced rows
 app.post('/api/professors', async (req, res) => {
     try {
         const data = req.body;
-        if (!data.id) data.id = `prof_${Date.now()}`;
+        
+        // Generate ID if creating new
+        if (!data.id) {
+            data.id = `prof_${Date.now()}`;
+        }
+        
+        // Sanitize date
         if (data.blackBeltDate && typeof data.blackBeltDate === 'string') {
             data.blackBeltDate = data.blackBeltDate.split('T')[0];
         } else if (data.blackBeltDate === '' || data.blackBeltDate === undefined) {
             data.blackBeltDate = null;
         }
         
-        const keys = Object.keys(data).map(key => `\`${key}\``);
+        const keys = Object.keys(data);
         const values = Object.values(data);
-        await pool.query(`REPLACE INTO professors (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values);
+        
+        // Construct ON DUPLICATE KEY UPDATE clause
+        const updateClause = keys.map(key => `\`${key}\` = VALUES(\`${key}\`)`).join(', ');
+        const placeholders = keys.map(() => '?').join(',');
+        const escapedKeys = keys.map(key => `\`${key}\``).join(',');
+
+        await pool.query(
+            `INSERT INTO professors (${escapedKeys}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`,
+            values
+        );
+        
         res.json({ success: true });
     } catch (error) {
         console.error(`Error in professors:`, error);

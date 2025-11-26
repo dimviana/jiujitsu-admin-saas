@@ -1,4 +1,3 @@
-
 -- Esquema do Banco de Dados para o Jiu-Jitsu Hub SAAS (MySQL)
 
 CREATE TABLE IF NOT EXISTS theme_settings (
@@ -42,7 +41,7 @@ CREATE TABLE IF NOT EXISTS academies (
     responsible TEXT,
     responsibleRegistration TEXT,
     professorId VARCHAR(255),
-    imageUrl TEXT,
+    imageUrl LONGTEXT,
     email VARCHAR(255) UNIQUE,
     password TEXT
 );
@@ -65,7 +64,7 @@ CREATE TABLE IF NOT EXISTS professors (
     cpf VARCHAR(255),
     academyId VARCHAR(255),
     graduationId VARCHAR(255),
-    imageUrl TEXT,
+    imageUrl LONGTEXT,
     blackBeltDate DATE,
     FOREIGN KEY (academyId) REFERENCES academies(id),
     FOREIGN KEY (graduationId) REFERENCES graduations(id)
@@ -87,7 +86,7 @@ CREATE TABLE IF NOT EXISTS students (
     lastPromotionDate DATE,
     paymentStatus VARCHAR(255) CHECK(paymentStatus IN ('paid', 'unpaid')),
     paymentDueDateDay INTEGER,
-    imageUrl TEXT,
+    imageUrl LONGTEXT,
     stripes INTEGER DEFAULT 0,
     isCompetitor BOOLEAN DEFAULT FALSE,
     lastCompetition TEXT,
