@@ -1,68 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { Student, ThemeSettings, User, Graduation } from '../types';
-import { Users, DollarSign, Upload, X } from 'lucide-react';
+import React, { useState, useMemo, useContext } from 'react';
+import { Student } from '../types';
+import { Users, DollarSign, Upload } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-
-// --- UI Components ---
-const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-    <div className={`bg-white p-6 rounded-xl shadow-sm border border-slate-100 ${className}`}>
-        {children}
-    </div>
-);
-
-const Button: React.FC<{ children: React.ReactNode; onClick?: () => void; type?: 'button' | 'submit'; variant?: 'primary' | 'secondary' | 'danger' | 'success'; size?: 'sm' | 'md'; disabled?: boolean; className?: string }> = 
-    ({ children, onClick, type = 'button', variant = 'primary', size = 'md', disabled = false, className = '' }) => {
-    
-    const baseStyle = "rounded-lg font-medium transition-colors flex items-center justify-center focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed";
-    const variants = {
-        primary: "bg-primary text-white hover:bg-amber-600",
-        secondary: "bg-slate-100 text-slate-700 hover:bg-slate-200",
-        danger: "bg-red-100 text-red-700 hover:bg-red-200",
-        success: "bg-green-100 text-green-700 hover:bg-green-200"
-    };
-    const sizes = {
-        sm: "px-3 py-1.5 text-xs",
-        md: "px-4 py-2 text-sm"
-    };
-    return (
-        <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`}>
-            {children}
-        </button>
-    );
-};
-
-const Input: React.FC<{ label: string; value: string | number; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; type?: string; step?: string; min?: string }> = 
-    ({ label, value, onChange, type = "text", ...props }) => (
-    <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
-        <input 
-            className="w-full border-slate-200 rounded-lg p-2.5 focus:ring-primary focus:border-primary border outline-none transition-all"
-            value={value}
-            onChange={onChange}
-            type={type}
-            {...props}
-        />
-    </div>
-);
-
-const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }> = ({ isOpen, onClose, title, children }) => {
-    if (!isOpen) return null;
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center p-6 border-b border-slate-100">
-                    <h3 className="text-xl font-bold text-slate-800">{title}</h3>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-                        <X className="w-6 h-6" />
-                    </button>
-                </div>
-                <div className="p-6">
-                    {children}
-                </div>
-            </div>
-        </div>
-    );
-};
+import Card from './ui/Card';
+import Button from './ui/Button';
+import Input from './ui/Input';
+import Modal from './ui/Modal';
+import { AppContext } from '../context/AppContext';
 
 // --- Charts ---
 const FinancialStatusChart: React.FC<{ paidCount: number; unpaidCount: number }> = ({ paidCount, unpaidCount }) => {
@@ -218,16 +162,8 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
     </Card>
 );
 
-interface FinancialProps {
-    students: Student[];
-    user: User;
-    graduations: Graduation[];
-    themeSettings: ThemeSettings;
-    setThemeSettings: (settings: ThemeSettings) => void;
-    updateStudentPayment: (studentId: string, status: 'paid' | 'unpaid') => Promise<void>;
-}
-
-export const Financial: React.FC<FinancialProps> = ({ students, user, graduations, themeSettings, setThemeSettings, updateStudentPayment }) => {
+export const Financial: React.FC = () => {
+    const { students, user, graduations, themeSettings, setThemeSettings, updateStudentPayment } = useContext(AppContext);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [updatedCard, setUpdatedCard] = useState<string | null>(null);

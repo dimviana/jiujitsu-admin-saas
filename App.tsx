@@ -56,16 +56,7 @@ const AppContent: React.FC = () => {
             )}
             {page === 'students' && <StudentsPage />}
             {page === 'professors' && <ProfessorsPage />}
-            {page === 'financial' && (
-                <Financial 
-                    students={students} 
-                    user={user}
-                    graduations={graduations}
-                    themeSettings={themeSettings} 
-                    setThemeSettings={() => {}} 
-                    updateStudentPayment={updateStudentPayment}
-                />
-            )}
+            {page === 'financial' && <Financial />}
             {page === 'schedule' && <SchedulesPage />}
             {page === 'attendance' && <AttendancePage />}
             {page === 'graduation' && <GraduationsPage />}

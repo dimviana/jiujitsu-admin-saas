@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { generateClassPlan, generateStudentFeedback } from '../services/geminiService';
 import { Student } from '../types';
-import { Sparkles, BookOpen, UserCheck, Loader } from 'lucide-react';
+import { Sparkles, BookOpen, UserCheck, Loader, Activity as ActivityIcon } from 'lucide-react';
 
 interface AICoachProps {
     students: Student[];
@@ -177,9 +177,3 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
         </div>
     );
 };
-
-const ActivityIcon = ({className}: {className: string}) => (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </svg>
-)
