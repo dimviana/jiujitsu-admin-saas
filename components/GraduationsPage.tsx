@@ -1,10 +1,11 @@
 import React, { useState, useContext, FormEvent, useEffect, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { Graduation } from '../types';
+import { Graduation, Student } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
+import { ChevronDown, ChevronRight, UserCheck } from 'lucide-react';
 
 interface GraduationFormProps {
   graduation: Partial<Graduation> | null;
@@ -67,6 +68,7 @@ const GraduationForm: React.FC<GraduationFormProps> = ({ graduation, onSave, onC
 };
 
 const calculateAge = (birthDate: string): number => {
+    if (!birthDate) return 0;
     const today = new Date();
     const birthDateObj = new Date(birthDate);
     let age = today.getFullYear() - birthDateObj.getFullYear();
@@ -79,11 +81,12 @@ const calculateAge = (birthDate: string): number => {
 
 
 const GraduationsPage: React.FC = () => {
-  const { graduations, saveGraduation, deleteGraduation, updateGraduationRanks, loading, students, academies } = useContext(AppContext);
+  const { graduations, saveGraduation, deleteGraduation, updateGraduationRanks, loading, students, academies, attendanceRecords } = useContext(AppContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedGraduation, setSelectedGraduation] = useState<Partial<Graduation> | null>(null);
   const [localGraduations, setLocalGraduations] = useState<Graduation[]>([]);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setLocalGraduations([...graduations].sort((a,b) => a.rank - b.rank));
@@ -92,36 +95,89 @@ const GraduationsPage: React.FC = () => {
   const kidsGraduations = useMemo(() => localGraduations.filter(g => g.type === 'kids'), [localGraduations]);
   const adultGraduations = useMemo(() => localGraduations.filter(g => g.type === 'adult'), [localGraduations]);
   
-  const eligibleForNextBeltKids = useMemo(() => {
-    const allKidsGrads = graduations.filter(g => g.type === 'kids').sort((a, b) => a.rank - b.rank);
-    const adultBlueBelt = graduations.find(g => g.name === 'Azul');
+  const groupedEligibleStudents = useMemo(() => {
+    const grouped: Record<string, Array<{ student: Student, currentBelt: Graduation, nextBelt: Graduation, reason: string }>> = {};
+    
+    const allGrads = [...graduations].sort((a, b) => a.rank - b.rank);
+    const adultBlueBelt = graduations.find(g => g.name === 'Azul' && g.type === 'adult');
 
-    return students
-        .map(student => {
-            const age = calculateAge(student.birthDate || '');
-            if (age >= 16) {
-                // Special case: Green belt turning 16 is eligible for Blue
-                const currentBelt = graduations.find(g => g.id === student.beltId);
-                if (currentBelt?.name === 'Verde' && adultBlueBelt) {
-                     return { student, nextBelt: adultBlueBelt, reason: `Atingiu 16 anos` };
+    students.forEach(student => {
+        const currentBelt = allGrads.find(g => g.id === student.beltId);
+        if (!currentBelt) return;
+
+        const age = calculateAge(student.birthDate || '');
+        const promotionDate = student.lastPromotionDate || student.firstGraduationDate;
+        
+        let monthsInBelt = 0;
+        if (promotionDate) {
+            const pDate = new Date(promotionDate);
+            const now = new Date();
+            monthsInBelt = (now.getFullYear() - pDate.getFullYear()) * 12 + (now.getMonth() - pDate.getMonth());
+        }
+
+        // Logic for Kids
+        if (currentBelt.type === 'kids') {
+             // Special case: Green -> Blue at 16
+             if (currentBelt.name.includes('Verde') && age >= 16 && adultBlueBelt) {
+                 if (!grouped[adultBlueBelt.name]) grouped[adultBlueBelt.name] = [];
+                 grouped[adultBlueBelt.name].push({ student, currentBelt, nextBelt: adultBlueBelt, reason: "Atingiu 16 anos (transição para adulto)" });
+                 return;
+             }
+
+             const currentIndex = allGrads.findIndex(g => g.id === currentBelt.id);
+             const nextBelt = allGrads[currentIndex + 1];
+             
+             // Check if next belt exists and is still kids
+             if (nextBelt && nextBelt.type === 'kids') {
+                 // Check age requirement
+                 if (nextBelt.minAge && age >= nextBelt.minAge) {
+                     // Optional: Check time in belt if enforced for kids
+                     const timeReq = nextBelt.minTimeInMonths || 0;
+                     if (monthsInBelt >= timeReq) {
+                         if (!grouped[nextBelt.name]) grouped[nextBelt.name] = [];
+                         grouped[nextBelt.name].push({ 
+                             student, 
+                             currentBelt, 
+                             nextBelt, 
+                             reason: `Idade: ${age} anos | Tempo: ${monthsInBelt}/${timeReq} meses` 
+                         });
+                     }
+                 }
+             }
+        } 
+        // Logic for Adults
+        else if (currentBelt.type === 'adult') {
+            const currentIndex = allGrads.findIndex(g => g.id === currentBelt.id);
+            const nextBelt = allGrads[currentIndex + 1];
+
+            if (nextBelt && nextBelt.type === 'adult') {
+                const timeReq = currentBelt.minTimeInMonths; // Time required in CURRENT belt to go to next
+                
+                // Check Attendance (Example: > 70%)
+                const relevantRecords = attendanceRecords.filter(r => r.studentId === student.id && new Date(r.date) >= new Date(promotionDate || 0));
+                const presentCount = relevantRecords.filter(r => r.status === 'present').length;
+                const totalRecords = relevantRecords.length;
+                const attendanceRate = totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0;
+
+                if (monthsInBelt >= timeReq && attendanceRate >= 70) {
+                     if (!grouped[nextBelt.name]) grouped[nextBelt.name] = [];
+                     grouped[nextBelt.name].push({
+                         student,
+                         currentBelt,
+                         nextBelt,
+                         reason: `Tempo: ${monthsInBelt}/${timeReq} meses | Freq: ${Math.round(attendanceRate)}%`
+                     });
                 }
-                return null;
             }
-            
-            const currentBelt = allKidsGrads.find(g => g.id === student.beltId);
-            if (!currentBelt) return null; // Not in the kids system
-            
-            const currentBeltIndex = allKidsGrads.findIndex(g => g.id === currentBelt.id);
-            const nextBelt = allKidsGrads[currentBeltIndex + 1];
+        }
+    });
 
-            if (nextBelt && nextBelt.minAge && age >= nextBelt.minAge) {
-                 return { student, nextBelt, reason: `Atingiu ${nextBelt.minAge} anos` };
-            }
+    return grouped;
+  }, [students, graduations, attendanceRecords]);
 
-            return null;
-        })
-        .filter((item): item is NonNullable<typeof item> => item !== null);
-  }, [students, graduations]);
+  const toggleGroup = (group: string) => {
+      setOpenGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  };
 
 
   const handleOpenModal = (grad: Partial<Graduation> | null = null) => {
@@ -177,19 +233,19 @@ const GraduationsPage: React.FC = () => {
 
   const renderGraduationTable = (grads: Graduation[], title: string) => (
     <Card>
-        <h2 className="text-xl font-bold text-amber-600 mb-4">{title}</h2>
+        <h2 className="text-xl font-bold text-slate-800 mb-4">{title}</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="border-b border-slate-200">
+            <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
                 <th className="p-4 text-sm font-semibold text-slate-600">Ordem</th>
                 <th className="p-4 text-sm font-semibold text-slate-600">Nome</th>
                 <th className="p-4 text-sm font-semibold text-slate-600">Cor</th>
                 <th className="p-4 text-sm font-semibold text-slate-600">Requisito</th>
-                <th className="p-4 text-sm font-semibold text-slate-600">Ações</th>
+                <th className="p-4 text-sm font-semibold text-slate-600 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr><td colSpan={5} className="p-4 text-center">Carregando...</td></tr>
               ) : grads.map((grad) => (
@@ -200,21 +256,20 @@ const GraduationsPage: React.FC = () => {
                   onDragEnd={handleDragEnd}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => handleDrop(grad)}
-                  className={`border-b border-slate-100 hover:bg-slate-50 transition-opacity ${draggedId === grad.id ? 'opacity-30' : 'opacity-100'}`}
+                  className={`hover:bg-slate-50 transition-colors ${draggedId === grad.id ? 'opacity-30 bg-amber-50' : ''}`}
                   style={{ cursor: 'move' }}
                 >
-                  <td className="p-4 text-slate-700">{grad.rank}</td>
+                  <td className="p-4 text-slate-500 font-mono text-xs">{grad.rank}</td>
                   <td className="p-4 text-slate-800 font-medium">{grad.name}</td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <span className="w-6 h-6 rounded-full border border-slate-300" style={{ backgroundColor: grad.color }}></span>
-                      <span className="ml-3 text-slate-700 font-mono">{grad.color}</span>
+                      <span className="w-6 h-6 rounded-full border border-slate-200 shadow-sm" style={{ backgroundColor: grad.color }}></span>
                     </div>
                   </td>
-                  <td className="p-4 text-slate-700">
-                    {grad.type === 'kids' ? `Idade: ${grad.minAge} - ${grad.maxAge}` : `${grad.minTimeInMonths} meses`}
+                  <td className="p-4 text-slate-600 text-sm">
+                    {grad.type === 'kids' ? `${grad.minAge} - ${grad.maxAge} anos` : `${grad.minTimeInMonths} meses`}
                   </td>
-                  <td className="p-4 flex gap-2">
+                  <td className="p-4 flex gap-2 justify-end">
                     <Button variant="secondary" size="sm" onClick={() => handleOpenModal(grad)}>Editar</Button>
                     <Button variant="danger" size="sm" onClick={() => handleDelete(grad.id)}>Excluir</Button>
                   </td>
@@ -228,56 +283,89 @@ const GraduationsPage: React.FC = () => {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-slate-800">Gerenciar Graduações</h1>
         <Button onClick={() => handleOpenModal({ rank: localGraduations.length + 1 })}>Adicionar Graduação</Button>
       </div>
       
-      {renderGraduationTable(kidsGraduations, 'Graduações Infantis')}
-      {renderGraduationTable(adultGraduations, 'Graduações Adultos')}
+      {/* Eligibility Section */}
+      <Card className="bg-gradient-to-r from-slate-50 to-white border-l-4 border-l-amber-500">
+        <div className="flex items-center justify-between mb-6">
+            <div>
+                <h2 className="text-xl font-bold text-slate-800 flex items-center">
+                    <UserCheck className="w-6 h-6 mr-2 text-amber-500" />
+                    Alunos Elegíveis para Promoção
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                    Alunos que atingiram os requisitos mínimos de tempo e idade para a próxima faixa.
+                </p>
+            </div>
+        </div>
 
-      <Card>
-        <h2 className="text-xl font-bold text-amber-600 mb-4">Alunos Elegíveis para Próxima Faixa (Infantil)</h2>
-        <p className="text-sm text-slate-500 mb-6">
-          Alunos que atingiram a idade mínima para a próxima graduação infantil, ou que completaram 16 anos na faixa verde.
-        </p>
         {loading ? (
-          <div className="text-center p-4">Calculando elegibilidade...</div>
-        ) : eligibleForNextBeltKids.length > 0 ? (
+          <div className="text-center p-8 text-slate-400">Calculando elegibilidade...</div>
+        ) : Object.keys(groupedEligibleStudents).length > 0 ? (
           <div className="space-y-4">
-            {eligibleForNextBeltKids.map(({ student, nextBelt, reason }) => {
-              const currentBelt = graduations.find(g => g.id === student.beltId);
-              const academy = academies.find(a => a.id === student.academyId);
-              return (
-                <div key={student.id} className="flex flex-col sm:flex-row items-center p-3 bg-slate-50 rounded-lg border border-slate-200 gap-4">
-                  <img src={student.imageUrl || `https://i.pravatar.cc/150?u=${student.cpf}`} alt={student.name} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
-                  <div className="flex-grow w-full grid grid-cols-1 md:grid-cols-3 gap-4 items-center text-center sm:text-left">
-                    <div>
-                      <p className="font-bold text-slate-800">{student.name}</p>
-                      <p className="text-sm text-slate-500">{academy?.name || 'N/A'}</p>
-                    </div>
-                    <div className="text-center">
-                       <p className="font-semibold text-slate-700 flex items-center justify-center">
-                        <span className="w-3 h-3 rounded-full mr-2 border" style={{backgroundColor: currentBelt?.color}}></span> {currentBelt?.name}
-                         <span className="mx-2">&rarr;</span>
-                        <span className="w-3 h-3 rounded-full mr-2 border" style={{backgroundColor: nextBelt?.color}}></span> {nextBelt.name}
-                      </p>
-                      <p className="text-xs text-slate-500">Motivo: {reason}</p>
-                    </div>
-                    <div className="text-center">
-                        <p className="text-sm text-slate-700">Idade Atual</p>
-                        <p className="font-bold text-lg text-amber-600">{calculateAge(student.birthDate || '')} anos</p>
-                    </div>
-                  </div>
+            {Object.entries(groupedEligibleStudents).map(([beltName, students]) => (
+                <div key={beltName} className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                    <button 
+                        onClick={() => toggleGroup(beltName)}
+                        className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
+                    >
+                        <div className="flex items-center">
+                            <span className="font-bold text-slate-700 mr-3">Candidatos à {beltName}</span>
+                            <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full font-medium">{students.length} alunos</span>
+                        </div>
+                        {openGroups[beltName] ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
+                    </button>
+                    
+                    {openGroups[beltName] && (
+                        <div className="divide-y divide-slate-100">
+                            {students.map(({ student, currentBelt, nextBelt, reason }) => {
+                                const academy = academies.find(a => a.id === student.academyId);
+                                return (
+                                    <div key={student.id} className="p-4 flex flex-col sm:flex-row items-center justify-between hover:bg-slate-50 transition-colors">
+                                        <div className="flex items-center mb-3 sm:mb-0 w-full sm:w-auto">
+                                            <img src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} alt={student.name} className="w-10 h-10 rounded-full object-cover mr-4 border border-slate-200" />
+                                            <div>
+                                                <p className="font-bold text-slate-800">{student.name}</p>
+                                                <p className="text-xs text-slate-500">{academy?.name}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                                            <div className="text-right mr-4">
+                                                <div className="flex items-center justify-end text-sm text-slate-600">
+                                                    <span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: currentBelt.color}}></span>
+                                                    {currentBelt.name}
+                                                    <ChevronRight className="w-4 h-4 mx-1 text-slate-400" />
+                                                    <span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: nextBelt.color}}></span>
+                                                    <span className="font-bold text-slate-800">{nextBelt.name}</span>
+                                                </div>
+                                                <p className="text-xs text-green-600 font-medium mt-1">{reason}</p>
+                                            </div>
+                                            {/* In a real app, add a "Promote" button here linked to the student action */}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
-              );
-            })}
+            ))}
           </div>
         ) : (
-          <p className="text-center text-slate-500 py-4">Nenhum aluno elegível no momento.</p>
+          <div className="text-center py-10 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+              <p className="text-slate-500">Nenhum aluno elegível para promoção no momento.</p>
+          </div>
         )}
       </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {renderGraduationTable(kidsGraduations, 'Sistema Infantil (4-15 anos)')}
+          {renderGraduationTable(adultGraduations, 'Sistema Adulto (16+ anos)')}
+      </div>
 
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={selectedGraduation?.id ? 'Editar Graduação' : 'Adicionar Graduação'}>
         <GraduationForm graduation={selectedGraduation} onSave={handleSave} onClose={handleCloseModal} />

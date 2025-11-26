@@ -403,13 +403,15 @@ const StudentsPage: React.FC = () => {
         setStudentForPhoto(null);
     };
     
-    const handleSavePhoto = async (studentToUpdate: Student, newImageUrl: string) => {
-        const { id, name, email, birthDate, cpf, fjjpe_registration, phone, address, beltId, academyId, firstGraduationDate, paymentDueDateDay, stripes, lastPromotionDate, isCompetitor, lastCompetition, medals } = studentToUpdate;
-        await saveStudent({
-            id, name, email, birthDate, cpf, fjjpe_registration, phone, address, beltId, academyId, firstGraduationDate, paymentDueDateDay, stripes, lastPromotionDate, isCompetitor, lastCompetition, medals,
-            imageUrl: newImageUrl
-        });
-        handleClosePhotoModal();
+    const handleSavePhoto = async (img: string) => {
+        if (studentForPhoto) {
+            const { id, name, email, birthDate, cpf, fjjpe_registration, phone, address, beltId, academyId, firstGraduationDate, paymentDueDateDay, stripes, lastPromotionDate, isCompetitor, lastCompetition, medals } = studentForPhoto;
+            await saveStudent({
+                id, name, email, birthDate, cpf, fjjpe_registration, phone, address, beltId, academyId, firstGraduationDate, paymentDueDateDay, stripes, lastPromotionDate, isCompetitor, lastCompetition, medals,
+                imageUrl: img
+            });
+            handleClosePhotoModal();
+        }
     };
 
     return (
@@ -581,9 +583,11 @@ const StudentsPage: React.FC = () => {
             
             {isPhotoModalOpen && studentForPhoto && (
                 <PhotoUploadModal
-                    student={studentForPhoto}
+                    isOpen={isPhotoModalOpen}
+                    onClose={() => setIsPhotoModalOpen(false)}
                     onSave={handleSavePhoto}
-                    onClose={handleClosePhotoModal}
+                    currentImage={studentForPhoto.imageUrl}
+                    title="Atualizar Foto de Perfil"
                 />
             )}
 
