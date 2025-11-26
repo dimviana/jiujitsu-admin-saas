@@ -5,6 +5,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
     plugins: [react()],
+    base: '/', // Ensure absolute paths for assets
     envPrefix: 'REACT_APP_', // Compatibilidade com variáveis injetadas pelo script de deploy
     build: {
       outDir: 'dist',

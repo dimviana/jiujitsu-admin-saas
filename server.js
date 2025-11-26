@@ -16,8 +16,16 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
 // Serve static files from the React build
-app.use(express.static(path.join(__dirname, 'dist')));
+// Explicitly set Content-Type for .js files to avoid MIME type errors in some environments
+app.use(express.static(path.join(__dirname, 'dist'), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        }
+    }
+}));
 
 // Database Connection
 const pool = mysql.createPool({
