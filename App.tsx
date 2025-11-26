@@ -13,12 +13,13 @@ import GraduationsPage from './components/GraduationsPage';
 import AttendancePage from './components/AttendancePage';
 import Login from './components/Login';
 import { SCHEDULES } from './constants'; // Fallback
+import Notification from './components/ui/Notification';
 
 type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'student-schedule' | 'student-financial' | 'student-progress' | 'settings';
 
 const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
-  const { user, themeSettings, students, users, schedules, graduations, updateStudentPayment, logout } = useContext(AppContext);
+  const { user, themeSettings, students, users, schedules, graduations, updateStudentPayment, logout, notification, setNotification } = useContext(AppContext);
 
   // Redirecionar para dashboard após login
   useEffect(() => {
@@ -27,47 +28,56 @@ const AppContent: React.FC = () => {
     }
   }, [user, page]);
 
-  // Not logged in logic
-  if (!user) {
-      if (page === 'login') {
-          return <Login />;
+  const renderPage = () => {
+      // Not logged in logic
+      if (!user) {
+          if (page === 'login') {
+              return <Login />;
+          }
+          return <PublicPage settings={themeSettings} schedules={schedules.length ? schedules : SCHEDULES} onLoginClick={() => setPage('login')} />;
       }
-      return <PublicPage settings={themeSettings} schedules={schedules.length ? schedules : SCHEDULES} onLoginClick={() => setPage('login')} />;
+      // Logged in logic
+      return (
+          <Layout user={user} onLogout={() => { logout(); setPage('home'); }} onNavigate={(p) => setPage(p as Page)} currentPage={page}>
+            {page === 'dashboard' && (
+                <Dashboard 
+                    user={user} 
+                    students={students} 
+                    users={users} 
+                    schedules={schedules} 
+                    graduations={graduations}
+                    themeSettings={themeSettings}
+                    updateStudentPayment={updateStudentPayment}
+                />
+            )}
+            {page === 'students' && <StudentsPage />}
+            {page === 'professors' && <ProfessorsPage />}
+            {page === 'financial' && (
+                <Financial 
+                    students={students} 
+                    user={user}
+                    graduations={graduations}
+                    themeSettings={themeSettings} 
+                    setThemeSettings={() => {}} 
+                    updateStudentPayment={updateStudentPayment}
+                />
+            )}
+            {page === 'schedule' && <SchedulesPage />}
+            {page === 'attendance' && <AttendancePage />}
+            {page === 'graduation' && <GraduationsPage />}
+            {page === 'ai-coach' && <AICoach students={students} />}
+            {page === 'settings' && <SettingsPage />}
+            
+            {(page === 'student-schedule') && <SchedulesPage />}
+          </Layout>
+      );
   }
 
   return (
-      <Layout user={user} onLogout={() => { logout(); setPage('home'); }} onNavigate={(p) => setPage(p as Page)} currentPage={page}>
-        {page === 'dashboard' && (
-            <Dashboard 
-                user={user} 
-                students={students} 
-                users={users} 
-                schedules={schedules} 
-                graduations={graduations}
-                themeSettings={themeSettings}
-                updateStudentPayment={updateStudentPayment}
-            />
-        )}
-        {page === 'students' && <StudentsPage />}
-        {page === 'professors' && <ProfessorsPage />}
-        {page === 'financial' && (
-            <Financial 
-                students={students} 
-                user={user}
-                graduations={graduations}
-                themeSettings={themeSettings} 
-                setThemeSettings={() => {}} 
-                updateStudentPayment={updateStudentPayment}
-            />
-        )}
-        {page === 'schedule' && <SchedulesPage />}
-        {page === 'attendance' && <AttendancePage />}
-        {page === 'graduation' && <GraduationsPage />}
-        {page === 'ai-coach' && <AICoach students={students} />}
-        {page === 'settings' && <SettingsPage />}
-        
-        {(page === 'student-schedule') && <SchedulesPage />}
-      </Layout>
+    <>
+      {notification && <Notification notification={notification} onClose={() => setNotification(null)} />}
+      {renderPage()}
+    </>
   );
 };
 

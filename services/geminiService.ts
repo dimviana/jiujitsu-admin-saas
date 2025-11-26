@@ -1,14 +1,11 @@
 import { GoogleGenAI } from "@google/genai";
 import { Student } from "../types";
 
-// Read API Key from Vite environment variables (compatible with REACT_APP_ prefix)
-// Using safe access with optional chaining to prevent runtime crashes
-// Cast import.meta to any to avoid TS error when vite types aren't globally available
-const apiKey = (import.meta as any).env?.REACT_APP_API_KEY || (typeof process !== 'undefined' && process.env?.REACT_APP_API_KEY) || ""; 
-const ai = new GoogleGenAI({ apiKey });
+// FIX: Per coding guidelines, initialize GoogleGenAI with apiKey from process.env.API_KEY.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const generateStudentFeedback = async (student: Student, performanceNote: string) => {
-  if (!apiKey) return "Chave de API não configurada. Verifique o arquivo .env";
+  // FIX: Removed API key check as per guidelines assuming it's pre-configured.
   try {
     const model = 'gemini-2.5-flash';
     const prompt = `
@@ -38,7 +35,7 @@ export const generateStudentFeedback = async (student: Student, performanceNote:
 };
 
 export const generateClassPlan = async (level: string, focus: string) => {
-    if (!apiKey) return { warmup: "Erro API Key", drill: "Erro API Key", sparring: "Erro API Key" };
+    // FIX: Removed API key check as per guidelines assuming it's pre-configured.
     try {
         const model = 'gemini-2.5-flash';
         const prompt = `

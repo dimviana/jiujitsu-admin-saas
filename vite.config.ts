@@ -2,7 +2,9 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  // FIX: Replaced process.cwd() with '.' to resolve a TypeScript type error where 'cwd' was not found on 'process'.
+  // In a standard Vite setup, '.' resolves to the project root, which is the intended behavior.
+  const env = loadEnv(mode, '.', '');
   return {
     plugins: [react()],
     base: '/', // Ensure absolute paths for assets
@@ -21,10 +23,10 @@ export default defineConfig(({ mode }) => {
       }
     },
     define: {
-      // Define process.env to avoid "process is not defined" errors in browser
-      'process.env': {},
-      // Fallback específico para a chave da API
-      'process.env.REACT_APP_API_KEY': JSON.stringify(env.REACT_APP_API_KEY)
+      // FIX: Map REACT_APP_API_KEY to process.env.API_KEY to comply with Gemini API guidelines.
+      'process.env': {
+        API_KEY: JSON.stringify(env.REACT_APP_API_KEY)
+      },
     }
   };
 });

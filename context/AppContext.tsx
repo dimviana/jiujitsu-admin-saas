@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { MOCK_THEME } from '../constants';
 
+type NotificationType = { message: string; details: string; type: 'error' | 'success' };
+
 interface AppContextType {
     user: User | null;
     users: User[];
@@ -14,6 +16,8 @@ interface AppContextType {
     attendanceRecords: AttendanceRecord[];
     activityLogs: ActivityLog[];
     loading: boolean;
+    notification: NotificationType | null;
+    setNotification: (notification: NotificationType | null) => void;
     
     saveStudent: (student: Omit<Student, 'id' | 'paymentStatus' | 'lastSeen' | 'paymentHistory'> & { id?: string }) => Promise<void>;
     deleteStudent: (id: string) => Promise<void>;
@@ -48,6 +52,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [activityLogs, setActivityLogs] = React.useState<ActivityLog[]>([]);
     const [themeSettings, setLocalThemeSettings] = React.useState<ThemeSettings>(MOCK_THEME);
     const [loading, setLoading] = React.useState(false);
+    const [notification, setNotification] = React.useState<NotificationType | null>(null);
 
     const refreshData = async () => {
         setLoading(true);
@@ -69,6 +74,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
         } catch (error) {
             console.error("Failed to fetch initial data", error);
+            setNotification({ message: 'Erro de Rede', details: 'Não foi possível carregar os dados do sistema.', type: 'error'});
         }
         setLoading(false);
     };
@@ -88,18 +94,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, [themeSettings]);
 
     const login = async (email: string, pass: string) => {
-        const res = await fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: pass })
-        });
-        if (res.ok) {
-            const data = await res.json();
-            setUser(data.user);
-            await refreshData();
-        } else {
-            const err = await res.json();
-            throw new Error(err.message || 'Login falhou');
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: pass })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setUser(data.user);
+                await refreshData();
+                setNotification({ message: `Bem-vindo, ${data.user.name.split(' ')[0]}!`, details: 'Login realizado com sucesso.', type: 'success' });
+            } else {
+                const err = await res.json();
+                throw new Error(err.message || 'Login falhou');
+            }
+        } catch(e: any) {
+            setNotification({ message: 'Erro de Login', details: e.message, type: 'error' });
+            throw e;
         }
     };
 
@@ -108,117 +120,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const registerAcademy = async (data: any) => {
-        const res = await fetch('/api/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (res.ok) {
-            await login(data.email, data.password);
-            return { success: true };
-        } else {
-            return { success: false, message: 'Erro no cadastro' };
+        try {
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                await login(data.email, data.password);
+                 setNotification({ message: 'Cadastro Realizado', details: 'Sua academia foi cadastrada com sucesso!', type: 'success' });
+                return { success: true };
+            } else {
+                 const err = await res.json();
+                 throw new Error(err.message || 'Erro no cadastro');
+            }
+        } catch (e: any) {
+             setNotification({ message: 'Erro no Cadastro', details: e.message, type: 'error' });
+            return { success: false, message: e.message };
         }
     };
 
-    const logout = () => setUser(null);
-
-    const saveStudent = async (studentData: any) => {
-        await fetch('/api/students', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(studentData)
-        });
-        await refreshData();
+    const logout = () => {
+        setUser(null);
+        setNotification({ message: 'Até logo!', details: 'Você saiu do sistema com segurança.', type: 'success' });
     };
 
-    const deleteStudent = async (id: string) => {
-        await fetch(`/api/students/${id}`, { method: 'DELETE' });
-        await refreshData();
+    const handleApiCall = async (endpoint: string, method: string, body: any, successMessage: string) => {
+        try {
+            const res = await fetch(endpoint, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.message || 'Operação falhou');
+            }
+            setNotification({ message: 'Sucesso!', details: successMessage, type: 'success' });
+            await refreshData();
+        } catch (e: any) {
+            setNotification({ message: 'Erro na Operação', details: e.message, type: 'error' });
+        }
     };
 
-    const updateStudentPayment = async (id: string, status: 'paid' | 'unpaid') => {
-        await fetch('/api/students/payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ studentId: id, status, amount: themeSettings.monthlyFeeAmount })
-        });
-        await refreshData();
-    };
-
-    const setThemeSettings = async (settings: ThemeSettings) => {
-        await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(settings)
-        });
-        setLocalThemeSettings(settings);
-    };
-
-    const saveSchedule = async (schedule: any) => {
-        await fetch('/api/schedules', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(schedule)
-        });
-        await refreshData();
-    };
-
-    const deleteSchedule = async (id: string) => {
-        await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
-        await refreshData();
-    };
-
-    const saveProfessor = async (professor: any) => {
-        await fetch('/api/professors', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(professor)
-        });
-        await refreshData();
-    };
-
-    const deleteProfessor = async (id: string) => {
-        await fetch(`/api/professors/${id}`, { method: 'DELETE' });
-        await refreshData();
-    };
-
-    const saveGraduation = async (graduation: any) => {
-        await fetch('/api/graduations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(graduation)
-        });
-        await refreshData();
-    };
-
-    const deleteGraduation = async (id: string) => {
-        await fetch(`/api/graduations/${id}`, { method: 'DELETE' });
-        await refreshData();
-    };
-
-    const updateGraduationRanks = async (items: { id: string, rank: number }[]) => {
-        await fetch('/api/graduations/reorder', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(items)
-        });
-        await refreshData();
-    };
-
-    const saveAttendanceRecord = async (record: any) => {
-        await fetch('/api/attendance', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...record, id: record.id || `att_${Date.now()}_${Math.random().toString(36).substr(2,9)}` })
-        });
-        await refreshData();
-    };
+    const saveStudent = (studentData: any) => handleApiCall('/api/students', 'POST', studentData, 'Aluno salvo com sucesso.');
+    const deleteStudent = (id: string) => handleApiCall(`/api/students/${id}`, 'DELETE', null, 'Aluno removido com sucesso.');
+    const updateStudentPayment = (id: string, status: 'paid' | 'unpaid') => handleApiCall('/api/students/payment', 'POST', { studentId: id, status, amount: themeSettings.monthlyFeeAmount }, 'Status de pagamento atualizado.');
+    const setThemeSettings = (settings: ThemeSettings) => handleApiCall('/api/settings', 'POST', settings, 'Configurações salvas com sucesso.');
+    const saveSchedule = (schedule: any) => handleApiCall('/api/schedules', 'POST', schedule, 'Horário salvo com sucesso.');
+    const deleteSchedule = (id: string) => handleApiCall(`/api/schedules/${id}`, 'DELETE', null, 'Horário removido com sucesso.');
+    const saveProfessor = (professor: any) => handleApiCall('/api/professors', 'POST', professor, 'Professor salvo com sucesso.');
+    const deleteProfessor = (id: string) => handleApiCall(`/api/professors/${id}`, 'DELETE', null, 'Professor removido com sucesso.');
+    const saveGraduation = (graduation: any) => handleApiCall('/api/graduations', 'POST', { ...graduation, id: graduation.id || `grad_${Date.now()}`}, 'Graduação salva com sucesso.');
+    const deleteGraduation = (id: string) => handleApiCall(`/api/graduations/${id}`, 'DELETE', null, 'Graduação removida com sucesso.');
+    const updateGraduationRanks = (items: { id: string, rank: number }[]) => handleApiCall('/api/graduations/reorder', 'POST', items, 'Ordem das graduações atualizada.');
+    const saveAttendanceRecord = (record: any) => handleApiCall('/api/attendance', 'POST', { ...record, id: record.id || `att_${Date.now()}_${Math.random().toString(36).substr(2,9)}` }, 'Frequência salva com sucesso.');
 
     return (
         <AppContext.Provider value={{
             user, users, students, academies, schedules, graduations, professors,
-            themeSettings, attendanceRecords, activityLogs, loading,
+            themeSettings, attendanceRecords, activityLogs, loading, notification, setNotification,
             saveStudent, deleteStudent, updateStudentPayment, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord,
