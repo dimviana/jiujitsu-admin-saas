@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { generateClassPlan, generateStudentFeedback } from '../services/geminiService';
+import { generateClassPlan, generateStudentFeedback, generateWorkoutPlan } from '../services/geminiService'; // Import new function
 import { Student } from '../types';
-import { Sparkles, BookOpen, UserCheck, Loader, Activity } from 'lucide-react';
+import { Sparkles, BookOpen, UserCheck, Loader, Activity, Dumbbell } from 'lucide-react'; // Import Dumbbell icon
 
 interface AICoachProps {
     students: Student[];
 }
 
 export const AICoach: React.FC<AICoachProps> = ({ students }) => {
-    const [mode, setMode] = useState<'class' | 'student'>('class');
+    const [mode, setMode] = useState<'class' | 'student' | 'workout'>('class'); // Add 'workout' mode
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<any>(null);
 
@@ -19,6 +19,10 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
     // Student Feedback Inputs
     const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || '');
     const [performanceNote, setPerformanceNote] = useState('');
+
+    // Workout Plan Inputs
+    const [workoutGoal, setWorkoutGoal] = useState('Força e Explosão');
+    const [equipment, setEquipment] = useState('Peso do corpo e Kettlebells');
 
     const handleGenerateClass = async () => {
         setLoading(true);
@@ -38,6 +42,16 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
         setLoading(false);
     };
 
+    const handleGenerateWorkout = async () => {
+        const student = students.find(s => s.id === selectedStudentId);
+        if (!student) return;
+        setLoading(true);
+        setResult(null);
+        const plan = await generateWorkoutPlan(student, workoutGoal, equipment);
+        setResult(plan);
+        setLoading(false);
+    }
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 space-y-4">
@@ -47,29 +61,36 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
                         IA Coach
                     </h3>
                     
-                    <div className="flex space-x-2 mb-6">
+                    <div className="flex space-x-2 mb-6 overflow-x-auto pb-2 md:pb-0">
                         <button 
                             onClick={() => { setMode('class'); setResult(null); }}
-                            className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${mode === 'class' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                            className={`flex-1 py-2 px-3 text-sm rounded-lg border transition-colors whitespace-nowrap ${mode === 'class' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                         >
                             Plano de Aula
                         </button>
                         <button 
                             onClick={() => { setMode('student'); setResult(null); }}
-                            className={`flex-1 py-2 text-sm rounded-lg border transition-colors ${mode === 'student' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                            className={`flex-1 py-2 px-3 text-sm rounded-lg border transition-colors whitespace-nowrap ${mode === 'student' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                         >
-                            Feedback Aluno
+                            Feedback
+                        </button>
+                        <button 
+                            onClick={() => { setMode('workout'); setResult(null); }}
+                            className={`flex-1 py-2 px-3 text-sm rounded-lg border transition-colors whitespace-nowrap ${mode === 'workout' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                        >
+                            Treino Físico
                         </button>
                     </div>
 
-                    {mode === 'class' ? (
+                    {/* Mode: Class Plan */}
+                    {mode === 'class' && (
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Nível da Aula</label>
                                 <select 
                                     value={classLevel} 
                                     onChange={(e) => setClassLevel(e.target.value)}
-                                    className="w-full border-slate-200 rounded-lg text-sm"
+                                    className="w-full border-slate-200 rounded-lg text-sm p-2"
                                 >
                                     <option>Iniciante (Branca)</option>
                                     <option>Intermediário (Azul/Roxa)</option>
@@ -84,7 +105,7 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
                                     type="text" 
                                     value={classFocus}
                                     onChange={(e) => setClassFocus(e.target.value)}
-                                    className="w-full border-slate-200 rounded-lg text-sm"
+                                    className="w-full border-slate-200 rounded-lg text-sm p-2"
                                     placeholder="Ex: Raspagem de gancho"
                                 />
                             </div>
@@ -96,14 +117,17 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
                                 {loading ? <Loader className="w-4 h-4 animate-spin" /> : 'Gerar Plano'}
                             </button>
                         </div>
-                    ) : (
+                    )}
+
+                    {/* Mode: Student Feedback */}
+                    {mode === 'student' && (
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Selecionar Aluno</label>
                                 <select 
                                     value={selectedStudentId} 
                                     onChange={(e) => setSelectedStudentId(e.target.value)}
-                                    className="w-full border-slate-200 rounded-lg text-sm"
+                                    className="w-full border-slate-200 rounded-lg text-sm p-2"
                                 >
                                     {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
@@ -113,7 +137,7 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
                                 <textarea 
                                     value={performanceNote}
                                     onChange={(e) => setPerformanceNote(e.target.value)}
-                                    className="w-full border-slate-200 rounded-lg text-sm"
+                                    className="w-full border-slate-200 rounded-lg text-sm p-2"
                                     rows={3}
                                     placeholder="Ex: Está com dificuldade na defesa de passagens emborcadas..."
                                 />
@@ -124,6 +148,49 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
                                 className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center"
                             >
                                 {loading ? <Loader className="w-4 h-4 animate-spin" /> : 'Gerar Feedback'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Mode: Workout Plan */}
+                    {mode === 'workout' && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Selecionar Aluno</label>
+                                <select 
+                                    value={selectedStudentId} 
+                                    onChange={(e) => setSelectedStudentId(e.target.value)}
+                                    className="w-full border-slate-200 rounded-lg text-sm p-2"
+                                >
+                                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Objetivo do Treino</label>
+                                <input 
+                                    type="text" 
+                                    value={workoutGoal}
+                                    onChange={(e) => setWorkoutGoal(e.target.value)}
+                                    className="w-full border-slate-200 rounded-lg text-sm p-2"
+                                    placeholder="Ex: Ganho de Força, Cardio, Flexibilidade"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Equipamento Disponível</label>
+                                <input 
+                                    type="text" 
+                                    value={equipment}
+                                    onChange={(e) => setEquipment(e.target.value)}
+                                    className="w-full border-slate-200 rounded-lg text-sm p-2"
+                                    placeholder="Ex: Academia completa, Peso do corpo"
+                                />
+                            </div>
+                            <button 
+                                onClick={handleGenerateWorkout}
+                                disabled={loading}
+                                className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center"
+                            >
+                                {loading ? <Loader className="w-4 h-4 animate-spin" /> : 'Gerar Treino'}
                             </button>
                         </div>
                     )}
@@ -165,9 +232,10 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
                         </div>
                     )}
 
-                    {result && mode === 'student' && (
+                    {result && (mode === 'student' || mode === 'workout') && (
                         <div className="prose prose-slate max-w-none animate-fade-in-up">
-                            <div className="whitespace-pre-wrap text-slate-700 bg-slate-50 p-6 rounded-lg">
+                            <div className={`whitespace-pre-wrap text-slate-700 p-6 rounded-lg ${mode === 'workout' ? 'bg-green-50 border border-green-100' : 'bg-slate-50'}`}>
+                                {mode === 'workout' && <h4 className="font-bold text-green-800 mb-3 flex items-center"><Dumbbell className="w-5 h-5 mr-2"/> Plano de Condicionamento</h4>}
                                 {result}
                             </div>
                         </div>

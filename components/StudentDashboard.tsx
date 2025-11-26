@@ -238,6 +238,7 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string |
       <p className="text-xl font-bold text-slate-800">{value}</p>
     </div>
   </Card>
+  
 );
 
 interface StudentDashboardProps {

@@ -37,7 +37,7 @@ export const generateStudentFeedback = async (student: Student, performanceNote:
 export const generateClassPlan = async (level: string, focus: string) => {
     // FIX: Removed API key check as per guidelines assuming it's pre-configured.
     try {
-        const model = 'gemini-2.5-flash';
+        const model = 'gemini-2.5-pro';
         const prompt = `
             Create a Jiu-Jitsu class plan (90 minutes).
             Level: ${level}
