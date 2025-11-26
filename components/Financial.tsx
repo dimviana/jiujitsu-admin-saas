@@ -201,7 +201,6 @@ export const Financial: React.FC = () => {
 
             const dueDateThisMonth = new Date(today.getFullYear(), today.getMonth(), student.paymentDueDateDay);
             
-            // Adjust Logic: If due date is passed this month, consider next month or previous depending on payment status
             const lastDueDate = dueDateThisMonth > today 
                 ? new Date(today.getFullYear(), today.getMonth() - 1, student.paymentDueDateDay)
                 : dueDateThisMonth;

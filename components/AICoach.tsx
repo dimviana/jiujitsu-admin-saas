@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { generateClassPlan, generateStudentFeedback } from '../services/geminiService';
 import { Student } from '../types';
-import { Sparkles, BookOpen, UserCheck, Loader, Activity as ActivityIcon } from 'lucide-react';
+import { Sparkles, BookOpen, UserCheck, Loader, Activity } from 'lucide-react';
 
 interface AICoachProps {
     students: Student[];
@@ -151,7 +151,7 @@ export const AICoach: React.FC<AICoachProps> = ({ students }) => {
                     {result && mode === 'class' && (
                         <div className="space-y-6 animate-fade-in-up">
                             <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
-                                <h4 className="font-bold text-purple-800 flex items-center"><ActivityIcon className="w-4 h-4 mr-2"/> Aquecimento (Warm-up)</h4>
+                                <h4 className="font-bold text-purple-800 flex items-center"><Activity className="w-4 h-4 mr-2"/> Aquecimento (Warm-up)</h4>
                                 <p className="text-slate-700 mt-1 whitespace-pre-wrap">{result.warmup}</p>
                             </div>
                             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
