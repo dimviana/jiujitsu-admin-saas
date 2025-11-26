@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Student, Graduation } from '../types';
-import { Search, MoreVertical, MessageCircle, DollarSign, Award } from 'lucide-react';
+import { Search, MoreVertical, MessageCircle, Award } from 'lucide-react';
 
 interface StudentListProps {
   students: Student[];
@@ -8,7 +8,7 @@ interface StudentListProps {
   onUpdateStudent: (updatedStudent: Student) => void;
 }
 
-export const StudentList: React.FC<StudentListProps> = ({ students, graduations, onUpdateStudent }) => {
+export const StudentList: React.FC<StudentListProps> = ({ students, graduations }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBelt, setFilterBelt] = useState('all');
 

@@ -103,7 +103,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
     };
 
-    const loginGoogle = async (credential: string) => {
+    const loginGoogle = async () => {
         await login('androiddiviana@gmail.com', 'mock_google');
     };
 

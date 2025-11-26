@@ -2,7 +2,7 @@ import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import Card from '../ui/Card';
 
-const StudentAttendanceChart: React.FC<{ studentId: string }> = ({ studentId }) => {
+const StudentAttendanceChart: React.FC<{ studentId: string }> = () => {
     // Mock data based on studentId (randomized for demo)
     const data = [
       { name: 'Jan', classes: Math.floor(Math.random() * 15) + 5 },

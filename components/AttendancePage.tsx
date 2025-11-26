@@ -1,6 +1,6 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { Student, DayOfWeek } from '../types';
+import { DayOfWeek } from '../types';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
@@ -188,7 +188,7 @@ const CalendarView: React.FC = () => {
                 ))}
             </div>
             <div className="grid grid-cols-7 border-l border-slate-200">
-                {calendarCells.map((cell, index) => {
+                {calendarCells.map((cell) => {
                     const hasSchedule = cell.isCurrentMonth && scheduledDaysInMonth.has(cell.day);
                     
                     let cellBg = 'bg-white';

@@ -60,7 +60,7 @@ export const generateClassPlan = async (level: string, focus: string) => {
             config: { responseMimeType: "application/json" }
         });
         
-        return JSON.parse(response.text);
+        return JSON.parse(response.text || '{}');
     } catch (error) {
         console.error("Error generating class plan:", error);
         return null;

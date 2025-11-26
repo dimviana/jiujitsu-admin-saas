@@ -1,6 +1,6 @@
 import React, { useState, useContext, FormEvent, useEffect, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { Graduation, Student as StudentType } from '../types';
+import { Graduation } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
