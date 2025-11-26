@@ -18,11 +18,13 @@ app.use(cors());
 app.use(express.json());
 
 // Serve static files from the React build
-// Explicitly set Content-Type for .js files to avoid MIME type errors in some environments
+// Explicitly set Content-Type for .js/.mjs files to avoid MIME type errors (application/octet-stream)
 app.use(express.static(path.join(__dirname, 'dist'), {
     setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.js')) {
+        if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
             res.setHeader('Content-Type', 'application/javascript');
+        } else if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
         }
     }
 }));
