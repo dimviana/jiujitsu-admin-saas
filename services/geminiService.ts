@@ -1,13 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
 import { Student } from "../types";
 
-// NOTE: In a real production environment, never expose your API key in the frontend code.
-// Ideally, you would call your own backend, which then calls Gemini.
-// For this demo, we assume the environment variable or a safe context.
-const apiKey = process.env.API_KEY || "YOUR_API_KEY_HERE"; 
+// Read API Key from Vite environment variables (compatible with REACT_APP_ prefix)
+// Using safe access with optional chaining to prevent runtime crashes
+const apiKey = import.meta.env?.REACT_APP_API_KEY || (typeof process !== 'undefined' && process.env?.REACT_APP_API_KEY) || ""; 
 const ai = new GoogleGenAI({ apiKey });
 
 export const generateStudentFeedback = async (student: Student, performanceNote: string) => {
+  if (!apiKey) return "Chave de API não configurada. Verifique o arquivo .env";
   try {
     const model = 'gemini-2.5-flash';
     const prompt = `
@@ -32,11 +32,12 @@ export const generateStudentFeedback = async (student: Student, performanceNote:
     return response.text;
   } catch (error) {
     console.error("Error generating feedback:", error);
-    return "Não foi possível gerar o feedback da IA no momento. Verifique a chave de API.";
+    return "Não foi possível gerar o feedback da IA no momento.";
   }
 };
 
 export const generateClassPlan = async (level: string, focus: string) => {
+    if (!apiKey) return { warmup: "Erro API Key", drill: "Erro API Key", sparring: "Erro API Key" };
     try {
         const model = 'gemini-2.5-flash';
         const prompt = `

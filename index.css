@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --theme-primary: #f59e0b;
+  --theme-secondary: #111827;
+  --theme-accent: #f9a825;
+  --theme-bg: #f8fafc;
+  --theme-card-bg: #ffffff;
+  --theme-text-primary: #111827;
+}
+
+body {
+  background-color: var(--theme-bg);
+  color: var(--theme-text-primary);
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 20px;
+}
+
+/* Animations */
+@keyframes fade-in-down {
+    0% { opacity: 0; transform: translateY(-20px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in-up {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-down {
+    animation: fade-in-down 1s ease-out forwards;
+}
+.animate-fade-in-up {
+    animation: fade-in-up 1s ease-out 0.5s forwards;
+}
