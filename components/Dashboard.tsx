@@ -301,7 +301,8 @@ const CompetitionsCard: React.FC<CompetitionsCardProps> = ({ students, onCompeti
                                 </div>
                             </div>
                         </button>
-                )}})}
+                    );
+                })}
             </div>
         </Card>
     );
