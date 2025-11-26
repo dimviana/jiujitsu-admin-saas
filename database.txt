@@ -1,10 +1,6 @@
 
 -- Esquema do Banco de Dados para o Jiu-Jitsu Hub SAAS (MySQL)
 
--- -----------------------------------------------------
--- Tabela: theme_settings
--- Armazena todas as configurações de personalização do sistema.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS theme_settings (
     id INTEGER PRIMARY KEY AUTO_INCREMENT,
     logoUrl TEXT,
@@ -39,10 +35,6 @@ CREATE TABLE IF NOT EXISTS theme_settings (
     systemVersion TEXT
 );
 
--- -----------------------------------------------------
--- Tabela: academies
--- Armazena informações sobre cada academia/filial.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS academies (
     id VARCHAR(255) PRIMARY KEY,
     name TEXT NOT NULL,
@@ -52,13 +44,9 @@ CREATE TABLE IF NOT EXISTS academies (
     professorId VARCHAR(255),
     imageUrl TEXT,
     email VARCHAR(255) UNIQUE,
-    password TEXT -- Hash
+    password TEXT
 );
 
--- -----------------------------------------------------
--- Tabela: graduations
--- Define o sistema de faixas (graduações) do Jiu-Jitsu.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS graduations (
     id VARCHAR(255) PRIMARY KEY,
     name TEXT NOT NULL,
@@ -70,10 +58,6 @@ CREATE TABLE IF NOT EXISTS graduations (
     maxAge INTEGER
 );
 
--- -----------------------------------------------------
--- Tabela: professors
--- Armazena informações sobre os professores.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS professors (
     id VARCHAR(255) PRIMARY KEY,
     name TEXT NOT NULL,
@@ -87,10 +71,6 @@ CREATE TABLE IF NOT EXISTS professors (
     FOREIGN KEY (graduationId) REFERENCES graduations(id)
 );
 
--- -----------------------------------------------------
--- Tabela: students
--- Armazena os dados de todos os alunos.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS students (
     id VARCHAR(255) PRIMARY KEY,
     name TEXT NOT NULL,
@@ -111,15 +91,11 @@ CREATE TABLE IF NOT EXISTS students (
     stripes INTEGER DEFAULT 0,
     isCompetitor BOOLEAN DEFAULT FALSE,
     lastCompetition TEXT,
-    medals TEXT, -- JSON string
+    medals TEXT,
     FOREIGN KEY (beltId) REFERENCES graduations(id),
     FOREIGN KEY (academyId) REFERENCES academies(id)
 );
 
--- -----------------------------------------------------
--- Tabela: payment_history
--- Armazena o histórico de pagamentos de cada aluno.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS payment_history (
     id VARCHAR(255) PRIMARY KEY,
     studentId VARCHAR(255),
@@ -128,10 +104,6 @@ CREATE TABLE IF NOT EXISTS payment_history (
     FOREIGN KEY (studentId) REFERENCES students(id)
 );
 
--- -----------------------------------------------------
--- Tabela: class_schedules
--- Define a grade de horários das aulas.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS class_schedules (
     id VARCHAR(255) PRIMARY KEY,
     className TEXT NOT NULL,
@@ -145,10 +117,6 @@ CREATE TABLE IF NOT EXISTS class_schedules (
     FOREIGN KEY (academyId) REFERENCES academies(id)
 );
 
--- -----------------------------------------------------
--- Tabela: schedule_assistants
--- Tabela de junção para múltiplos assistentes em uma aula.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS schedule_assistants (
     scheduleId VARCHAR(255),
     assistantId VARCHAR(255),
@@ -157,10 +125,6 @@ CREATE TABLE IF NOT EXISTS schedule_assistants (
     FOREIGN KEY (assistantId) REFERENCES professors(id)
 );
 
--- -----------------------------------------------------
--- Tabela: attendance_records
--- Registra a frequência dos alunos nas aulas.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS attendance_records (
     id VARCHAR(255) PRIMARY KEY,
     studentId VARCHAR(255),
@@ -171,10 +135,6 @@ CREATE TABLE IF NOT EXISTS attendance_records (
     FOREIGN KEY (scheduleId) REFERENCES class_schedules(id)
 );
 
--- -----------------------------------------------------
--- Tabela: users
--- Armazena os usuários do sistema para controle de acesso.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(255) PRIMARY KEY,
     name TEXT NOT NULL,
@@ -186,10 +146,6 @@ CREATE TABLE IF NOT EXISTS users (
     refreshToken TEXT
 );
 
--- -----------------------------------------------------
--- Tabela: activity_logs
--- Registra as ações importantes realizadas no sistema.
--- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS activity_logs (
     id VARCHAR(255) PRIMARY KEY,
     actorId VARCHAR(255),
@@ -198,43 +154,9 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     details TEXT
 );
 
--- -----------------------------------------------------
--- Seed Data: Configurações Padrão
--- -----------------------------------------------------
-REPLACE INTO theme_settings (
-    id, logoUrl, systemName, primaryColor, secondaryColor, backgroundColor, 
-    cardBackgroundColor, buttonColor, buttonTextColor, iconColor, chartColor1, chartColor2, 
-    useGradient, reminderDaysBeforeDue, overdueDaysAfterDue, theme, monthlyFeeAmount, 
-    publicPageEnabled, heroHtml, aboutHtml, branchesHtml, footerHtml, 
-    copyrightText, systemVersion, socialLoginEnabled
-) VALUES (
-    1,
-    'https://tailwindui.com/img/logos/mark.svg?color=amber&shade=500',
-    'Jiu-Jitsu Hub',
-    '#f59e0b', '#111827', '#f8fafc', '#ffffff', '#f59e0b', '#ffffff', '#64748b', '#f9a825', '#475569',
-    1, 5, 5, 'light', 150.00, 1,
-    '<div class="relative bg-white text-slate-800 text-center py-20 px-4 overflow-hidden" style="background-image: url(\'https://images.unsplash.com/photo-1581009137052-c40971b51c69?q=80&w=2070&auto=format&fit=crop\'); background-size: cover; background-position: center;"> <div class="absolute inset-0 bg-white/50 backdrop-blur-sm"></div> <div class="relative z-10 container mx-auto"> <h1 class="text-5xl font-bold mb-4 animate-fade-in-down">Jiu-Jitsu: Arte, Disciplina, Respeito</h1> <p class="text-xl text-slate-600 animate-fade-in-up">Transforme sua vida dentro e fora do tatame. Junte-se à nossa família.</p> <a href="#schedule" class="mt-8 inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-8 rounded-lg transition duration-300">Encontre uma Aula</a> </div> </div>',
-    '<div id="quem-somos" class="py-16 bg-slate-50 px-4"> <div class="container mx-auto text-center"> <h2 class="text-4xl font-bold text-amber-600 mb-6">Quem Somos</h2> <p class="text-lg text-slate-600 max-w-3xl mx-auto"> Somos mais do que uma academia, somos uma comunidade unida pela paixão pelo Jiu-Jitsu. Com instrutores de classe mundial e um ambiente acolhedor, nossa missão é capacitar cada aluno a atingir seu potencial máximo. </p> </div> </div>',
-    '<div id="filiais" class="py-16 bg-white px-4"> <div class="container mx-auto text-center"> <h2 class="text-4xl font-bold text-amber-600 mb-10">Nossas Filiais</h2> <p class="text-slate-600">Aqui você pode listar suas academias.</p> </div> </div>',
-    '<div class="py-8 bg-slate-100 text-center text-slate-500"> <p>© 2024 Jiu-Jitsu Hub.</p> <p>Desenvolvido com a Arte Suave em mente.</p> </div>',
-    '© 2024 Jiu-Jitsu Hub', '1.2.0', 0
-);
+-- Seed Data
+REPLACE INTO theme_settings (id, logoUrl, systemName, primaryColor, secondaryColor, backgroundColor, cardBackgroundColor, buttonColor, buttonTextColor, iconColor, chartColor1, chartColor2, useGradient, reminderDaysBeforeDue, overdueDaysAfterDue, theme, monthlyFeeAmount, publicPageEnabled, heroHtml, aboutHtml, branchesHtml, footerHtml, copyrightText, systemVersion, socialLoginEnabled) VALUES (1, 'https://tailwindui.com/img/logos/mark.svg?color=amber&shade=500', 'Jiu-Jitsu Hub', '#f59e0b', '#111827', '#f8fafc', '#ffffff', '#f59e0b', '#ffffff', '#64748b', '#f9a825', '#475569', 1, 5, 5, 'light', 150.00, 1, '<div class="relative bg-white text-slate-800 text-center py-20 px-4 overflow-hidden" style="background-image: url(\'https://images.unsplash.com/photo-1581009137052-c40971b51c69?q=80&w=2070&auto=format&fit=crop\'); background-size: cover; background-position: center;"> <div class="absolute inset-0 bg-white/50 backdrop-blur-sm"></div> <div class="relative z-10 container mx-auto"> <h1 class="text-5xl font-bold mb-4 animate-fade-in-down">Jiu-Jitsu: Arte, Disciplina, Respeito</h1> <p class="text-xl text-slate-600 animate-fade-in-up">Transforme sua vida dentro e fora do tatame. Junte-se à nossa família.</p> <a href="#schedule" class="mt-8 inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-8 rounded-lg transition duration-300">Encontre uma Aula</a> </div> </div>', '<div id="quem-somos" class="py-16 bg-slate-50 px-4"> <div class="container mx-auto text-center"> <h2 class="text-4xl font-bold text-amber-600 mb-6">Quem Somos</h2> <p class="text-lg text-slate-600 max-w-3xl mx-auto"> Somos mais do que uma academia, somos uma comunidade unida pela paixão pelo Jiu-Jitsu. Com instrutores de classe mundial e um ambiente acolhedor, nossa missão é capacitar cada aluno a atingir seu potencial máximo. </p> </div> </div>', '<div id="filiais" class="py-16 bg-white px-4"> <div class="container mx-auto text-center"> <h2 class="text-4xl font-bold text-amber-600 mb-10">Nossas Filiais</h2> <p class="text-slate-600">Aqui você pode listar suas academias.</p> </div> </div>', '<div class="py-8 bg-slate-100 text-center text-slate-500"> <p>© 2024 Jiu-Jitsu Hub.</p> <p>Desenvolvido com a Arte Suave em mente.</p> </div>', '© 2024 Jiu-Jitsu Hub', '1.2.0', 0);
 
--- -----------------------------------------------------
--- Seed Data: Admin Geral
--- -----------------------------------------------------
-REPLACE INTO academies (id, name, email, password, responsible, responsibleRegistration)
-VALUES ('master_admin_academy_01', 'Academia Master', 'androiddiviana@gmail.com', 'HASH_DA_SENHA', 'Admin Geral', '000.000.000-00');
-
-REPLACE INTO users (id, name, email, role, academyId)
-VALUES ('master_admin_user_01', 'Admin Geral', 'androiddiviana@gmail.com', 'general_admin', 'master_admin_academy_01');
-
--- -----------------------------------------------------
--- Seed Data: Graduações Básicas
--- -----------------------------------------------------
-REPLACE INTO graduations (id, name, color, minTimeInMonths, rank, type) VALUES
-('white', 'Faixa Branca', '#ffffff', 0, 1, 'adult'),
-('blue', 'Faixa Azul', '#3b82f6', 24, 2, 'adult'),
-('purple', 'Faixa Roxa', '#a855f7', 18, 3, 'adult'),
-('brown', 'Faixa Marrom', '#78350f', 12, 4, 'adult'),
-('black', 'Faixa Preta', '#000000', 36, 5, 'adult');
+REPLACE INTO academies (id, name, email, password, responsible, responsibleRegistration) VALUES ('master_admin_academy_01', 'Academia Master', 'androiddiviana@gmail.com', '123', 'Admin Geral', '000.000.000-00');
+REPLACE INTO users (id, name, email, role, academyId) VALUES ('master_admin_user_01', 'Admin Geral', 'androiddiviana@gmail.com', 'general_admin', 'master_admin_academy_01');
+REPLACE INTO graduations (id, name, color, minTimeInMonths, rank, type) VALUES ('white', 'Faixa Branca', '#ffffff', 0, 1, 'adult'), ('blue', 'Faixa Azul', '#3b82f6', 24, 2, 'adult'), ('purple', 'Faixa Roxa', '#a855f7', 18, 3, 'adult'), ('brown', 'Faixa Marrom', '#78350f', 12, 4, 'adult'), ('black', 'Faixa Preta', '#000000', 36, 5, 'adult');

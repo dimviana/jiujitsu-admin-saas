@@ -12,7 +12,7 @@ import ProfessorsPage from './components/ProfessorsPage';
 import GraduationsPage from './components/GraduationsPage';
 import AttendancePage from './components/AttendancePage';
 import Login from './components/Login';
-import { SCHEDULES } from './constants'; // Fallback for Public Page before context loads
+import { SCHEDULES } from './constants'; // Fallback
 
 type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'student-schedule' | 'student-financial' | 'student-progress' | 'settings';
 
@@ -20,16 +20,14 @@ const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
   const { user, themeSettings, students, users, schedules, graduations, updateStudentPayment, logout } = useContext(AppContext);
 
-  // If not logged in
+  // Not logged in logic
   if (!user) {
       if (page === 'login') {
           return <Login />;
       }
-      // Public Page shows partial data or loading
       return <PublicPage settings={themeSettings} schedules={schedules.length ? schedules : SCHEDULES} onLoginClick={() => setPage('login')} />;
   }
 
-  // Logged in layout
   return (
       <Layout user={user} onLogout={() => { logout(); setPage('home'); }} onNavigate={(p) => setPage(p as Page)} currentPage={page}>
         {page === 'dashboard' && (
@@ -51,7 +49,7 @@ const AppContent: React.FC = () => {
                 user={user}
                 graduations={graduations}
                 themeSettings={themeSettings} 
-                setThemeSettings={() => {}} // Handled in component
+                setThemeSettings={() => {}} 
                 updateStudentPayment={updateStudentPayment}
             />
         )}

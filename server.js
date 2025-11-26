@@ -16,6 +16,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+// Serve static files from the React build
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Database Connection
@@ -38,18 +39,15 @@ app.post('/api/login', async (req, res) => {
         // Check Users table
         const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
         
-        // In a real app, compare hashed passwords (bcrypt). 
-        // For this migration, we check simple match or match against the seed hash logic
-        // If user exists and (no password check for demo OR password matches)
         if (users.length > 0) {
-            // Log activity
+            // In production, check hashed password here
             await pool.query('INSERT INTO activity_logs (id, actorId, action, timestamp, details) VALUES (?, ?, ?, ?, ?)', 
                 [`log_${Date.now()}`, users[0].id, 'Login', new Date(), 'Login realizado com sucesso.']);
             
             return res.json({ user: users[0] });
         }
 
-        // Check Students (if login allowed)
+        // Check Students (for student portal)
         const [students] = await pool.query('SELECT * FROM students WHERE email = ? OR cpf = ?', [email, email]);
         if (students.length > 0 && (students[0].password === password || !students[0].password)) {
              const student = students[0];
@@ -82,7 +80,7 @@ app.post('/api/register', async (req, res) => {
 
         await conn.query(
             'INSERT INTO academies (id, name, address, responsible, responsibleRegistration, email, password) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [academyId, name, address, responsible, responsibleRegistration, email, password] // Should hash password
+            [academyId, name, address, responsible, responsibleRegistration, email, password]
         );
 
         await conn.query(
@@ -105,14 +103,12 @@ app.post('/api/register', async (req, res) => {
 app.get('/api/initial-data', async (req, res) => {
     try {
         const [students] = await pool.query('SELECT * FROM students');
-        // Parse JSON fields for students
         const parsedStudents = students.map(s => ({
             ...s,
             isCompetitor: Boolean(s.isCompetitor),
             medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 }
         }));
 
-        // Fetch payment history for students
         const [payments] = await pool.query('SELECT * FROM payment_history');
         parsedStudents.forEach(s => {
             s.paymentHistory = payments.filter(p => p.studentId === s.id);
@@ -125,7 +121,6 @@ app.get('/api/initial-data', async (req, res) => {
         const [schedules] = await pool.query('SELECT * FROM class_schedules');
         const [assistants] = await pool.query('SELECT * FROM schedule_assistants');
         
-        // Parse schedules to include assistantIds array
         const parsedSchedules = schedules.map(s => ({
             ...s,
             assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId)
@@ -135,7 +130,6 @@ app.get('/api/initial-data', async (req, res) => {
         const [logs] = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100');
         const [settings] = await pool.query('SELECT * FROM theme_settings LIMIT 1');
 
-        // Convert settings boolean/number fields
         let parsedSettings = settings[0] || {};
         parsedSettings.useGradient = Boolean(parsedSettings.useGradient);
         parsedSettings.publicPageEnabled = Boolean(parsedSettings.publicPageEnabled);
@@ -162,8 +156,6 @@ app.get('/api/initial-data', async (req, res) => {
 const createHandler = (table) => async (req, res) => {
     try {
         const data = req.body;
-        // Simple Insert: Assumes body keys match column names. 
-        // In production, use a query builder or specific mappings for safety.
         const keys = Object.keys(data);
         const values = Object.values(data).map(v => typeof v === 'object' ? JSON.stringify(v) : v);
         const placeholders = keys.map(() => '?').join(',');
@@ -181,19 +173,16 @@ const deleteHandler = (table) => async (req, res) => {
         await pool.query(`DELETE FROM ${table} WHERE id = ?`, [req.params.id]);
         res.json({ success: true });
     } catch (error) {
-        console.error(error);
         res.status(500).json({ message: error.message });
     }
 };
 
 // --- Specific Entity Routes ---
 
-// Students
 app.post('/api/students', async (req, res) => {
     const s = req.body;
     const medals = JSON.stringify(s.medals || {});
     const id = s.id || `student_${Date.now()}`;
-    
     try {
         await pool.query(
             `REPLACE INTO students (id, name, email, password, birthDate, cpf, fjjpe_registration, phone, address, beltId, academyId, firstGraduationDate, lastPromotionDate, paymentStatus, paymentDueDateDay, imageUrl, stripes, isCompetitor, lastCompetition, medals) 
@@ -211,13 +200,11 @@ app.post('/api/students/payment', async (req, res) => {
     try {
         await conn.beginTransaction();
         await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', [status, studentId]);
-        
         if (status === 'paid') {
             const payId = `pay_${Date.now()}`;
             await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', 
                 [payId, studentId, new Date(), amount]);
         }
-        
         await conn.commit();
         res.json({ success: true });
     } catch (error) {
@@ -228,35 +215,28 @@ app.post('/api/students/payment', async (req, res) => {
     }
 });
 
-// Professors
 app.post('/api/professors', createHandler('professors'));
 app.delete('/api/professors/:id', deleteHandler('professors'));
 
-// Schedules
 app.post('/api/schedules', async (req, res) => {
     const { assistantIds, ...schedule } = req.body;
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
         const id = schedule.id || `schedule_${Date.now()}`;
-        
-        // Save schedule
         await conn.query(`REPLACE INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, schedule.professorId, schedule.academyId, schedule.requiredGraduationId]);
         
-        // Update assistants
         await conn.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [id]);
         if (assistantIds && assistantIds.length > 0) {
             for (const assistId of assistantIds) {
                 await conn.query('INSERT INTO schedule_assistants (scheduleId, assistantId) VALUES (?, ?)', [id, assistId]);
             }
         }
-        
         await conn.commit();
         res.json({ success: true });
     } catch (error) {
         await conn.rollback();
-        console.error(error);
         res.status(500).send(error.message);
     } finally {
         conn.release();
@@ -270,11 +250,10 @@ app.delete('/api/schedules/:id', async (req, res) => {
     } catch(e) { res.status(500).send(e.message); }
 });
 
-// Graduations
 app.post('/api/graduations', createHandler('graduations'));
 app.delete('/api/graduations/:id', deleteHandler('graduations'));
 app.post('/api/graduations/reorder', async (req, res) => {
-    const items = req.body; // [{id, rank}]
+    const items = req.body;
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
@@ -286,10 +265,8 @@ app.post('/api/graduations/reorder', async (req, res) => {
     } catch(e) { await conn.rollback(); res.status(500).send(e.message); } finally { conn.release(); }
 });
 
-// Settings
 app.post('/api/settings', async (req, res) => {
     const s = req.body;
-    // Using specific ID 1 for theme settings as per schema
     try {
         await pool.query(`UPDATE theme_settings SET 
             systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, 
@@ -308,10 +285,9 @@ app.post('/api/settings', async (req, res) => {
     } catch(e) { console.error(e); res.status(500).send(e.message); }
 });
 
-// Attendance
 app.post('/api/attendance', createHandler('attendance_records'));
 
-// Catch-all for SPA
+// Catch-all for React Router
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });

@@ -15,7 +15,6 @@ interface AppContextType {
     activityLogs: ActivityLog[];
     loading: boolean;
     
-    // Data Management
     saveStudent: (student: Omit<Student, 'id' | 'paymentStatus' | 'lastSeen' | 'paymentHistory'> & { id?: string }) => Promise<void>;
     deleteStudent: (id: string) => Promise<void>;
     updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
@@ -29,7 +28,6 @@ interface AppContextType {
     updateGraduationRanks: (items: { id: string, rank: number }[]) => Promise<void>;
     saveAttendanceRecord: (record: Partial<AttendanceRecord> & { studentId: string; scheduleId: string; date: string; status: 'present' | 'absent' }) => Promise<void>;
 
-    // Authentication
     login: (email: string, pass: string) => Promise<void>;
     loginGoogle: (credential: string) => Promise<void>;
     registerAcademy: (data: any) => Promise<{ success: boolean; message?: string }>;
@@ -76,12 +74,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     useEffect(() => {
-        // Initial fetch
         refreshData();
     }, []);
 
     useEffect(() => {
-        // Apply dynamic theme
         const root = document.documentElement;
         root.style.setProperty('--theme-primary', themeSettings.primaryColor);
         root.style.setProperty('--theme-secondary', themeSettings.secondaryColor);
@@ -100,7 +96,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (res.ok) {
             const data = await res.json();
             setUser(data.user);
-            await refreshData(); // Refresh to get user-specific data if needed
+            await refreshData();
         } else {
             const err = await res.json();
             throw new Error(err.message || 'Login falhou');
@@ -108,8 +104,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const loginGoogle = async (credential: string) => {
-        // Simulating Google Login via backend if implemented, or just logging in master for now
-        // Real implementation would send token to backend verification
         await login('androiddiviana@gmail.com', 'mock_google');
     };
 
@@ -120,7 +114,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             body: JSON.stringify(data)
         });
         if (res.ok) {
-            // Auto login after register
             await login(data.email, data.password);
             return { success: true };
         } else {
@@ -129,8 +122,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const logout = () => setUser(null);
-
-    // --- Data Methods ---
 
     const saveStudent = async (studentData: any) => {
         await fetch('/api/students', {
@@ -161,7 +152,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(settings)
         });
-        setLocalThemeSettings(settings); // Optimistic update
+        setLocalThemeSettings(settings);
     };
 
     const saveSchedule = async (schedule: any) => {

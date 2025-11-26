@@ -7,7 +7,6 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 
-// --- Types ---
 interface DashboardProps {
   user: User;
   students: Student[];
@@ -18,15 +17,12 @@ interface DashboardProps {
   updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
 }
 
-// --- Helper Functions ---
 const toYYYYMMDD = (date: Date) => date.toISOString().split('T')[0];
 
 const dayNameToIndex: { [key in DayOfWeek]: number } = {
     'Domingo': 0, 'Segunda-feira': 1, 'Terça-feira': 2, 'Quarta-feira': 3,
     'Quinta-feira': 4, 'Sexta-feira': 5, 'Sábado': 6
 };
-
-// --- Sub-components for Dashboard ---
 
 const BirthdayCard: React.FC<{ students: Student[], users: User[] }> = ({ students, users }) => {
     const today = new Date();
@@ -308,8 +304,6 @@ const CompetitionsCard: React.FC<CompetitionsCardProps> = ({ students, onCompeti
     );
 };
 
-// --- Charts ---
-
 const AttendanceChart = () => {
     const data = [
       { name: 'Seg', uv: 40 },
@@ -396,8 +390,6 @@ const StudentBreakdownChart = ({ students }: { students: Student[] }) => {
     );
 };
 
-// --- Main Dashboard Component ---
-
 export const Dashboard: React.FC<DashboardProps> = ({ 
     user, 
     students, 
@@ -410,7 +402,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
     
-    // If user is a student, show the student-specific dashboard
     if (user?.role === 'student') {
         return <StudentDashboard 
             user={user} 
@@ -443,14 +434,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Main Content */}
                 <div className="lg:col-span-8 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                        {stats.map(stat => <StatCard key={stat.title} {...stat} />)}
                     </div>
-                    
                     <AttendanceChart />
-
                     <Card>
                         <div className="flex justify-between items-center mb-4">
                              <h3 className="text-lg font-semibold text-slate-800">Desempenho dos Alunos</h3>
@@ -466,8 +454,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         </div>
                     </Card>
                 </div>
-
-                {/* Right Sidebar */}
                 <div className="lg:col-span-4 space-y-6">
                     <BirthdayCard students={students} users={users} />
                     <CommunityCard />
