@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText } from 'lucide-react'; // Import FileText icon
+import { Award as IconAward, FileText, Baby } from 'lucide-react'; // Import Baby icon
 import { PhotoUploadModal } from './ui/PhotoUploadModal'; // Import reusable modal
 import { generateCertificate } from '../services/certificateService'; // Import service
 
@@ -497,6 +497,10 @@ const StudentsPage: React.FC = () => {
                                                 <div className="flex items-center">
                                                     <span className="w-4 h-4 rounded-full mr-2 border border-slate-300" style={{ backgroundColor: belt.color }}></span>
                                                     <span className="font-medium text-slate-700">{belt.name}</span>
+                                                    {/* Visual Indicator for Kids Belt */}
+                                                    {belt.type === 'kids' && (
+                                                        <Baby className="w-4 h-4 ml-1 text-pink-400" title="Graduação Infantil" />
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
