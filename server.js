@@ -146,7 +146,11 @@ app.post('/api/students', async (req, res) => {
             data.medals = JSON.stringify(data.medals);
         }
         for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate']) {
-            if (data[key] === '') data[key] = null;
+            if (data[key] && typeof data[key] === 'string') {
+                data[key] = data[key].split('T')[0];
+            } else if (data[key] === '' || data[key] === undefined) {
+                data[key] = null;
+            }
         }
         if (data.hasOwnProperty('isCompetitor')) {
             data.isCompetitor = data.isCompetitor ? 1 : 0;
@@ -157,12 +161,16 @@ app.post('/api/students', async (req, res) => {
             if (updateData.password === '' || updateData.password === undefined) {
                 delete updateData.password;
             }
-            const updateFields = Object.keys(updateData).map(key => `\`${key}\` = ?`).join(', ');
+            const updateKeys = Object.keys(updateData);
+            
+            if (updateKeys.length === 0) {
+                return res.json({ success: true, id, message: "No fields to update." });
+            }
+
+            const updateFields = updateKeys.map(key => `\`${key}\` = ?`).join(', ');
             const updateValues = Object.values(updateData);
 
-            if (updateFields) {
-                await pool.query(`UPDATE students SET ${updateFields} WHERE id = ?`, [...updateValues, id]);
-            }
+            await pool.query(`UPDATE students SET ${updateFields} WHERE id = ?`, [...updateValues, id]);
             res.json({ success: true, id });
 
         } else { // INSERT logic
@@ -212,7 +220,11 @@ app.post('/api/professors', async (req, res) => {
     try {
         const data = req.body;
         if (!data.id) data.id = `prof_${Date.now()}`;
-        if (!data.blackBeltDate) data.blackBeltDate = null;
+        if (data.blackBeltDate && typeof data.blackBeltDate === 'string') {
+            data.blackBeltDate = data.blackBeltDate.split('T')[0];
+        } else if (data.blackBeltDate === '' || data.blackBeltDate === undefined) {
+            data.blackBeltDate = null;
+        }
         
         const keys = Object.keys(data).map(key => `\`${key}\``);
         const values = Object.values(data);
