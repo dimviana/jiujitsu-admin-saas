@@ -226,7 +226,30 @@ app.post('/api/students/payment', async (req, res) => {
     }
 });
 
-app.post('/api/professors', createHandler('professors'));
+// Professor Handler: Manages ID generation and date formatting
+app.post('/api/professors', async (req, res) => {
+    try {
+        const data = req.body;
+        // Generate ID if missing
+        if (!data.id) {
+            data.id = `prof_${Date.now()}`;
+        }
+        // Handle empty date string for SQL compatibility
+        if (!data.blackBeltDate) {
+            data.blackBeltDate = null;
+        }
+
+        const keys = Object.keys(data).map(key => `\`${key}\``);
+        const values = Object.values(data).map(v => typeof v === 'object' ? JSON.stringify(v) : v);
+        const placeholders = keys.map(() => '?').join(',');
+        
+        await pool.query(`REPLACE INTO professors (${keys.join(',')}) VALUES (${placeholders})`, values);
+        res.json({ success: true });
+    } catch (error) {
+        console.error(`Error in professors:`, error);
+        res.status(500).json({ message: error.message });
+    }
+});
 app.delete('/api/professors/:id', deleteHandler('professors'));
 
 app.post('/api/schedules', async (req, res) => {

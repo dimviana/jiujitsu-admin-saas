@@ -69,7 +69,7 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({ professor, onSave, onClos
     onSave(formData as any);
   };
 
-  const selectStyles = "w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-md px-3 py-2 focus:ring-amber-500 focus:border-amber-500";
+  const selectStyles = "w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-3 py-2.5 focus:ring-primary focus:border-primary outline-none transition-all";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -79,6 +79,8 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({ professor, onSave, onClos
         <Input label="CPF" name="cpf" value={formData.cpf} onChange={handleChange} required />
         {cpfError && <p className="text-sm text-red-500 mt-1">{cpfError}</p>}
       </div>
+      
+      {/* Seletor de Academia (Apenas para Admin Geral) */}
       {user?.role === 'general_admin' && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Academia</label>
@@ -88,6 +90,7 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({ professor, onSave, onClos
             </select>
           </div>
       )}
+
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Graduação</label>
         <select name="graduationId" value={formData.graduationId} onChange={handleChange} required className={selectStyles}>
@@ -105,7 +108,7 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({ professor, onSave, onClos
         />
         <p className="text-xs text-slate-500 mt-1 px-1">Usado para calcular os graus para faixas preta e superiores.</p>
       </div>
-      <div className="flex justify-end gap-4 pt-4">
+      <div className="flex justify-end gap-4 pt-4 border-t border-slate-100 mt-6">
         <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
         <Button type="submit" disabled={!!cpfError}>Salvar</Button>
       </div>
@@ -144,9 +147,9 @@ const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({ professor, onSave, 
         <Modal isOpen={true} onClose={onClose} title={`Alterar foto de ${professor.name}`}>
             <div className="flex flex-col items-center">
                 <img
-                    src={preview || `https://i.pravatar.cc/150?u=${professor.cpf}`}
+                    src={preview || `https://ui-avatars.com/api/?name=${professor.name}`}
                     alt="Preview"
-                    className="w-40 h-40 rounded-full object-cover mb-4 border-4 border-slate-200"
+                    className="w-40 h-40 rounded-full object-cover mb-4 border-4 border-slate-200 shadow-md"
                 />
                 <input
                     type="file"
@@ -160,7 +163,7 @@ const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({ professor, onSave, 
                 </Button>
                 <p className="text-sm text-slate-500 mt-2">Selecione uma imagem do seu computador.</p>
             </div>
-            <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-slate-200">
+            <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-slate-100">
                 <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
                 <Button type="button" onClick={handleSaveClick} disabled={!preview}>Salvar Foto</Button>
             </div>
@@ -251,13 +254,13 @@ const ProfessorsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <h1 className="text-3xl font-bold text-slate-800">Gerenciar Professores</h1>
         <Button onClick={() => handleOpenModal({})}>Adicionar Professor</Button>
       </div>
 
       {loading ? (
-        <div className="text-center p-4">Carregando...</div>
+        <div className="text-center p-8 text-slate-500">Carregando professores...</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {professors.map(prof => {
@@ -266,23 +269,23 @@ const ProfessorsPage: React.FC = () => {
                 const { dan } = professorDanData.get(prof.id) || { dan: 0 };
                 
                 return (
-                    <Card key={prof.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-[328px]">
+                    <Card key={prof.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-full">
                         <div className="h-2" style={{ backgroundColor: graduation?.color || '#e2e8f0' }}></div>
                         <div className="p-5 flex flex-col flex-grow">
                             <div className="flex items-center mb-4">
                                 <button onClick={() => handleOpenPhotoModal(prof)} className="relative group flex-shrink-0">
                                     <img 
-                                        src={prof.imageUrl || `https://i.pravatar.cc/150?u=${prof.cpf}`} 
+                                        src={prof.imageUrl || `https://ui-avatars.com/api/?name=${prof.name}`} 
                                         alt={prof.name} 
-                                        className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 group-hover:opacity-75 transition-opacity"
+                                        className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 group-hover:opacity-75 transition-opacity shadow-sm"
                                     />
                                     <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-full transition-opacity">
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white opacity-0 group-hover:opacity-100" fill="none" viewBox="0 0 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                     </div>
                                 </button>
-                                <div className="ml-4">
-                                    <h2 className="text-xl font-bold text-slate-800">{prof.name}</h2>
-                                    <p className="text-sm text-slate-500">{academy?.name || 'N/A'}</p>
+                                <div className="ml-4 overflow-hidden">
+                                    <h2 className="text-xl font-bold text-slate-800 truncate">{prof.name}</h2>
+                                    <p className="text-sm text-slate-500 truncate">{academy?.name || 'Sem Academia'}</p>
                                 </div>
                             </div>
                             
@@ -291,14 +294,14 @@ const ProfessorsPage: React.FC = () => {
                                     <div className="flex justify-between items-center">
                                         <span className="text-slate-600 font-medium">Graduação:</span>
                                         <div className="flex items-center">
-                                            <span className="w-4 h-4 rounded-full mr-2 border border-slate-300" style={{ backgroundColor: graduation.color }}></span>
+                                            <span className="w-4 h-4 rounded-full mr-2 border border-slate-300 shadow-sm" style={{ backgroundColor: graduation.color }}></span>
                                             <span className="font-medium text-slate-700">{graduation.name}</span>
                                         </div>
                                     </div>
                                 )}
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-600 font-medium">Registro:</span>
-                                    <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{prof.fjjpe_registration}</span>
+                                    <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-600">{prof.fjjpe_registration || 'N/A'}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-600 font-medium">CPF:</span>
@@ -309,20 +312,21 @@ const ProfessorsPage: React.FC = () => {
                             <div className="mt-auto">
                                 <div className="pt-4 mt-4">
                                     <div 
-                                        className="w-full h-7 rounded-md flex items-center justify-end" 
+                                        className="w-full h-8 rounded-md flex items-center justify-end shadow-inner relative overflow-hidden" 
                                         style={{ backgroundColor: graduation?.color || '#e2e8f0', border: '1px solid rgba(0,0,0,0.1)' }}
                                         title={`${graduation?.name}${dan > 0 ? ` - ${dan}º Dan` : ''}`}
                                     >
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/5 pointer-events-none"></div>
                                         {dan > 0 && (
-                                            <div className="h-full w-auto min-w-[25%] bg-black flex items-center justify-center space-x-1 p-1">
+                                            <div className="h-full w-auto min-w-[25%] bg-red-600 flex items-center justify-center space-x-1 p-1 z-10 border-l-2 border-black">
                                                 {Array.from({ length: dan }).map((_, index) => (
-                                                    <div key={index} className="h-5 w-1 bg-white"></div>
+                                                    <div key={index} className="h-5 w-1 bg-white shadow-sm"></div>
                                                 ))}
                                             </div>
                                         )}
                                     </div>
                                 </div>
-                                <div className="mt-4 pt-4 border-t border-slate-200/60 flex justify-end gap-2">
+                                <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end gap-2">
                                     <Button size="sm" variant="secondary" onClick={() => handleOpenModal(prof)}>Editar</Button>
                                     <Button size="sm" variant="danger" onClick={() => handleDelete(prof.id)}>Excluir</Button>
                                 </div>
