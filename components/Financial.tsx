@@ -197,7 +197,7 @@ const ReminderModal: React.FC<{
 );
 
 export const Financial: React.FC = () => {
-    const { students, user, graduations, themeSettings, setThemeSettings, updateStudentPayment } = useContext(AppContext);
+    const { students, graduations, themeSettings, setThemeSettings, updateStudentPayment } = useContext(AppContext);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [updatedCard, setUpdatedCard] = useState<string | null>(null);
@@ -206,23 +206,16 @@ export const Financial: React.FC = () => {
     const [feeAmount, setFeeAmount] = useState(themeSettings.monthlyFeeAmount);
     const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
 
-    const filteredStudents = useMemo(() => {
-        if (user?.role === 'academy_admin' && user.academyId) {
-            return students.filter(student => student.academyId === user.academyId);
-        }
-        return students;
-    }, [students, user]);
-
     const { paidStudents, unpaidStudents, totalRevenue } = useMemo(() => {
-        const paid = filteredStudents.filter(s => s.paymentStatus === 'paid');
-        const unpaid = filteredStudents.filter(s => s.paymentStatus === 'unpaid');
+        const paid = students.filter(s => s.paymentStatus === 'paid');
+        const unpaid = students.filter(s => s.paymentStatus === 'unpaid');
         const revenue = paid.length * themeSettings.monthlyFeeAmount;
         return {
             paidStudents: paid.length,
             unpaidStudents: unpaid.length,
             totalRevenue: revenue,
         };
-    }, [filteredStudents, themeSettings.monthlyFeeAmount]);
+    }, [students, themeSettings.monthlyFeeAmount]);
 
     const { remindersToSend, overduePayments } = useMemo(() => {
         const today = new Date();
@@ -231,7 +224,7 @@ export const Financial: React.FC = () => {
         const reminders: Student[] = [];
         const overdue: Student[] = [];
 
-        filteredStudents.forEach(student => {
+        students.forEach(student => {
             if (!student.paymentDueDateDay) return;
 
             const dueDateThisMonth = new Date(today.getFullYear(), today.getMonth(), student.paymentDueDateDay);
@@ -259,7 +252,7 @@ export const Financial: React.FC = () => {
         });
 
         return { remindersToSend: reminders, overduePayments: overdue };
-    }, [filteredStudents, themeSettings]);
+    }, [students, themeSettings]);
 
     // Effect for automatic reminder modal
     useEffect(() => {
@@ -408,7 +401,7 @@ export const Financial: React.FC = () => {
             <h2 className="text-2xl font-bold text-slate-800 pt-4">Visão Geral dos Alunos</h2>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredStudents.map(student => {
+                {students.map(student => {
                     const belt = graduations.find(g => g.id === student.beltId);
                     const isUpdated = updatedCard === student.id;
                     const cardClass = isUpdated

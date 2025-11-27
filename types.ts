@@ -77,7 +77,6 @@ export interface User {
   studentId?: string;
   token?: string;
   birthDate?: string;
-  // FIX: Add optional imageUrl property to User type
   imageUrl?: string;
 }
 
