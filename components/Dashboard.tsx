@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useContext } from 'react';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Student, User, ClassSchedule, DayOfWeek, Graduation, ThemeSettings, AttendanceRecord } from '../types';
 import { Users, Briefcase, BookOpen, Gift, Award, Calendar as CalendarIcon, DollarSign } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
@@ -357,66 +357,11 @@ const AttendanceChart: React.FC<{ records: AttendanceRecord[] }> = ({ records })
                       borderRadius: '0.75rem',
                   }}
               />
-              <Legend iconType="circle" />
               <Bar dataKey="Presentes" fill={themeSettings.chartColor1} radius={[5, 5, 0, 0]} barSize={10} />
               <Bar dataKey="Ausentes" fill={themeSettings.chartColor2} radius={[5, 5, 0, 0]} barSize={10} />
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </Card>
-    );
-};
-
-const StudentBreakdownChart: React.FC<{ students: Student[] }> = ({ students }) => {
-    const { themeSettings } = useContext(AppContext);
-    const data = [
-      { name: 'Meninos', value: 12 }, // Static for now
-      { name: 'Meninas', value: 8 },
-    ];
-  
-    const COLORS = [themeSettings.chartColor1, themeSettings.chartColor2];
-  
-    return (
-      <Card className="flex flex-col h-full">
-          <h3 className="text-lg font-semibold text-[var(--theme-text-primary)]">Divisão de Alunos</h3>
-          <div className="flex-grow w-full h-64 relative">
-               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="text-center">
-                      <p className="text-3xl font-bold text-[var(--theme-text-primary)]">{students.length}</p>
-                      <p className="text-sm text-[var(--theme-text-primary)]/70">Alunos</p>
-                  </div>
-              </div>
-              <ResponsiveContainer>
-                  <PieChart>
-                  <Pie
-                      data={data}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={100}
-                      innerRadius={70}
-                      fill="#8884d8"
-                      dataKey="value"
-                      paddingAngle={5}
-                      cornerRadius={8}
-                  >
-                      {data.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                  </Pie>
-                  <Tooltip 
-                      cursor={{fill: 'transparent'}}
-                      contentStyle={{ 
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                          borderColor: '#E5E7EB',
-                          color: '#1F2937',
-                          borderRadius: '0.75rem',
-                      }}
-                  />
-                  <Legend iconType="circle" />
-                  </PieChart>
-              </ResponsiveContainer>
-          </div>
       </Card>
     );
 };

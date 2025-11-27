@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { Student } from '../types';
-import { Users, DollarSign, Upload, MessageSquareWarning } from 'lucide-react';
+import { Users, DollarSign, Upload, MessageSquareWarning, FileText } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
 import { AppContext } from '../context/AppContext';
+import jsPDF from 'jspdf';
 
 // --- Charts ---
 const FinancialStatusChart: React.FC<{ paidCount: number; unpaidCount: number }> = ({ paidCount, unpaidCount }) => {
@@ -331,11 +332,63 @@ export const Financial: React.FC = () => {
         }
     };
 
+    const handleExportPDF = () => {
+        const doc = new jsPDF();
+        const today = new Date().toLocaleDateString('pt-BR');
+
+        doc.setFontSize(22);
+        doc.text(`Relatório Financeiro - ${themeSettings.systemName}`, 20, 20);
+        
+        doc.setFontSize(12);
+        doc.text(`Data de Emissão: ${today}`, 20, 30);
+        
+        doc.setLineWidth(0.5);
+        doc.line(20, 35, 190, 35);
+
+        doc.setFontSize(16);
+        doc.text("Resumo Geral", 20, 50);
+
+        doc.setFontSize(12);
+        doc.text(`Total de Alunos em Dia: ${paidStudents}`, 20, 60);
+        doc.text(`Total de Alunos Pendentes: ${unpaidStudents}`, 20, 70);
+        doc.text(`Receita Estimada (Mês): ${totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 20, 80);
+
+        doc.setFontSize(16);
+        doc.text("Alunos Pendentes (Ação Necessária)", 20, 100);
+
+        const unpaidList = students.filter(s => s.paymentStatus === 'unpaid');
+        let yPos = 110;
+
+        if (unpaidList.length > 0) {
+             doc.setFontSize(10);
+             unpaidList.forEach((s, index) => {
+                 if (yPos > 280) {
+                     doc.addPage();
+                     yPos = 20;
+                 }
+                 doc.text(`${index + 1}. ${s.name} - Venceu dia ${s.paymentDueDateDay}`, 20, yPos);
+                 yPos += 7;
+             });
+        } else {
+            doc.setFontSize(12);
+            doc.setTextColor(0, 150, 0);
+            doc.text("Parabéns! Não há pendências.", 20, 110);
+        }
+
+        doc.save(`relatorio_financeiro_${today.replace(/\//g, '-')}.pdf`);
+    };
+
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center flex-wrap gap-4">
                 <h1 className="text-3xl font-bold text-slate-800">Controle Financeiro</h1>
-                <Button onClick={() => setIsValuesModalOpen(true)}>Configurar Valores</Button>
+                <div className="flex gap-2">
+                    <Button variant="secondary" onClick={handleExportPDF}>
+                        <FileText className="w-4 h-4 mr-2" />
+                        Exportar Relatório
+                    </Button>
+                    <Button onClick={() => setIsValuesModalOpen(true)}>Configurar Valores</Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

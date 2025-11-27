@@ -23,15 +23,22 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
     endTime: '',
     professorId: '',
     assistantIds: [] as string[],
-    academyId: user?.role === 'academy_admin' ? user.academyId || '' : '',
+    academyId: user?.role === 'academy_admin' ? user.academyId || '' : (schedule?.academyId || ''),
     requiredGraduationId: '',
     ...schedule
   });
 
+  // Filter professors based on the selected academy.
+  // If no academy is selected (yet), show all (or none, depending on preference).
+  // For academy_admins, this automatically filters to their academy.
+  const availableProfessors = useMemo(() => {
+      if (!formData.academyId) return professors;
+      return professors.filter(p => p.academyId === formData.academyId);
+  }, [professors, formData.academyId]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === 'assistantIds' && e.target instanceof HTMLSelectElement) {
-      // FIX: Use selectedOptions and explicitly type `option` to resolve errors on `.selected` and `.value`.
       const selectedIds = Array.from(e.target.selectedOptions)
         .map((option: HTMLOptionElement) => option.value);
       setFormData(prev => ({ ...prev, assistantIds: selectedIds }));
@@ -50,6 +57,17 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <Input label="Nome da Turma" name="className" value={formData.className} onChange={handleChange} required />
+      
+      {user?.role === 'general_admin' && (
+         <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Academia</label>
+            <select name="academyId" value={formData.academyId} onChange={handleChange} required className={selectStyles}>
+               <option value="">Selecione uma academia</option>
+               {academies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+         </div>
+       )}
+
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Dia da Semana</label>
         <select name="dayOfWeek" value={formData.dayOfWeek} onChange={handleChange} required className={selectStyles}>
@@ -68,10 +86,17 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
         </select>
       </div>
        <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Professor</label>
-        <select name="professorId" value={formData.professorId} onChange={handleChange} required className={selectStyles}>
-           <option value="">Selecione um professor</option>
-           {professors.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        <label className="block text-sm font-medium text-slate-700 mb-1">Professor Responsável</label>
+        <select 
+            name="professorId" 
+            value={formData.professorId} 
+            onChange={handleChange} 
+            required 
+            className={selectStyles}
+            disabled={!formData.academyId && user?.role === 'general_admin'}
+        >
+           <option value="">{(!formData.academyId && user?.role === 'general_admin') ? 'Selecione uma academia primeiro' : 'Selecione um professor'}</option>
+           {availableProfessors.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </div>
        <div>
@@ -83,18 +108,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
           multiple
           className={`${selectStyles} h-24`}
         >
-          {professors.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          {availableProfessors.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </div>
-       {user?.role === 'general_admin' && (
-         <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Academia</label>
-            <select name="academyId" value={formData.academyId} onChange={handleChange} required className={selectStyles}>
-               <option value="">Selecione uma academia</option>
-               {academies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-         </div>
-       )}
+      
       <div className="flex justify-end gap-4 pt-4">
         <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
         <Button type="submit">Salvar</Button>
