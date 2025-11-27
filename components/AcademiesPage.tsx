@@ -1,14 +1,84 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, FormEvent } from 'react';
 import { AppContext } from '../context/AppContext';
+import { Academy } from '../types';
 import Card from './ui/Card';
-import { Building, ChevronDown, ChevronRight, User, Briefcase } from 'lucide-react';
+import Button from './ui/Button';
+import Modal from './ui/Modal';
+import Input from './ui/Input';
+import { Building, ChevronDown, ChevronRight, User, Briefcase, Edit, Mail } from 'lucide-react';
+
+interface AcademyFormProps {
+    academy: Partial<Academy> | null;
+    onSave: (academy: Academy) => void;
+    onClose: () => void;
+}
+
+const AcademyForm: React.FC<AcademyFormProps> = ({ academy, onSave, onClose }) => {
+    const [formData, setFormData] = useState({
+        id: '',
+        name: '',
+        address: '',
+        responsible: '',
+        responsibleRegistration: '',
+        email: '',
+        ...academy
+    });
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleSubmit = (e: FormEvent) => {
+        e.preventDefault();
+        // Since we are editing, we assume ID exists or is handled by backend if new (though register handles new)
+        onSave(formData as Academy);
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <Input label="Nome da Academia" name="name" value={formData.name} onChange={handleChange} required />
+            <Input label="Endereço" name="address" value={formData.address || ''} onChange={handleChange} required />
+            <Input label="Responsável" name="responsible" value={formData.responsible} onChange={handleChange} required />
+            <Input label="CPF do Responsável" name="responsibleRegistration" value={formData.responsibleRegistration} onChange={handleChange} required />
+            <Input label="Email de Contato" name="email" value={formData.email} onChange={handleChange} required type="email" />
+            
+            <div className="flex justify-end gap-4 pt-4 border-t border-slate-100 mt-6">
+                <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
+                <Button type="submit">Salvar Alterações</Button>
+            </div>
+        </form>
+    );
+};
 
 const AcademiesPage: React.FC = () => {
-    const { academies, professors, students, loading } = useContext(AppContext);
+    const { academies, professors, students, loading, saveAcademy } = useContext(AppContext); // Assuming saveAcademy exists in context now
     const [expandedAcademy, setExpandedAcademy] = useState<string | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedAcademy, setSelectedAcademy] = useState<Academy | null>(null);
 
     const toggleAcademy = (id: string) => {
         setExpandedAcademy(prev => (prev === id ? null : id));
+    };
+
+    const handleEditClick = (e: React.MouseEvent, academy: Academy) => {
+        e.stopPropagation();
+        setSelectedAcademy(academy);
+        setIsModalOpen(true);
+    };
+
+    const handleSave = async (academyData: Academy) => {
+        if (saveAcademy) {
+             await saveAcademy(academyData);
+             setIsModalOpen(false);
+             setSelectedAcademy(null);
+        } else {
+            console.error("saveAcademy function not found in context");
+        }
+    };
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setSelectedAcademy(null);
     };
 
     return (
@@ -26,42 +96,80 @@ const AcademiesPage: React.FC = () => {
 
                         return (
                             <Card key={academy.id} className="p-0 overflow-hidden">
-                                <button 
-                                    className="w-full text-left p-4 flex justify-between items-center bg-slate-50 hover:bg-slate-100"
+                                <div 
+                                    className="w-full text-left p-4 flex justify-between items-center bg-slate-50 hover:bg-slate-100 cursor-pointer"
                                     onClick={() => toggleAcademy(academy.id)}
                                 >
                                     <div className="flex items-center">
-                                        <Building className="w-6 h-6 mr-3 text-primary"/>
+                                        <Building className="w-8 h-8 mr-4 text-primary bg-white p-1.5 rounded-full border border-slate-200"/>
                                         <div>
-                                            <h2 className="font-bold text-slate-800">{academy.name}</h2>
-                                            <p className="text-sm text-slate-500">{academy.address}</p>
+                                            <h2 className="font-bold text-slate-800 text-lg">{academy.name}</h2>
+                                            <p className="text-sm text-slate-500 flex items-center mt-1">
+                                                <Mail className="w-3 h-3 mr-1" /> {academy.email}
+                                            </p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center space-x-4">
-                                        <span className="text-sm text-slate-500">{academyProfessors.length} Professores</span>
-                                        <span className="text-sm text-slate-500">{academyStudents.length} Alunos</span>
-                                        {isExpanded ? <ChevronDown className="w-5 h-5 text-slate-400"/> : <ChevronRight className="w-5 h-5 text-slate-400"/>}
+                                    <div className="flex items-center space-x-6">
+                                        <div className="hidden md:flex items-center space-x-6">
+                                            <div className="text-center">
+                                                <span className="block font-bold text-slate-700">{academyProfessors.length}</span>
+                                                <span className="text-xs text-slate-500 uppercase">Profs</span>
+                                            </div>
+                                            <div className="text-center">
+                                                <span className="block font-bold text-slate-700">{academyStudents.length}</span>
+                                                <span className="text-xs text-slate-500 uppercase">Alunos</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
+                                            <Button 
+                                                size="sm" 
+                                                variant="secondary" 
+                                                onClick={(e) => handleEditClick(e, academy)}
+                                                className="flex items-center"
+                                            >
+                                                <Edit className="w-4 h-4 mr-1" /> Editar
+                                            </Button>
+                                            {isExpanded ? <ChevronDown className="w-5 h-5 text-slate-400"/> : <ChevronRight className="w-5 h-5 text-slate-400"/>}
+                                        </div>
                                     </div>
-                                </button>
+                                </div>
                                 
                                 {isExpanded && (
-                                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-200">
+                                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-200 bg-white animate-fade-in-down">
+                                        <div className="col-span-full mb-2">
+                                            <p className="text-sm text-slate-600"><strong>Endereço:</strong> {academy.address}</p>
+                                            <p className="text-sm text-slate-600"><strong>Responsável:</strong> {academy.responsible} (CPF: {academy.responsibleRegistration})</p>
+                                        </div>
+
                                         {/* Professors List */}
-                                        <div>
-                                            <h3 className="font-semibold text-slate-700 mb-2 flex items-center"><Briefcase className="w-4 h-4 mr-2"/> Professores</h3>
+                                        <div className="border border-slate-100 rounded-lg p-4 bg-slate-50/50">
+                                            <h3 className="font-semibold text-slate-700 mb-3 flex items-center border-b border-slate-200 pb-2">
+                                                <Briefcase className="w-4 h-4 mr-2 text-primary"/> Corpo Docente
+                                            </h3>
                                             <ul className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
                                                 {academyProfessors.length > 0 ? academyProfessors.map(prof => (
-                                                    <li key={prof.id} className="text-sm p-2 bg-slate-50 rounded-md">{prof.name}</li>
-                                                )) : <li className="text-sm text-slate-400 italic">Nenhum professor.</li>}
+                                                    <li key={prof.id} className="text-sm p-2 bg-white rounded border border-slate-100 shadow-sm flex items-center">
+                                                        <span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
+                                                        {prof.name}
+                                                    </li>
+                                                )) : <li className="text-sm text-slate-400 italic p-2">Nenhum professor registrado.</li>}
                                             </ul>
                                         </div>
                                         {/* Students List */}
-                                        <div>
-                                            <h3 className="font-semibold text-slate-700 mb-2 flex items-center"><User className="w-4 h-4 mr-2"/> Alunos</h3>
+                                        <div className="border border-slate-100 rounded-lg p-4 bg-slate-50/50">
+                                            <h3 className="font-semibold text-slate-700 mb-3 flex items-center border-b border-slate-200 pb-2">
+                                                <User className="w-4 h-4 mr-2 text-primary"/> Corpo Discente
+                                            </h3>
                                             <ul className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
                                                 {academyStudents.length > 0 ? academyStudents.map(stud => (
-                                                    <li key={stud.id} className="text-sm p-2 bg-slate-50 rounded-md">{stud.name}</li>
-                                                )) : <li className="text-sm text-slate-400 italic">Nenhum aluno.</li>}
+                                                    <li key={stud.id} className="text-sm p-2 bg-white rounded border border-slate-100 shadow-sm flex justify-between items-center">
+                                                        <span>{stud.name}</span>
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${stud.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                            {stud.paymentStatus === 'paid' ? 'Em dia' : 'Pendente'}
+                                                        </span>
+                                                    </li>
+                                                )) : <li className="text-sm text-slate-400 italic p-2">Nenhum aluno registrado.</li>}
                                             </ul>
                                         </div>
                                     </div>
@@ -70,6 +178,12 @@ const AcademiesPage: React.FC = () => {
                         );
                     })}
                 </div>
+            )}
+
+            {isModalOpen && (
+                <Modal isOpen={isModalOpen} onClose={handleCloseModal} title="Editar Academia">
+                    <AcademyForm academy={selectedAcademy} onSave={handleSave} onClose={handleCloseModal} />
+                </Modal>
             )}
         </div>
     );

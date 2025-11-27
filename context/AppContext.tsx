@@ -36,6 +36,7 @@ interface AppContextType {
     deleteGraduation: (id: string) => Promise<void>;
     updateGraduationRanks: (items: { id: string, rank: number }[]) => Promise<void>;
     saveAttendanceRecord: (record: Omit<AttendanceRecord, 'id'>) => Promise<void>;
+    saveAcademy: (academy: Academy) => Promise<void>; // New function
 
     login: (email: string, pass: string) => Promise<void>;
     loginGoogle: (credential: string) => Promise<void>;
@@ -272,6 +273,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (e: any) {
              console.warn(`Simulating success for ${endpoint} (Offline)`);
              setNotification({ message: 'Sucesso (Demo)!', details: successMessage, type: 'success' });
+             // In mock mode, we manually update the local state for immediate feedback
+             if (endpoint.includes('academies')) {
+                 const updatedAcademy = body;
+                 setAllAcademies(prev => prev.map(a => a.id === updatedAcademy.id ? updatedAcademy : a));
+             }
         }
     };
 
@@ -287,6 +293,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const deleteGraduation = (id: string) => handleApiCall(`/api/graduations/${id}`, 'DELETE', null, 'Graduação removida com sucesso.');
     const updateGraduationRanks = (items: { id: string, rank: number }[]) => handleApiCall('/api/graduations/reorder', 'POST', items, 'Ordem das graduações atualizada.');
     const saveAttendanceRecord = (record: Omit<AttendanceRecord, 'id'>) => handleApiCall('/api/attendance', 'POST', record, 'Frequência salva com sucesso.');
+    const saveAcademy = (academy: Academy) => handleApiCall('/api/academies', 'POST', academy, 'Academia atualizada com sucesso.');
 
     return (
         <AppContext.Provider value={{
@@ -296,7 +303,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             globalAcademyFilter, setGlobalAcademyFilter,
             saveStudent, deleteStudent, updateStudentPayment, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor,
-            saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord,
+            saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord, saveAcademy,
             login, loginGoogle, registerAcademy, logout,
             
             // Pass the filtered lists to consumers

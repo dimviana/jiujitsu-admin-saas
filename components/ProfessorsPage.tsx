@@ -28,6 +28,16 @@ const validateCPF = (cpf: string): boolean => {
     return true;
 };
 
+// Helper to format date string from API/DB (often includes time or is ISO) to YYYY-MM-DD for input type="date"
+const formatDateForInput = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+        return dateString.split('T')[0];
+    } catch (e) {
+        return '';
+    }
+};
+
 // Form component
 interface ProfessorFormProps {
   professor: Partial<Professor> | null;
@@ -43,8 +53,9 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({ professor, onSave, onClos
     cpf: '',
     academyId: user?.role === 'academy_admin' ? user.academyId || '' : (professor?.academyId || ''),
     graduationId: '',
-    blackBeltDate: '',
     ...professor,
+    // Format the date properly for input field
+    blackBeltDate: formatDateForInput(professor?.blackBeltDate),
   });
   const [cpfError, setCpfError] = useState('');
 

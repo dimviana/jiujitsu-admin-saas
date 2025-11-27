@@ -5,7 +5,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import StudentAttendanceChart from './charts/StudentAttendanceChart';
-import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix } from 'lucide-react';
+import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle } from 'lucide-react';
 
 // --- Helper Functions & Components ---
 
@@ -40,7 +40,7 @@ const generateBRCode = (
     let crc = 0xFFFF;
     for (let i = 0; i < payloadWithCrc.length; i++) {
         crc ^= payloadWithCrc.charCodeAt(i) << 8;
-        for (let j = 0; j < 8; j++) {
+        for (let j = 0; j < 8; j += 2) {
             crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
         }
     }
@@ -142,6 +142,96 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
                     </>
                 )}
             </div>
+        </Modal>
+    );
+};
+
+const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfirm: () => Promise<void>; amount: number }> = ({ student, onClose, onConfirm, amount }) => {
+    const [loading, setLoading] = useState(false);
+    const [cardData, setCardData] = useState({
+        number: '',
+        name: '',
+        expiry: '',
+        cvc: ''
+    });
+
+    const handleFormatCardNumber = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let val = e.target.value.replace(/\D/g, '');
+        val = val.replace(/(\d{4})/g, '$1 ').trim();
+        setCardData(prev => ({ ...prev, number: val.substring(0, 19) }));
+    };
+
+    const handleFormatExpiry = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length >= 2) {
+            val = val.substring(0, 2) + '/' + val.substring(2, 4);
+        }
+        setCardData(prev => ({ ...prev, expiry: val }));
+    };
+
+    const handlePayment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        // Simulating API latency
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await onConfirm();
+        setLoading(false);
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Pagamento com Cartão de Crédito">
+            <form onSubmit={handlePayment} className="space-y-4">
+                <div className="bg-slate-50 p-4 rounded-lg mb-4 text-center border border-slate-100">
+                    <p className="text-sm text-slate-500">Valor a pagar</p>
+                    <p className="text-3xl font-bold text-slate-800">{amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                </div>
+
+                <Input 
+                    label="Número do Cartão" 
+                    value={cardData.number} 
+                    onChange={handleFormatCardNumber} 
+                    placeholder="0000 0000 0000 0000" 
+                    required 
+                />
+                <Input 
+                    label="Nome do Titular" 
+                    value={cardData.name} 
+                    onChange={(e) => setCardData(prev => ({ ...prev, name: e.target.value.toUpperCase() }))} 
+                    placeholder="COMO ESTÁ NO CARTÃO" 
+                    required 
+                />
+                <div className="grid grid-cols-2 gap-4">
+                    <Input 
+                        label="Validade" 
+                        value={cardData.expiry} 
+                        onChange={handleFormatExpiry} 
+                        placeholder="MM/AA" 
+                        maxLength={5} 
+                        required 
+                    />
+                    <Input 
+                        label="CVV" 
+                        value={cardData.cvc} 
+                        onChange={(e) => setCardData(prev => ({ ...prev, cvc: e.target.value.replace(/\D/g, '').substring(0, 4) }))} 
+                        placeholder="123" 
+                        type="password"
+                        maxLength={4} 
+                        required 
+                    />
+                </div>
+
+                <div className="pt-4 flex items-center justify-end gap-3">
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
+                    <Button type="submit" disabled={loading} className="w-full sm:w-auto">
+                        {loading ? (
+                            <><Loader className="w-4 h-4 mr-2 animate-spin" /> Processando...</>
+                        ) : (
+                            'Pagar Agora'
+                        )}
+                    </Button>
+                </div>
+            </form>
         </Modal>
     );
 };
@@ -249,7 +339,6 @@ interface StudentDashboardProps {
   schedules: ClassSchedule[];
   themeSettings: ThemeSettings;
   updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
-  // FIX: Added optional `users` prop to match usage in Dashboard.tsx
   users?: User[];
 }
 
@@ -262,7 +351,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     themeSettings, 
     updateStudentPayment 
 }) => {
-    const [paymentModalState, setPaymentModalState] = useState<'closed' | 'pix' | 'upload'>('closed');
+    const [paymentModalState, setPaymentModalState] = useState<'closed' | 'pix' | 'card' | 'upload'>('closed');
     const [paymentSuccess, setPaymentSuccess] = useState(false);
 
     const studentDataFromContext = useMemo(() => students.find(s => s.id === user?.studentId), [students, user]);
@@ -360,6 +449,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     onProceedToUpload={() => setPaymentModalState('upload')}
                 />
             )}
+            {paymentModalState === 'card' && (
+                <CreditCardModal 
+                    student={studentData}
+                    amount={themeSettings.monthlyFeeAmount}
+                    onClose={() => setPaymentModalState('closed')}
+                    onConfirm={handleConfirmPayment}
+                />
+            )}
             {paymentModalState === 'upload' && (
                  <UploadProofModal 
                     onClose={() => setPaymentModalState('closed')}
@@ -385,17 +482,23 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             <div>
                                 <p className="text-sm font-medium text-slate-500">Mensalidade</p>
                                 {paymentSuccess ? (
-                                    <p className="text-xl font-bold text-green-600">Enviado!</p>
+                                    <p className="text-xl font-bold text-green-600 flex items-center"><CheckCircle className="w-4 h-4 mr-1"/> Pago</p>
                                 ) : (
                                     <p className="text-xl font-bold text-slate-800">{studentData.paymentStatus === 'paid' ? 'Em Dia' : 'Pendente'}</p>
                                 )}
                             </div>
                         </div>
                         {shouldShowPaymentButton && !studentProp && !paymentSuccess && (
-                             <Button size="sm" onClick={() => setPaymentModalState('pix')}>
-                                <IconPix className="w-4 h-4 mr-2" />
-                                Pagar
-                             </Button>
+                             <div className="flex flex-col gap-2">
+                                <Button size="sm" onClick={() => setPaymentModalState('pix')}>
+                                    <IconPix className="w-4 h-4 mr-2" />
+                                    PIX
+                                </Button>
+                                <Button size="sm" variant="secondary" onClick={() => setPaymentModalState('card')}>
+                                    <CreditCard className="w-4 h-4 mr-2" />
+                                    Cartão
+                                </Button>
+                             </div>
                         )}
                     </div>
                 </Card>

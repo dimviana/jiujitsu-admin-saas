@@ -6,9 +6,9 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText, Baby } from 'lucide-react'; // Import Baby icon
-import { PhotoUploadModal } from './ui/PhotoUploadModal'; // Import reusable modal
-import { generateCertificate } from '../services/certificateService'; // Import service
+import { Award as IconAward, FileText, Baby } from 'lucide-react';
+import { PhotoUploadModal } from './ui/PhotoUploadModal';
+import { generateCertificate } from '../services/certificateService';
 
 const validateCPF = (cpf: string): boolean => {
     if (typeof cpf !== 'string') return false;
@@ -32,7 +32,16 @@ const validateCPF = (cpf: string): boolean => {
     return true;
 };
 
-// Define StudentForm component inside the same file to avoid re-rendering issues and keep it self-contained.
+// Helper to format date string from API/DB (often includes time or is ISO) to YYYY-MM-DD for input type="date"
+const formatDateForInput = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+        return dateString.split('T')[0];
+    } catch (e) {
+        return '';
+    }
+};
+
 interface StudentFormProps {
     student: Partial<Student> | null;
     onSave: (student: Omit<Student, 'id' | 'paymentStatus' | 'lastSeen' | 'paymentHistory'> & { id?: string }) => void;
@@ -48,20 +57,21 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
         name: '',
         email: '',
         password: '',
-        birthDate: '',
         cpf: '',
         fjjpe_registration: '',
         phone: '',
         address: '',
         beltId: '',
         academyId: user?.role === 'academy_admin' ? user.academyId || '' : (student?.academyId || ''),
-        firstGraduationDate: '',
-        lastPromotionDate: '',
         paymentDueDateDay: 10,
         stripes: 0,
         isCompetitor: false,
-        lastCompetition: '',
         ...student,
+        // Ensure dates are correctly formatted for input fields
+        birthDate: formatDateForInput(student?.birthDate),
+        firstGraduationDate: formatDateForInput(student?.firstGraduationDate),
+        lastPromotionDate: formatDateForInput(student?.lastPromotionDate),
+        lastCompetition: student?.lastCompetition || '',
         medals: student?.medals || { gold: 0, silver: 0, bronze: 0 },
     });
     const [cpfError, setCpfError] = useState('');
@@ -175,7 +185,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
             
             {formData.isCompetitor && (
                 <div className="space-y-4 p-4 bg-slate-50 rounded-lg border border-slate-200 animate-fade-in-down">
-                    <Input label="Última Competição" name="lastCompetition" value={formData.lastCompetition || ''} onChange={handleChange} />
+                    <Input label="Última Competição" name="lastCompetition" value={formData.lastCompetition} onChange={handleChange} />
                     <fieldset className="border-t border-slate-200 pt-3">
                         <legend className="text-sm font-medium text-slate-700 mb-2">Quadro de Medalhas</legend>
                         <div className="grid grid-cols-3 gap-4">
