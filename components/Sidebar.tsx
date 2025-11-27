@@ -28,7 +28,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, currentPage, onNav
   const studentLinks = [
       { to: "dashboard", text: "Meu Dashboard", icon: <Home className="w-5 h-5" /> },
       { to: "schedule", text: "Horários", icon: <Calendar className="w-5 h-5" /> },
-      { to: "profile", text: "Meu Perfil", icon: <Users className="w-5 h-5" /> },
+      { to: "profile", text: "Meus Dados", icon: <Users className="w-5 h-5" /> },
   ];
 
   const linksToShow = user?.role === 'student' ? studentLinks : navLinks.filter(link => link.roles.includes(user?.role || ''));

@@ -11,7 +11,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentPage, onNavigate }) => {
     { to: 'dashboard', icon: <Home className="w-6 h-6" />, label: 'Início' },
     { to: 'schedule', icon: <Calendar className="w-6 h-6" />, label: 'Horários' },
     { to: 'students', icon: <Users className="w-6 h-6" />, label: 'Alunos' }, // Shows for students too, handled by logic but simplified here
-    { to: 'profile', icon: <User className="w-6 h-6" />, label: 'Perfil' },
+    { to: 'profile', icon: <User className="w-6 h-6" />, label: 'Meus Dados' },
   ];
 
   return (

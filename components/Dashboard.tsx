@@ -43,7 +43,7 @@ const BirthdayCard: React.FC<{ students: Student[], users: User[] }> = ({ studen
     if (allBirthdays.length === 0) return null;
 
     return (
-        <Card>
+        <Card className="animate-bounce-once border-l-4 border-l-amber-500">
             <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
                 <Gift className="w-5 h-5 mr-2 text-primary" />
                 Aniversariantes de Hoje
@@ -340,14 +340,14 @@ const AttendanceChart: React.FC<{ records: AttendanceRecord[] }> = ({ records })
     return (
       <Card className="h-full">
         <div className="flex justify-between items-center mb-4">
-           <h3 className="text-lg font-semibold text-[var(--theme-text-primary)]">Relatório de Frequência</h3>
+           <h3 className="text-lg font-semibold text-[var(--theme-text-primary)]">Relatório de Frequência (Últimos 9 dias)</h3>
         </div>
         <div style={{ width: '100%', height: 300 }}>
           <ResponsiveContainer>
             <BarChart data={data} barGap={8}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0, 0, 0, 0.05)" />
               <XAxis dataKey="name" tick={{ fill: 'var(--theme-text-primary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'var(--theme-text-primary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--theme-text-primary)', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip 
                   cursor={{fill: 'rgba(245, 158, 11, 0.1)'}}
                   contentStyle={{ 

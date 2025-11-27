@@ -1,10 +1,11 @@
-import React, { useState, useContext, FormEvent, useMemo } from 'react';
+import React, { useState, useContext, FormEvent, useMemo, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ClassSchedule, DayOfWeek } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
+import { Heart, Shield, Users } from 'lucide-react';
 
 interface ScheduleFormProps {
   schedule: Partial<ClassSchedule> | null;
@@ -125,6 +126,26 @@ const SchedulesPage: React.FC = () => {
   const { schedules, saveSchedule, deleteSchedule, loading, professors, academies, user, graduations } = useContext(AppContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Partial<ClassSchedule> | null>(null);
+  
+  // Favorites State
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+        const saved = localStorage.getItem('schedule_favorites');
+        return saved ? JSON.parse(saved) : [];
+    } catch {
+        return [];
+    }
+  });
+
+  const toggleFavorite = (scheduleId: string) => {
+    setFavorites(prev => {
+        const newFavs = prev.includes(scheduleId) 
+            ? prev.filter(id => id !== scheduleId) 
+            : [...prev, scheduleId];
+        localStorage.setItem('schedule_favorites', JSON.stringify(newFavs));
+        return newFavs;
+    });
+  };
 
   const filteredSchedules = useMemo(() => {
     let studentSchedules: ClassSchedule[] = [];
@@ -188,54 +209,82 @@ const SchedulesPage: React.FC = () => {
                 const academy = academies.find(a => a.id === schedule.academyId);
                 const requiredGrad = graduations.find(g => g.id === schedule.requiredGraduationId);
                 const assistants = professors.filter(p => schedule.assistantIds.includes(p.id));
+                const isFavorite = favorites.includes(schedule.id);
 
                 return (
-                    <Card key={schedule.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1">
+                    <Card key={schedule.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 relative h-full">
                         <div className="h-2 bg-amber-500"></div>
-                        <div className="p-5 flex flex-col flex-grow">
+                        <div className="p-5 flex flex-col flex-grow relative">
+                            {/* Favorite Button (Students Only) */}
+                            {user?.role === 'student' && (
+                                <button 
+                                    onClick={() => toggleFavorite(schedule.id)}
+                                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 transition-colors z-10"
+                                    title={isFavorite ? "Remover dos favoritos" : "Marcar como favorito"}
+                                >
+                                    <Heart 
+                                        className={`w-6 h-6 transition-colors ${isFavorite ? 'text-red-500 fill-red-500' : 'text-slate-300'}`} 
+                                    />
+                                </button>
+                            )}
+
                             <div className="flex-grow">
-                                <p className="text-sm font-semibold text-amber-600">{schedule.dayOfWeek}</p>
-                                <h2 className="text-xl font-bold text-slate-800 mt-1">{schedule.className}</h2>
-                                <p className="text-slate-500 font-medium">{schedule.startTime} - {schedule.endTime}</p>
-                                <div className="mt-4 space-y-3 text-sm">
+                                <p className="text-sm font-semibold text-amber-600 mb-1">{schedule.dayOfWeek}</p>
+                                <h2 className="text-xl font-bold text-slate-800 pr-8">{schedule.className}</h2>
+                                <p className="text-slate-500 font-medium text-lg mt-1">{schedule.startTime} - {schedule.endTime}</p>
+                                
+                                <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
                                     <div className="flex justify-between items-center">
-                                        <span className="text-slate-600 font-medium">Professor:</span>
-                                        <span className="font-medium text-slate-700">{professor?.name || 'N/A'}</span>
+                                        <span className="text-slate-500 text-sm font-medium">Professor:</span>
+                                        <span className="font-semibold text-slate-700">{professor?.name || 'N/A'}</span>
                                     </div>
+                                    
                                     {/* Conditional display for academy name */}
                                     {user?.role === 'general_admin' && academy && (
                                         <div className="flex justify-between items-center">
-                                            <span className="text-slate-600 font-medium">Academia:</span>
-                                            <span className="font-medium text-slate-700">{academy.name}</span>
+                                            <span className="text-slate-500 text-sm font-medium">Academia:</span>
+                                            <span className="font-medium text-slate-700 text-sm">{academy.name}</span>
                                         </div>
                                     )}
+
                                     {requiredGrad && (
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-slate-600 font-medium">Mínimo:</span>
+                                        <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100">
+                                            <span className="text-xs text-slate-500 font-bold uppercase flex items-center">
+                                                <Shield className="w-3 h-3 mr-1" /> Mínimo
+                                            </span>
                                             <div className="flex items-center">
-                                                <span className="w-4 h-4 rounded-full mr-2 border border-slate-300" style={{ backgroundColor: requiredGrad.color }}></span>
-                                                <span className="font-medium text-slate-700">{requiredGrad.name}</span>
+                                                <div 
+                                                    className="w-3 h-3 rounded-full mr-2 border border-slate-300 shadow-sm" 
+                                                    style={{ backgroundColor: requiredGrad.color }}
+                                                />
+                                                <span className="text-sm font-semibold text-slate-700">{requiredGrad.name}</span>
                                             </div>
                                         </div>
                                     )}
+
                                     {assistants.length > 0 && (
-                                        <div className="flex justify-between items-start">
-                                            <span className="text-slate-600 font-medium pt-1">Assistentes:</span>
-                                            <div className="text-right">
-                                                {assistants.map(a => <p key={a.id} className="font-medium text-slate-700">{a.name}</p>)}
+                                        <div>
+                                            <span className="text-xs text-slate-500 font-bold uppercase flex items-center mb-1">
+                                                <Users className="w-3 h-3 mr-1" /> Assistentes
+                                            </span>
+                                            <div className="flex flex-wrap gap-1">
+                                                {assistants.map(a => (
+                                                    <span key={a.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                                        {a.name}
+                                                    </span>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
                                 </div>
                             </div>
-                            <div className="mt-auto">
-                                {isAdmin && (
-                                    <div className="mt-5 pt-4 border-t border-slate-200/60 flex justify-end gap-2">
-                                        <Button size="sm" variant="secondary" onClick={() => handleOpenModal(schedule)}>Editar</Button>
-                                        <Button size="sm" variant="danger" onClick={() => handleDelete(schedule.id)}>Excluir</Button>
-                                    </div>
-                                )}
-                            </div>
+                            
+                            {isAdmin && (
+                                <div className="mt-5 pt-4 border-t border-slate-200/60 flex justify-end gap-2">
+                                    <Button size="sm" variant="secondary" onClick={() => handleOpenModal(schedule)}>Editar</Button>
+                                    <Button size="sm" variant="danger" onClick={() => handleDelete(schedule.id)}>Excluir</Button>
+                                </div>
+                            )}
                         </div>
                     </Card>
                 );

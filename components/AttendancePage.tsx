@@ -4,6 +4,7 @@ import { DayOfWeek, Student } from '../types';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
+import { Check, X, UserCheck } from 'lucide-react';
 
 // --- Constants ---
 const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -15,7 +16,7 @@ const toYYYYMMDD = (date: Date) => date.toISOString().split('T')[0];
 // --- Sub-components ---
 
 const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date, onClose }) => {
-    const { schedules, users, students, graduations, attendanceRecords, saveAttendanceRecord } = useContext(AppContext);
+    const { schedules, users, students, graduations, attendanceRecords, saveAttendanceRecord, setNotification } = useContext(AppContext);
     const dayOfWeek = DAYS_OF_WEEK_MAP[date.getDay()];
     
     const todaysSchedules = useMemo(() => schedules.filter(s => s.dayOfWeek === dayOfWeek), [schedules, dayOfWeek]);
@@ -33,61 +34,145 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
         setAttendance(prev => ({ ...prev, [`${studentId}-${scheduleId}`]: status }));
     };
 
-    const handleSave = async () => {
-        const promises = Object.entries(attendance).map(([key, status]) => {
-            const [studentId, scheduleId] = key.split('-');
-            const existingRecord = attendanceRecords.find(ar => ar.studentId === studentId && ar.scheduleId === scheduleId && ar.date === dateStr);
-            if (!existingRecord || existingRecord.status !== status) {
-                 return saveAttendanceRecord({ studentId, scheduleId, date: dateStr, status });
-            }
-            return Promise.resolve();
+    const handleMarkAllPresent = (scheduleId: string, eligibleStudents: Student[]) => {
+        const updates: Record<string, 'present' | 'absent'> = { ...attendance };
+        eligibleStudents.forEach(s => {
+            updates[`${s.id}-${scheduleId}`] = 'present';
         });
-        await Promise.all(promises);
-        onClose();
+        setAttendance(updates);
+    };
+
+    const handleSave = async () => {
+        try {
+            const promises = Object.entries(attendance).map(([key, status]) => {
+                const [studentId, scheduleId] = key.split('-');
+                const existingRecord = attendanceRecords.find(ar => ar.studentId === studentId && ar.scheduleId === scheduleId && ar.date === dateStr);
+                
+                // Only save if status changed or is new
+                if (!existingRecord || existingRecord.status !== status) {
+                     return saveAttendanceRecord({ studentId, scheduleId, date: dateStr, status });
+                }
+                return Promise.resolve();
+            });
+            await Promise.all(promises);
+            setNotification({ message: 'Frequência Salva', details: 'Os registros de presença foram atualizados com sucesso.', type: 'success' });
+            onClose();
+        } catch (error) {
+            setNotification({ message: 'Erro ao Salvar', details: 'Houve um problema ao salvar a frequência.', type: 'error' });
+        }
     };
     
     return (
-        <Modal isOpen={true} onClose={onClose} title={`Aulas de ${date.toLocaleDateString('pt-BR')}`} size="lg">
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
+        <Modal isOpen={true} onClose={onClose} title={`Aulas de ${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}`} size="lg">
+            <div className="space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
                 {todaysSchedules.length > 0 ? todaysSchedules.map(schedule => {
                      const eligibleStudents = students.filter(student => {
                         if (student.academyId !== schedule.academyId) return false;
                         const studentGrad = graduations.find(g => g.id === student.beltId);
                         const requiredGrad = graduations.find(g => g.id === schedule.requiredGraduationId);
-                        const reqRank = requiredGrad?.rank ?? 1;
+                        const reqRank = requiredGrad?.rank ?? 1; // Default to rank 1 (White belt) if not specified
                         return (studentGrad?.rank ?? 0) >= reqRank;
                     });
+
+                    const professor = users.find(u => u.id === schedule.professorId);
+
                     return (
-                        <div key={schedule.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                            <div className="flex justify-between items-start mb-3">
+                        <div key={schedule.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                            {/* Class Header */}
+                            <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center flex-wrap gap-2">
                                 <div>
-                                    <h3 className="font-bold text-slate-800">{schedule.className}</h3>
-                                    <p className="text-xs text-slate-500">{schedule.startTime} - {schedule.endTime} • Prof. {users.find(u => u.id === schedule.professorId)?.name}</p>
+                                    <h3 className="font-bold text-slate-800 text-lg">{schedule.className}</h3>
+                                    <p className="text-sm text-slate-500 flex items-center">
+                                        <span className="font-medium mr-2">{schedule.startTime} - {schedule.endTime}</span>
+                                        <span className="w-1 h-1 bg-slate-300 rounded-full mx-2"></span>
+                                        Prof. {professor?.name || 'N/A'}
+                                    </p>
                                 </div>
-                                <span className="bg-slate-200 text-slate-600 text-xs px-2 py-1 rounded-full">{eligibleStudents.length} Alunos</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="bg-white border border-slate-200 text-slate-600 text-xs px-2.5 py-1 rounded-full font-medium shadow-sm">
+                                        {eligibleStudents.length} Alunos Elegíveis
+                                    </span>
+                                    <Button size="sm" variant="secondary" onClick={() => handleMarkAllPresent(schedule.id, eligibleStudents)} className="text-xs">
+                                        <UserCheck className="w-3 h-3 mr-1" /> Todos Presentes
+                                    </Button>
+                                </div>
                             </div>
                             
-                            <div className="space-y-2">
+                            {/* Student List */}
+                            <div className="divide-y divide-slate-50">
                                 {eligibleStudents.map(student => {
                                     const key = `${student.id}-${schedule.id}`;
                                     const currentStatus = attendance[key];
+                                    const belt = graduations.find(g => g.id === student.beltId);
+
                                     return (
-                                        <div key={student.id} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 shadow-sm">
-                                            <span className="text-sm font-medium text-slate-700">{student.name}</span>
+                                        <div key={student.id} className="flex justify-between items-center p-3 hover:bg-slate-50 transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className="relative">
+                                                    <img 
+                                                        src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
+                                                        alt={student.name} 
+                                                        className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                                                    />
+                                                    {currentStatus === 'present' && (
+                                                        <div className="absolute -bottom-1 -right-1 bg-green-500 text-white rounded-full p-0.5 border-2 border-white">
+                                                            <Check className="w-3 h-3" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium text-slate-700 text-sm">{student.name}</p>
+                                                    {belt && (
+                                                        <div className="flex items-center mt-0.5">
+                                                            <div className="w-6 h-1.5 rounded-sm mr-1.5 border border-slate-200" style={{ backgroundColor: belt.color }}></div>
+                                                            <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{belt.name}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
                                             <div className="flex gap-2">
-                                                <Button size="sm" onClick={() => handleStatusChange(student.id, schedule.id, 'present')} className={currentStatus === 'present' ? '!bg-green-500 hover:!bg-green-600 text-white' : '!bg-slate-100 hover:!bg-slate-200 !text-slate-500'}>Presente</Button>
-                                                <Button size="sm" onClick={() => handleStatusChange(student.id, schedule.id, 'absent')} className={currentStatus === 'absent' ? '!bg-red-500 hover:!bg-red-600 text-white' : '!bg-slate-100 hover:!bg-slate-200 !text-slate-500'}>Faltou</Button>
+                                                <button 
+                                                    onClick={() => handleStatusChange(student.id, schedule.id, 'present')}
+                                                    className={`p-2 rounded-lg transition-all flex items-center justify-center ${
+                                                        currentStatus === 'present' 
+                                                            ? 'bg-green-100 text-green-700 ring-2 ring-green-500 ring-offset-1' 
+                                                            : 'bg-slate-50 text-slate-400 hover:bg-green-50 hover:text-green-600'
+                                                    }`}
+                                                    title="Presente"
+                                                >
+                                                    <Check className="w-5 h-5" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleStatusChange(student.id, schedule.id, 'absent')}
+                                                    className={`p-2 rounded-lg transition-all flex items-center justify-center ${
+                                                        currentStatus === 'absent' 
+                                                            ? 'bg-red-100 text-red-700 ring-2 ring-red-500 ring-offset-1' 
+                                                            : 'bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-600'
+                                                    }`}
+                                                    title="Ausente"
+                                                >
+                                                    <X className="w-5 h-5" />
+                                                </button>
                                             </div>
                                         </div>
                                     );
                                 })}
-                                {eligibleStudents.length === 0 && <p className="text-sm text-slate-400 italic">Nenhum aluno elegível para esta turma.</p>}
+                                {eligibleStudents.length === 0 && (
+                                    <div className="p-8 text-center">
+                                        <p className="text-slate-400 italic text-sm">Nenhum aluno elegível para esta turma (verifique as graduações).</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )
-                }) : <p className="text-slate-500 text-center py-4">Nenhuma aula agendada para este dia.</p>}
+                }) : (
+                    <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <p className="text-slate-500">Nenhuma aula agendada para este dia.</p>
+                    </div>
+                )}
             </div>
-            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-100">
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
                 <Button variant="secondary" onClick={onClose}>Cancelar</Button>
                 <Button onClick={handleSave}>Salvar Frequência</Button>
             </div>
@@ -226,21 +311,11 @@ const CalendarView: React.FC = () => {
 
 
 const AttendanceGrid: React.FC<{ student: Student }> = ({ student }) => {
-    const { attendanceRecords, schedules } = useContext(AppContext);
+    const { attendanceRecords } = useContext(AppContext);
     const today = new Date();
+    // Show last 6 months (approx 180 days)
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - 180); 
-
-    const studentSchedulesByDay = useMemo(() => {
-        const scheduleMap: Record<number, boolean> = {};
-        schedules.filter(s => s.academyId === student.academyId).forEach(s => {
-            const dayIndex = Object.keys(DAYS_OF_WEEK_MAP).find(key => DAYS_OF_WEEK_MAP[Number(key) as keyof typeof DAYS_OF_WEEK_MAP] === s.dayOfWeek);
-            if (dayIndex) {
-                scheduleMap[Number(dayIndex)] = true;
-            }
-        });
-        return scheduleMap;
-    }, [schedules, student.academyId]);
 
     const recordsByDate = useMemo(() => {
         const map = new Map<string, 'present' | 'absent'>();
@@ -266,37 +341,31 @@ const AttendanceGrid: React.FC<{ student: Student }> = ({ student }) => {
                  {days.map(day => {
                     const dateStr = toYYYYMMDD(day);
                     const status = recordsByDate.get(dateStr);
-                    const hadClass = studentSchedulesByDay[day.getDay()];
 
-                    let colorClass = 'bg-transparent'; // No class day
-                    let title = `${dateStr}: Sem aula agendada`;
+                    let colorClass = 'bg-slate-100 border border-slate-200'; // Sem registro / Sem cor
+                    let title = `${dateStr}: Sem registro`;
                     
-                    if (hadClass) {
-                        if (status === 'present') {
-                            colorClass = 'bg-green-500';
-                            title = `${dateStr}: Presente`;
-                        } else if (status === 'absent') {
-                            colorClass = 'bg-red-500';
-                            title = `${dateStr}: Faltou`;
-                        } else {
-                            colorClass = 'bg-slate-200'; // Class existed but no record
-                            title = `${dateStr}: Sem registro`;
-                        }
+                    if (status === 'present') {
+                        colorClass = 'bg-green-500 border border-green-600';
+                        title = `${dateStr}: Presente`;
+                    } else if (status === 'absent') {
+                        colorClass = 'bg-red-500 border border-red-600';
+                        title = `${dateStr}: Faltou`;
                     }
 
                     return (
                         <div 
                             key={dateStr} 
-                            className={`w-3 h-3 rounded-sm ${colorClass} transition-colors hover:opacity-80`} 
+                            className={`w-4 h-4 rounded-sm ${colorClass} transition-colors hover:opacity-80`} 
                             title={title} 
                         />
                     );
                  })}
             </div>
              <div className="flex gap-6 mt-6 text-sm items-center text-slate-600 justify-end">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-green-500"/> Presente</div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-red-500"/> Faltou</div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-slate-200"/> Sem Registro</div>
+                <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-sm bg-green-500 border border-green-600"/> Presente</div>
+                <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-sm bg-red-500 border border-red-600"/> Faltou</div>
+                <div className="flex items-center gap-2"><div className="w-4 h-4 rounded-sm bg-slate-100 border border-slate-200"/> Sem Registro</div>
              </div>
         </Card>
     );
