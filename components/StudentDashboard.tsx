@@ -249,6 +249,8 @@ interface StudentDashboardProps {
   schedules: ClassSchedule[];
   themeSettings: ThemeSettings;
   updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
+  // FIX: Added optional `users` prop to match usage in Dashboard.tsx
+  users?: User[];
 }
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ 

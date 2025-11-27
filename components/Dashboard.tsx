@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useContext } from 'react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
-import { Student, User, ClassSchedule, DayOfWeek, Graduation, ThemeSettings } from '../types';
-import { Users, Briefcase, BookOpen, ChevronDown, Gift, Award, Calendar as CalendarIcon } from 'lucide-react';
+import { Student, User, ClassSchedule, DayOfWeek, Graduation, ThemeSettings, AttendanceRecord } from '../types';
+import { Users, Briefcase, BookOpen, ChevronDown, Gift, Award, Calendar as CalendarIcon, DollarSign } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -16,6 +16,7 @@ interface DashboardProps {
   graduations: Graduation[];
   themeSettings: ThemeSettings;
   updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
+  attendanceRecords: AttendanceRecord[];
 }
 
 const toYYYYMMDD = (date: Date) => date.toISOString().split('T')[0];
@@ -81,34 +82,42 @@ const StatCard: React.FC<StatCardProps> = ({ icon, title, value, color, bgColor 
     </Card>
 );
 
-const StudentPerformanceTable: React.FC<{ students: Student[] }> = ({ students }) => {
+const StudentPerformanceTable: React.FC<{ students: Student[], onPayClick: (student: Student) => void }> = ({ students, onPayClick }) => {
+    const overdueStudents = students.filter(s => s.paymentStatus === 'unpaid').slice(0, 4);
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-sm text-left text-slate-600">
                 <thead className="text-xs text-slate-500 uppercase bg-slate-50">
                     <tr>
                         <th scope="col" className="px-6 py-3">Nome</th>
-                        <th scope="col" className="px-6 py-3">ID Federação</th>
-                        <th scope="col" className="px-6 py-3">Turma</th>
-                        <th scope="col" className="px-6 py-3">Conceito</th>
+                        <th scope="col" className="px-6 py-3">Status</th>
+                        <th scope="col" className="px-6 py-3">Ação</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {students.slice(0, 4).map(student => (
+                    {overdueStudents.map(student => (
                         <tr key={student.id} className="bg-white border-b border-slate-100 hover:bg-slate-50">
                             <td className="px-6 py-4 font-medium text-slate-800 whitespace-nowrap flex items-center">
                                 <img src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}&background=random`} alt={student.name} className="w-8 h-8 rounded-full mr-3 object-cover" />
                                 {student.name}
                             </td>
-                            <td className="px-6 py-4">{student.fjjpe_registration || '---'}</td>
-                            <td className="px-6 py-4">Turma {Math.floor(Math.random() * (12 - 9 + 1)) + 9}:00</td>
-                            <td className="px-6 py-4 font-medium">
-                                <span className={`px-2 py-1 rounded-full text-xs ${['bg-green-100 text-green-700', 'bg-blue-100 text-blue-700'][Math.floor(Math.random()*2)]}`}>
-                                    {['Excepcional', 'Bom'][Math.floor(Math.random()*2)]}
-                                </span>
+                            <td className="px-6 py-4">
+                                <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-1 rounded-full">Pendente</span>
+                            </td>
+                            <td className="px-6 py-4">
+                                <Button size="sm" variant="secondary" onClick={() => onPayClick(student)}>
+                                    Registrar Pagamento
+                                </Button>
                             </td>
                         </tr>
                     ))}
+                     {overdueStudents.length === 0 && (
+                        <tr>
+                            <td colSpan={3} className="text-center py-6 text-slate-400">
+                                Nenhum aluno com pendências.
+                            </td>
+                        </tr>
+                    )}
                 </tbody>
             </table>
         </div>
@@ -173,8 +182,8 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({ selectedDate, onDateCha
             <div className="flex justify-between items-center mb-4">
                 <h3 className="font-semibold text-slate-800 capitalize">{selectedDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
                 <div className="flex space-x-2">
-                    <button onClick={() => changeMonth(-1)} className="text-slate-400 hover:text-primary p-1 rounded-full hover:bg-slate-100">&lt;</button>
-                    <button onClick={() => changeMonth(1)} className="text-slate-400 hover:text-primary p-1 rounded-full hover:bg-slate-100">&gt;</button>
+                    <button onClick={() => changeMonth(-1)} className="text-slate-400 hover:text-primary p-1 rounded-full hover:bg-slate-100 transition-colors">&lt;</button>
+                    <button onClick={() => changeMonth(1)} className="text-slate-400 hover:text-primary p-1 rounded-full hover:bg-slate-100 transition-colors">&gt;</button>
                 </div>
             </div>
             <div className="grid grid-cols-7 text-center text-sm text-slate-500">
@@ -305,37 +314,38 @@ const CompetitionsCard: React.FC<CompetitionsCardProps> = ({ students, onCompeti
     );
 };
 
-const attendanceData = [
-    { name: '18-Jun', Presentes: 1600, Ausentes: 800 },
-    { name: '19-Jun', Presentes: 1800, Ausentes: 1100 },
-    { name: '20-Jun', Presentes: 1900, Ausentes: 900 },
-    { name: '21-Jun', Presentes: 1200, Ausentes: 700 },
-    { name: '22-Jun', Presentes: 2000, Ausentes: 400 },
-    { name: '23-Jun', Presentes: 1400, Ausentes: 600 },
-    { name: '24-Jun', Presentes: 1100, Ausentes: 500 },
-    { name: '25-Jun', Presentes: 1300, Ausentes: 800 },
-    { name: '26-Jun', Presentes: 1800, Ausentes: 300 },
-];
-  
-const AttendanceChart: React.FC = () => {
+const AttendanceChart: React.FC<{ records: AttendanceRecord[] }> = ({ records }) => {
     const { themeSettings } = useContext(AppContext);
-    const tickColor = 'var(--theme-text-primary)';
   
+    const data = useMemo(() => {
+        const last9Days = Array.from({ length: 9 }).map((_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            return d;
+        }).reverse();
+
+        return last9Days.map(day => {
+            const dateStr = toYYYYMMDD(day);
+            const dailyRecords = records.filter(r => r.date === dateStr);
+            return {
+                name: day.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', ''),
+                Presentes: dailyRecords.filter(r => r.status === 'present').length,
+                Ausentes: dailyRecords.filter(r => r.status === 'absent').length
+            };
+        });
+    }, [records]);
+    
     return (
       <Card className="h-full">
         <div className="flex justify-between items-center mb-4">
            <h3 className="text-lg font-semibold text-[var(--theme-text-primary)]">Relatório de Frequência</h3>
-           <div className="flex items-center space-x-4 text-sm text-[var(--theme-text-primary)]/80">
-              <div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: themeSettings.chartColor1}}></span>Presentes</div>
-              <div className="flex items-center"><span className="w-3 h-3 rounded-full mr-2" style={{backgroundColor: themeSettings.chartColor2}}></span>Ausentes</div>
-           </div>
         </div>
         <div style={{ width: '100%', height: 300 }}>
           <ResponsiveContainer>
-            <BarChart data={attendanceData} barGap={8}>
+            <BarChart data={data} barGap={8}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0, 0, 0, 0.05)" />
-              <XAxis dataKey="name" tick={{ fill: tickColor, fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: tickColor, fontSize: 12 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fill: 'var(--theme-text-primary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--theme-text-primary)', fontSize: 12 }} axisLine={false} tickLine={false} />
               <Tooltip 
                   cursor={{fill: 'rgba(245, 158, 11, 0.1)'}}
                   contentStyle={{ 
@@ -345,6 +355,7 @@ const AttendanceChart: React.FC = () => {
                       borderRadius: '0.75rem',
                   }}
               />
+              <Legend iconType="circle" />
               <Bar dataKey="Presentes" fill={themeSettings.chartColor1} radius={[5, 5, 0, 0]} barSize={10} />
               <Bar dataKey="Ausentes" fill={themeSettings.chartColor2} radius={[5, 5, 0, 0]} barSize={10} />
             </BarChart>
@@ -354,11 +365,11 @@ const AttendanceChart: React.FC = () => {
     );
 };
 
-const StudentBreakdownChart: React.FC = () => {
+const StudentBreakdownChart: React.FC<{ students: Student[] }> = ({ students }) => {
     const { themeSettings } = useContext(AppContext);
     const data = [
-      { name: 'Meninos', value: 1200 },
-      { name: 'Meninas', value: 800 },
+      { name: 'Meninos', value: 12 }, // Static for now
+      { name: 'Meninas', value: 8 },
     ];
   
     const COLORS = [themeSettings.chartColor1, themeSettings.chartColor2];
@@ -369,7 +380,7 @@ const StudentBreakdownChart: React.FC = () => {
           <div className="flex-grow w-full h-64 relative">
                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="text-center">
-                      <p className="text-3xl font-bold text-[var(--theme-text-primary)]">2000</p>
+                      <p className="text-3xl font-bold text-[var(--theme-text-primary)]">{students.length}</p>
                       <p className="text-sm text-[var(--theme-text-primary)]/70">Alunos</p>
                   </div>
               </div>
@@ -408,6 +419,35 @@ const StudentBreakdownChart: React.FC = () => {
     );
 };
 
+// Payment Modal
+const PaymentModal: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void;
+    students: Student[];
+    onConfirm: (studentId: string) => void;
+}> = ({ isOpen, onClose, students, onConfirm }) => {
+    const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || '');
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Registrar Pagamento de Mensalidade">
+            <div className="space-y-4">
+                <p>Selecione o aluno que realizou o pagamento:</p>
+                <select 
+                    value={selectedStudentId}
+                    onChange={(e) => setSelectedStudentId(e.target.value)}
+                    className="w-full border-slate-200 rounded-lg"
+                >
+                    {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                    <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={() => onConfirm(selectedStudentId)} disabled={!selectedStudentId}>Confirmar Pagamento</Button>
+                </div>
+            </div>
+        </Modal>
+    )
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({ 
     user, 
     students, 
@@ -415,10 +455,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
     schedules, 
     graduations, 
     themeSettings, 
-    updateStudentPayment 
+    updateStudentPayment,
+    attendanceRecords
 }) => {
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+    const overdueStudents = useMemo(() => students.filter(s => s.paymentStatus === 'unpaid'), [students]);
+
+    const handleConfirmPayment = async (studentId: string) => {
+        await updateStudentPayment(studentId, 'paid');
+        setIsPaymentModalOpen(false);
+    }
     
     if (user?.role === 'student') {
         return <StudentDashboard 
@@ -427,7 +476,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             graduations={graduations} 
             schedules={schedules} 
             themeSettings={themeSettings} 
-            updateStudentPayment={updateStudentPayment} 
+            updateStudentPayment={updateStudentPayment}
+            users={users}
         />;
     }
 
@@ -444,10 +494,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-3xl font-bold text-slate-800">Bom dia, {user?.name?.split(' ')[0]}!</h1>
-                  <p className="text-slate-500 mt-1">Bem-vindo ao painel da Academia Master</p>
+                  <p className="text-slate-500 mt-1">Bem-vindo ao painel da sua academia.</p>
                 </div>
                 <div className="hidden md:block">
-                    <Button variant="secondary"><CalendarIcon className="w-4 h-4 mr-2" /> {new Date().toLocaleDateString()}</Button>
+                    <Button variant="secondary"><CalendarIcon className="w-4 h-4 mr-2" /> {new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</Button>
                 </div>
             </div>
             
@@ -456,20 +506,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                        {stats.map(stat => <StatCard key={stat.title} {...stat} />)}
                     </div>
-                    <AttendanceChart />
+                    <AttendanceChart records={attendanceRecords} />
                     <Card>
                         <div className="flex justify-between items-center mb-4">
-                             <h3 className="text-lg font-semibold text-slate-800">Desempenho dos Alunos</h3>
-                             <Button variant="secondary" size="sm">Todos <ChevronDown className="w-4 h-4 ml-1" /></Button>
+                             <h3 className="text-lg font-semibold text-slate-800">Alunos com Pendências</h3>
+                             <Button size="sm" onClick={() => setIsPaymentModalOpen(true)} disabled={overdueStudents.length === 0}>
+                                <DollarSign className="w-4 h-4 mr-2" />
+                                Pagar Mensalidade
+                             </Button>
                         </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div className="lg:col-span-2">
-                                <StudentPerformanceTable students={students} />
-                            </div>
-                            <div>
-                                <StudentBreakdownChart />
-                            </div>
-                        </div>
+                        <StudentPerformanceTable students={students} onPayClick={(student) => {
+                            setIsPaymentModalOpen(true);
+                        }} />
                     </Card>
                 </div>
                 <div className="lg:col-span-4 space-y-6">
@@ -494,9 +542,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         graduations={graduations} 
                         schedules={schedules} 
                         themeSettings={themeSettings} 
-                        updateStudentPayment={updateStudentPayment} 
+                        updateStudentPayment={updateStudentPayment}
+                        users={users}
                     />
                 </Modal>
+            )}
+
+            {isPaymentModalOpen && (
+                <PaymentModal
+                    isOpen={isPaymentModalOpen}
+                    onClose={() => setIsPaymentModalOpen(false)}
+                    students={overdueStudents}
+                    onConfirm={handleConfirmPayment}
+                />
             )}
         </div>
     );

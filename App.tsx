@@ -13,7 +13,7 @@ import GraduationsPage from './components/GraduationsPage';
 import AttendancePage from './components/AttendancePage';
 import Login from './components/Login';
 import AcademiesPage from './components/AcademiesPage'; // New Import
-import { SCHEDULES } from './constants'; // Fallback
+import { SCHEDULES, ATTENDANCE_RECORDS } from './constants'; // Fallback
 import Notification from './components/ui/Notification';
 import ProfilePage from './components/ProfilePage';
 
@@ -21,7 +21,8 @@ type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financ
 
 const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
-  const { user, themeSettings, students, users, schedules, graduations, updateStudentPayment, logout, notification, setNotification } = useContext(AppContext);
+  // FIX: Destructure `attendanceRecords` from context to pass to Dashboard.
+  const { user, themeSettings, students, users, schedules, graduations, updateStudentPayment, logout, notification, setNotification, attendanceRecords } = useContext(AppContext);
 
   // Redirecionar para dashboard após login
   useEffect(() => {
@@ -53,6 +54,8 @@ const AppContent: React.FC = () => {
                     graduations={graduations}
                     themeSettings={themeSettings}
                     updateStudentPayment={updateStudentPayment}
+                    // FIX: Pass the required `attendanceRecords` prop to Dashboard.
+                    attendanceRecords={attendanceRecords}
                 />
             )}
             {page === 'students' && <StudentsPage />}
