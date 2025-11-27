@@ -1,6 +1,6 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { DayOfWeek } from '../types';
+import { DayOfWeek, Student } from '../types';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
@@ -54,7 +54,6 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
                         if (student.academyId !== schedule.academyId) return false;
                         const studentGrad = graduations.find(g => g.id === student.beltId);
                         const requiredGrad = graduations.find(g => g.id === schedule.requiredGraduationId);
-                        // If no required grad, assume white belt rank (1)
                         const reqRank = requiredGrad?.rank ?? 1;
                         return (studentGrad?.rank ?? 0) >= reqRank;
                     });
@@ -226,20 +225,30 @@ const CalendarView: React.FC = () => {
 };
 
 
-const AttendanceGrid: React.FC<{ studentId: string }> = ({ studentId }) => {
-    const { attendanceRecords } = useContext(AppContext);
+const AttendanceGrid: React.FC<{ student: Student }> = ({ student }) => {
+    const { attendanceRecords, schedules } = useContext(AppContext);
     const today = new Date();
-    // Show last 6 months approx
     const startDate = new Date(today);
     startDate.setDate(today.getDate() - 180); 
+
+    const studentSchedulesByDay = useMemo(() => {
+        const scheduleMap: Record<number, boolean> = {};
+        schedules.filter(s => s.academyId === student.academyId).forEach(s => {
+            const dayIndex = Object.keys(DAYS_OF_WEEK_MAP).find(key => DAYS_OF_WEEK_MAP[Number(key) as keyof typeof DAYS_OF_WEEK_MAP] === s.dayOfWeek);
+            if (dayIndex) {
+                scheduleMap[Number(dayIndex)] = true;
+            }
+        });
+        return scheduleMap;
+    }, [schedules, student.academyId]);
 
     const recordsByDate = useMemo(() => {
         const map = new Map<string, 'present' | 'absent'>();
         attendanceRecords
-            .filter(r => r.studentId === studentId)
+            .filter(r => r.studentId === student.id)
             .forEach(r => map.set(r.date, r.status));
         return map;
-    }, [attendanceRecords, studentId]);
+    }, [attendanceRecords, student.id]);
 
     const days = [];
     let currentDate = new Date(startDate);
@@ -250,9 +259,6 @@ const AttendanceGrid: React.FC<{ studentId: string }> = ({ studentId }) => {
     
     if (days.length === 0) return <p>Nenhum dado para exibir.</p>;
     
-    // Group by weeks for a GitHub-like contribution graph
-    // or just a grid. Let's do a flexible grid.
-    
     return (
         <Card>
             <h3 className="text-lg font-bold text-amber-600 mb-4">Histórico de Presença (Últimos 6 meses)</h3>
@@ -260,15 +266,22 @@ const AttendanceGrid: React.FC<{ studentId: string }> = ({ studentId }) => {
                  {days.map(day => {
                     const dateStr = toYYYYMMDD(day);
                     const status = recordsByDate.get(dateStr);
-                    let colorClass = 'bg-slate-100'; // Default empty day
-                    let title = `${dateStr}: Sem registro`;
+                    const hadClass = studentSchedulesByDay[day.getDay()];
+
+                    let colorClass = 'bg-transparent'; // No class day
+                    let title = `${dateStr}: Sem aula agendada`;
                     
-                    if (status === 'present') {
-                        colorClass = 'bg-green-500';
-                        title = `${dateStr}: Presente`;
-                    } else if (status === 'absent') {
-                        colorClass = 'bg-red-500';
-                        title = `${dateStr}: Faltou`;
+                    if (hadClass) {
+                        if (status === 'present') {
+                            colorClass = 'bg-green-500';
+                            title = `${dateStr}: Presente`;
+                        } else if (status === 'absent') {
+                            colorClass = 'bg-red-500';
+                            title = `${dateStr}: Faltou`;
+                        } else {
+                            colorClass = 'bg-slate-200'; // Class existed but no record
+                            title = `${dateStr}: Sem registro`;
+                        }
                     }
 
                     return (
@@ -283,7 +296,7 @@ const AttendanceGrid: React.FC<{ studentId: string }> = ({ studentId }) => {
              <div className="flex gap-6 mt-6 text-sm items-center text-slate-600 justify-end">
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-green-500"/> Presente</div>
                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-red-500"/> Faltou</div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-slate-100 border border-slate-200"/> Sem Aula/Registro</div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-slate-200"/> Sem Registro</div>
              </div>
         </Card>
     );
@@ -292,7 +305,7 @@ const AttendanceGrid: React.FC<{ studentId: string }> = ({ studentId }) => {
 
 const StudentView: React.FC = () => {
     const { students, graduations, loading } = useContext(AppContext);
-    const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+    const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredStudents = students.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -314,9 +327,9 @@ const StudentView: React.FC = () => {
                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto custom-scrollbar p-1">
                     {filteredStudents.map(student => {
                         const belt = graduations.find(g => g.id === student.beltId);
-                        const isSelected = selectedStudentId === student.id;
+                        const isSelected = selectedStudent?.id === student.id;
                         return (
-                           <div key={student.id} onClick={() => setSelectedStudentId(student.id)}
+                           <div key={student.id} onClick={() => setSelectedStudent(student)}
                             className={`bg-white p-3 rounded-lg shadow-sm cursor-pointer transition-all duration-200 border
                                 ${isSelected ? 'border-amber-500 ring-1 ring-amber-500' : 'border-slate-200 hover:border-amber-300'}`}>
                                <div className="flex items-center gap-3">
@@ -337,9 +350,9 @@ const StudentView: React.FC = () => {
                 </div>
              )}
 
-            {selectedStudentId && (
+            {selectedStudent && (
                 <div className="mt-8 animate-fade-in-up">
-                    <AttendanceGrid studentId={selectedStudentId} />
+                    <AttendanceGrid student={selectedStudent} />
                 </div>
             )}
         </div>

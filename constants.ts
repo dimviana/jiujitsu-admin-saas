@@ -160,10 +160,11 @@ export const SCHEDULES: ClassSchedule[] = [
     { id: 'c3', className: 'No-Gi Submission', dayOfWeek: 'Quarta-feira', startTime: '19:00', endTime: '20:30', professorId: 'prof1', academyId: 'master_admin_academy_01', assistantIds: [], requiredGraduationId: 'white'},
 ];
 
+// FIX: Removed `id` property from mock attendance records to match the `AttendanceRecord` type.
 export const ATTENDANCE_RECORDS: AttendanceRecord[] = [
-    { id: 'att1', studentId: 'student_01', scheduleId: 'c1', date: '2023-10-01', status: 'present' },
-    { id: 'att2', studentId: 'student_01', scheduleId: 'c1', date: '2023-10-08', status: 'present' },
-    { id: 'att3', studentId: 'student_02', scheduleId: 'c1', date: '2023-10-01', status: 'absent' },
+    { studentId: 'student_01', scheduleId: 'c1', date: '2023-10-01', status: 'present' },
+    { studentId: 'student_01', scheduleId: 'c1', date: '2023-10-08', status: 'present' },
+    { studentId: 'student_02', scheduleId: 'c1', date: '2023-10-01', status: 'absent' },
 ];
 
 export const ACTIVITY_LOGS: ActivityLog[] = [

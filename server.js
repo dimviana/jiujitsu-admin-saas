@@ -219,16 +219,9 @@ app.post('/api/students/payment', async (req, res) => {
     }
 });
 
-// FIX: Updated Professor Handler to use INSERT ... ON DUPLICATE KEY UPDATE
-// This prevents foreign key errors caused by REPLACE INTO deleting referenced rows
 app.post('/api/professors', async (req, res) => {
     try {
         const data = req.body;
-        
-        // Generate ID if creating new
-        if (!data.id) {
-            data.id = `prof_${Date.now()}`;
-        }
         
         // Sanitize date
         if (data.blackBeltDate && typeof data.blackBeltDate === 'string') {
@@ -237,18 +230,19 @@ app.post('/api/professors', async (req, res) => {
             data.blackBeltDate = null;
         }
         
-        const keys = Object.keys(data);
-        const values = Object.values(data);
-        
-        // Construct ON DUPLICATE KEY UPDATE clause
-        const updateClause = keys.map(key => `\`${key}\` = VALUES(\`${key}\`)`).join(', ');
-        const placeholders = keys.map(() => '?').join(',');
-        const escapedKeys = keys.map(key => `\`${key}\``).join(',');
-
-        await pool.query(
-            `INSERT INTO professors (${escapedKeys}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`,
-            values
-        );
+        // Use INSERT ... ON DUPLICATE KEY UPDATE for safe updates
+        if (data.id) {
+            const { id, ...updateData } = data;
+            const updateFields = Object.keys(updateData).map(key => `\`${key}\` = ?`).join(', ');
+            const updateValues = Object.values(updateData);
+            await pool.query(`UPDATE professors SET ${updateFields} WHERE id = ?`, [...updateValues, id]);
+        } else {
+            data.id = `prof_${Date.now()}`;
+            const keys = Object.keys(data).map(key => `\`${key}\``).join(',');
+            const placeholders = Object.keys(data).map(() => '?').join(',');
+            const values = Object.values(data);
+            await pool.query(`INSERT INTO professors (${keys}) VALUES (${placeholders})`, values);
+        }
         
         res.json({ success: true });
     } catch (error) {

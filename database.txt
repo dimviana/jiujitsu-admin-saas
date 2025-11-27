@@ -124,15 +124,17 @@ CREATE TABLE IF NOT EXISTS schedule_assistants (
     FOREIGN KEY (assistantId) REFERENCES professors(id)
 );
 
+-- FIX: Changed primary key to composite key to ensure unique records and allow updates
 CREATE TABLE IF NOT EXISTS attendance_records (
-    id VARCHAR(255) PRIMARY KEY,
     studentId VARCHAR(255),
     scheduleId VARCHAR(255),
     `date` DATE NOT NULL,
     status VARCHAR(255) CHECK(status IN ('present', 'absent')),
+    PRIMARY KEY (studentId, scheduleId, `date`),
     FOREIGN KEY (studentId) REFERENCES students(id),
     FOREIGN KEY (scheduleId) REFERENCES class_schedules(id)
 );
+
 
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(255) PRIMARY KEY,
@@ -153,9 +155,38 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     details TEXT
 );
 
--- Seed Data
+-- Seed Data: Configurações Iniciais
 REPLACE INTO theme_settings (id, logoUrl, systemName, primaryColor, secondaryColor, backgroundColor, cardBackgroundColor, buttonColor, buttonTextColor, iconColor, chartColor1, chartColor2, useGradient, reminderDaysBeforeDue, overdueDaysAfterDue, theme, monthlyFeeAmount, publicPageEnabled, heroHtml, aboutHtml, branchesHtml, footerHtml, copyrightText, systemVersion, socialLoginEnabled) VALUES (1, 'https://tailwindui.com/img/logos/mark.svg?color=amber&shade=500', 'Jiu-Jitsu Hub', '#f59e0b', '#111827', '#f8fafc', '#ffffff', '#f59e0b', '#ffffff', '#64748b', '#f9a825', '#475569', 1, 5, 5, 'light', 150.00, 1, '<div class="relative bg-white text-slate-800 text-center py-20 px-4 overflow-hidden" style="background-image: url(\'https://images.unsplash.com/photo-1581009137052-c40971b51c69?q=80&w=2070&auto=format&fit=crop\'); background-size: cover; background-position: center;"> <div class="absolute inset-0 bg-white/50 backdrop-blur-sm"></div> <div class="relative z-10 container mx-auto"> <h1 class="text-5xl font-bold mb-4 animate-fade-in-down">Jiu-Jitsu: Arte, Disciplina, Respeito</h1> <p class="text-xl text-slate-600 animate-fade-in-up">Transforme sua vida dentro e fora do tatame. Junte-se à nossa família.</p> <a href="#schedule" class="mt-8 inline-block bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-8 rounded-lg transition duration-300">Encontre uma Aula</a> </div> </div>', '<div id="quem-somos" class="py-16 bg-slate-50 px-4"> <div class="container mx-auto text-center"> <h2 class="text-4xl font-bold text-amber-600 mb-6">Quem Somos</h2> <p class="text-lg text-slate-600 max-w-3xl mx-auto"> Somos mais do que uma academia, somos uma comunidade unida pela paixão pelo Jiu-Jitsu. Com instrutores de classe mundial e um ambiente acolhedor, nossa missão é capacitar cada aluno a atingir seu potencial máximo. </p> </div> </div>', '<div id="filiais" class="py-16 bg-white px-4"> <div class="container mx-auto text-center"> <h2 class="text-4xl font-bold text-amber-600 mb-10">Nossas Filiais</h2> <p class="text-slate-600">Aqui você pode listar suas academias.</p> </div> </div>', '<div class="py-8 bg-slate-100 text-center text-slate-500"> <p>© 2024 Jiu-Jitsu Hub.</p> <p>Desenvolvido com a Arte Suave em mente.</p> </div>', '© 2024 Jiu-Jitsu Hub', '1.2.0', 0);
 
 REPLACE INTO academies (id, name, email, password, responsible, responsibleRegistration) VALUES ('master_admin_academy_01', 'Academia Master', 'androiddiviana@gmail.com', '123', 'Admin Geral', '000.000.000-00');
 REPLACE INTO users (id, name, email, role, academyId) VALUES ('master_admin_user_01', 'Admin Geral', 'androiddiviana@gmail.com', 'general_admin', 'master_admin_academy_01');
-REPLACE INTO graduations (id, name, color, minTimeInMonths, rank, type) VALUES ('white', 'Faixa Branca', '#ffffff', 0, 1, 'adult'), ('blue', 'Faixa Azul', '#3b82f6', 24, 2, 'adult'), ('purple', 'Faixa Roxa', '#a855f7', 18, 3, 'adult'), ('brown', 'Faixa Marrom', '#78350f', 12, 4, 'adult'), ('black', 'Faixa Preta', '#000000', 36, 5, 'adult');
+
+-- Seed Data: Graduações Completas (IBJJF)
+DELETE FROM graduations;
+-- INFANTIL (4-15 anos)
+REPLACE INTO graduations (id, name, color, minTimeInMonths, `rank`, type, minAge, maxAge) VALUES 
+('kids_white', 'Branca (Infantil)', '#FFFFFF', 0, 1, 'kids', 4, 15),
+('kids_grey_white', 'Cinza e Branca', '#E5E7EB', 6, 2, 'kids', 4, 15),
+('kids_grey', 'Cinza', '#9CA3AF', 6, 3, 'kids', 4, 15),
+('kids_grey_black', 'Cinza e Preta', '#374151', 6, 4, 'kids', 4, 15),
+('kids_yellow_white', 'Amarela e Branca', '#FEF08A', 6, 5, 'kids', 7, 15),
+('kids_yellow', 'Amarela', '#FACC15', 6, 6, 'kids', 7, 15),
+('kids_yellow_black', 'Amarela e Preta', '#854D0E', 6, 7, 'kids', 7, 15),
+('kids_orange_white', 'Laranja e Branca', '#FED7AA', 6, 8, 'kids', 10, 15),
+('kids_orange', 'Laranja', '#FB923C', 6, 9, 'kids', 10, 15),
+('kids_orange_black', 'Laranja e Preta', '#C2410C', 6, 10, 'kids', 10, 15),
+('kids_green_white', 'Verde e Branca', '#BBF7D0', 6, 11, 'kids', 13, 15),
+('kids_green', 'Verde', '#4ADE80', 6, 12, 'kids', 13, 15),
+('kids_green_black', 'Verde e Preta', '#15803D', 6, 13, 'kids', 13, 15);
+
+-- ADULTO (16+ anos)
+REPLACE INTO graduations (id, name, color, minTimeInMonths, `rank`, type, minAge) VALUES 
+('adult_white', 'Branca', '#FFFFFF', 0, 100, 'adult', 16),
+('adult_blue', 'Azul', '#3B82F6', 24, 101, 'adult', 16),
+('adult_purple', 'Roxa', '#A855F7', 18, 102, 'adult', 16),
+('adult_brown', 'Marrom', '#78350F', 12, 103, 'adult', 18),
+('adult_black', 'Preta', '#000000', 36, 104, 'adult', 19),
+-- MASTER / GRAND MASTER
+('adult_coral_black', 'Coral (Vermelha e Preta)', '#DC2626', 84, 105, 'adult', 50), -- Mestre (7º Grau)
+('adult_coral_white', 'Coral (Vermelha e Branca)', '#F87171', 120, 106, 'adult', 57), -- Mestre (8º Grau)
+('adult_red', 'Vermelha', '#EF4444', 0, 107, 'adult', 67); -- Grande Mestre (9º e 10º Grau)

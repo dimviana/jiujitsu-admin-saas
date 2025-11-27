@@ -136,7 +136,6 @@ export interface ClassSchedule {
 }
 
 export interface AttendanceRecord {
-    id: string;
     studentId: string;
     scheduleId: string;
     date: string;

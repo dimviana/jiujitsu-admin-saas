@@ -30,7 +30,7 @@ interface AppContextType {
     saveGraduation: (graduation: Omit<Graduation, 'id'> & { id?: string }) => Promise<void>;
     deleteGraduation: (id: string) => Promise<void>;
     updateGraduationRanks: (items: { id: string, rank: number }[]) => Promise<void>;
-    saveAttendanceRecord: (record: Partial<AttendanceRecord> & { studentId: string; scheduleId: string; date: string; status: 'present' | 'absent' }) => Promise<void>;
+    saveAttendanceRecord: (record: Omit<AttendanceRecord, 'id'>) => Promise<void>;
 
     login: (email: string, pass: string) => Promise<void>;
     loginGoogle: (credential: string) => Promise<void>;
@@ -150,7 +150,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const res = await fetch(endpoint, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
+                body: body ? JSON.stringify(body) : null
             });
             if (!res.ok) {
                 const err = await res.json();
@@ -174,7 +174,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saveGraduation = (graduation: any) => handleApiCall('/api/graduations', 'POST', { ...graduation, id: graduation.id || `grad_${Date.now()}`}, 'Graduação salva com sucesso.');
     const deleteGraduation = (id: string) => handleApiCall(`/api/graduations/${id}`, 'DELETE', null, 'Graduação removida com sucesso.');
     const updateGraduationRanks = (items: { id: string, rank: number }[]) => handleApiCall('/api/graduations/reorder', 'POST', items, 'Ordem das graduações atualizada.');
-    const saveAttendanceRecord = (record: any) => handleApiCall('/api/attendance', 'POST', { ...record, id: record.id || `att_${Date.now()}_${Math.random().toString(36).substr(2,9)}` }, 'Frequência salva com sucesso.');
+    const saveAttendanceRecord = (record: Omit<AttendanceRecord, 'id'>) => handleApiCall('/api/attendance', 'POST', record, 'Frequência salva com sucesso.');
 
     return (
         <AppContext.Provider value={{
