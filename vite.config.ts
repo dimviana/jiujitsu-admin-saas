@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => {
     },
     define: {
       'process.env': {
-        API_KEY: JSON.stringify(env.REACT_APP_API_KEY)
+        API_KEY: JSON.stringify(env.API_KEY || env.REACT_APP_API_KEY || "")
       },
     }
   };

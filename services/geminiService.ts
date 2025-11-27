@@ -1,12 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { Student } from "../types";
 
-// FIX: Per coding guidelines, initialize GoogleGenAI with apiKey from process.env.API_KEY.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const generateStudentFeedback = async (student: Student, performanceNote: string) => {
-  // FIX: Removed API key check as per guidelines assuming it's pre-configured.
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const model = 'gemini-2.5-flash';
     const prompt = `
       Act as a world-class Brazilian Jiu-Jitsu professor.
@@ -35,8 +32,8 @@ export const generateStudentFeedback = async (student: Student, performanceNote:
 };
 
 export const generateClassPlan = async (level: string, focus: string) => {
-    // FIX: Removed API key check as per guidelines assuming it's pre-configured.
     try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const model = 'gemini-2.5-flash'; // Using flash for this task
         const prompt = `
             Create a Jiu-Jitsu class plan (90 minutes).
@@ -67,6 +64,7 @@ export const generateClassPlan = async (level: string, focus: string) => {
 
 export const generateWorkoutPlan = async (student: Student, goal: string, equipment: string) => {
     try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const model = 'gemini-2.5-flash';
         const prompt = `
             Create a personalized physical conditioning workout plan for a Jiu-Jitsu student.
