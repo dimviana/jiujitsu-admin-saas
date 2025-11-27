@@ -12,11 +12,12 @@ import ProfessorsPage from './components/ProfessorsPage';
 import GraduationsPage from './components/GraduationsPage';
 import AttendancePage from './components/AttendancePage';
 import Login from './components/Login';
+import AcademiesPage from './components/AcademiesPage'; // New Import
 import { SCHEDULES } from './constants'; // Fallback
 import Notification from './components/ui/Notification';
 import ProfilePage from './components/ProfilePage';
 
-type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'settings' | 'profile';
+type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'settings' | 'profile' | 'academies'; // New Page
 
 const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
@@ -56,6 +57,7 @@ const AppContent: React.FC = () => {
             )}
             {page === 'students' && <StudentsPage />}
             {page === 'professors' && <ProfessorsPage />}
+            {page === 'academies' && <AcademiesPage />} 
             {page === 'financial' && <Financial />}
             {page === 'schedule' && <SchedulesPage />}
             {page === 'attendance' && <AttendancePage />}

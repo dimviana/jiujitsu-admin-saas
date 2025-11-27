@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import { AppContext } from '../context/AppContext';
-import { Home, Users, DollarSign, UserCheck, Settings, X, Medal, Calendar, Briefcase, Activity } from 'lucide-react';
+import { Home, Users, DollarSign, UserCheck, Settings, X, Medal, Calendar, Briefcase, Activity, Building } from 'lucide-react'; // Import Building icon
 
 interface SidebarProps {
   isOpen: boolean;
@@ -16,6 +16,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, currentPage, onNav
     { to: "dashboard", text: "Dashboard", icon: <Home className="w-5 h-5" />, roles: ['general_admin', 'academy_admin', 'student'] },
     { to: "students", text: "Alunos", icon: <Users className="w-5 h-5" />, roles: ['general_admin', 'academy_admin'] },
     { to: "professors", text: "Professores", icon: <Briefcase className="w-5 h-5" />, roles: ['general_admin', 'academy_admin'] },
+    { to: "academies", text: "Academias", icon: <Building className="w-5 h-5" />, roles: ['general_admin'] }, // New Link
     { to: "graduation", text: "Graduações", icon: <Medal className="w-5 h-5" />, roles: ['general_admin', 'academy_admin'] },
     { to: "schedule", text: "Horários", icon: <Calendar className="w-5 h-5" />, roles: ['general_admin', 'academy_admin', 'student'] },
     { to: "attendance", text: "Frequência", icon: <UserCheck className="w-5 h-5" />, roles: ['general_admin', 'academy_admin'] },
