@@ -110,7 +110,7 @@ app.get('/api/initial-data', async (req, res) => {
         const [settings] = await pool.query('SELECT * FROM theme_settings LIMIT 1');
         
         let parsedSettings = settings[0] || {};
-        parsedSettings = { ...parsedSettings, useGradient: Boolean(parsedSettings.useGradient), publicPageEnabled: Boolean(parsedSettings.publicPageEnabled), socialLoginEnabled: Boolean(parsedSettings.socialLoginEnabled) };
+        parsedSettings = { ...parsedSettings, useGradient: Boolean(parsedSettings.useGradient), publicPageEnabled: Boolean(parsedSettings.publicPageEnabled), registrationEnabled: Boolean(parsedSettings.registrationEnabled), socialLoginEnabled: Boolean(parsedSettings.socialLoginEnabled) };
 
         res.json({ students: parsedStudents, users, academies, graduations, professors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
     } catch (error) {
@@ -302,8 +302,18 @@ app.post('/api/graduations/reorder', async (req, res) => {
 app.post('/api/settings', async (req, res) => {
     const s = req.body;
     try {
-        await pool.query(`UPDATE theme_settings SET systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?, useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?, publicPageEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?, socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=? WHERE id = 1`,
-            [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2, s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount, s.publicPageEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs, s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion]
+        await pool.query(`UPDATE theme_settings SET 
+            systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, 
+            cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?,
+            useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?,
+            publicPageEnabled=?, registrationEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?,
+            socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?
+            WHERE id = 1`,
+            [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
+             s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
+             s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount,
+             s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs,
+             s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion]
         );
         res.json({ success: true });
     } catch(e) { console.error(e); res.status(500).send(e.message); }

@@ -307,7 +307,8 @@ const GraduationsPage: React.FC = () => {
           <div className="text-center p-8 text-slate-400">Calculando elegibilidade...</div>
         ) : Object.keys(groupedEligibleStudents).length > 0 ? (
           <div className="space-y-4">
-            {Object.entries(groupedEligibleStudents).map(([beltName, students]) => (
+            {/* FIX: Explicitly type `students` as `any` to allow access to `.length` and `.map` properties, resolving TypeScript errors. */}
+            {Object.entries(groupedEligibleStudents).map(([beltName, students]: [string, any]) => (
                 <div key={beltName} className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
                     <button 
                         onClick={() => toggleGroup(beltName)}
@@ -322,7 +323,7 @@ const GraduationsPage: React.FC = () => {
                     
                     {openGroups[beltName] && (
                         <div className="divide-y divide-slate-100">
-                            {students.map(({ student, currentBelt, nextBelt, reason }) => {
+                            {students.map(({ student, currentBelt, nextBelt, reason }: { student: Student, currentBelt: Graduation, nextBelt: Graduation, reason: string }) => {
                                 const academy = academies.find(a => a.id === student.academyId);
                                 return (
                                     <div key={student.id} className="p-4 flex flex-col sm:flex-row items-center justify-between hover:bg-slate-50 transition-colors">

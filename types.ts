@@ -117,6 +117,7 @@ export interface ThemeSettings {
   
   // Feature Flags & Integrations
   publicPageEnabled: boolean;
+  registrationEnabled: boolean;
   socialLoginEnabled: boolean;
   googleClientId?: string;
   facebookAppId?: string;

@@ -12,7 +12,8 @@ export default defineConfig(({ mode }) => {
     envPrefix: 'REACT_APP_', // Compatibilidade com variáveis injetadas pelo script de deploy
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './'),
+        // FIX: Replaced `__dirname` (not available in ES modules) with `'./'` to resolve the alias to the project root.
+        '@': path.resolve('./'),
       },
     },
     build: {

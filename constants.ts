@@ -33,6 +33,8 @@ export const MOCK_THEME: ThemeSettings = {
   // Configs
   publicPageEnabled: true,
   socialLoginEnabled: false,
+  // FIX: Added missing 'registrationEnabled' property required by ThemeSettings type.
+  registrationEnabled: false,
   copyrightText: '© 2025 Jiu-JitsuAdmin',
   systemVersion: '1.3.0',
   theme: 'light'

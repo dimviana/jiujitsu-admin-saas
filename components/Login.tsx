@@ -98,8 +98,12 @@ const Login: React.FC = () => {
     try {
         await login(email, password);
     } catch (err: any) {
-        if (err.message?.includes('Usuário não encontrado')) setIsNotFoundModalOpen(true);
-        else setError(err.message || 'Erro ao logar.');
+        if (err.message?.includes('User or password invalid') && themeSettings.registrationEnabled) {
+             setIsNotFoundModalOpen(true);
+        }
+        else {
+             setError(err.message || 'Erro ao logar.');
+        }
     }
     setLoading(false);
   };
@@ -133,9 +137,11 @@ const Login: React.FC = () => {
                     {error && <p className="text-red-600 text-sm text-center">{error}</p>}
                     <Button type="submit" disabled={loading} className="w-full">{loading ? 'Entrando...' : 'Entrar'}</Button>
                 </form>
-                <div className="text-center mt-6 text-sm">
-                    <button onClick={() => setIsRegisterModalOpen(true)} className="font-semibold text-[var(--theme-accent)] hover:underline">Cadastre-se</button>
-                </div>
+                {themeSettings.registrationEnabled && (
+                    <div className="text-center mt-6 text-sm">
+                        <button onClick={() => setIsRegisterModalOpen(true)} className="font-semibold text-[var(--theme-accent)] hover:underline">Cadastre-se</button>
+                    </div>
+                )}
                 {themeSettings.socialLoginEnabled && (
                     <div className="mt-6">
                         <div id="googleBtn"></div>
@@ -143,18 +149,22 @@ const Login: React.FC = () => {
                 )}
             </div>
         </main>
-        <Modal isOpen={isRegisterModalOpen} onClose={() => setIsRegisterModalOpen(false)} title="Cadastrar Nova Academia">
-            <RegisterForm onSave={handleRegisterSave} onClose={() => setIsRegisterModalOpen(false)} />
-        </Modal>
-        <Modal isOpen={isNotFoundModalOpen} onClose={() => setIsNotFoundModalOpen(false)} title="Usuário não encontrado">
-            <div className="text-center">
-                <p>Deseja cadastrar uma nova academia?</p>
-                <div className="flex justify-center gap-4 mt-4">
-                    <Button variant="secondary" onClick={() => setIsNotFoundModalOpen(false)}>Não</Button>
-                    <Button onClick={() => { setIsNotFoundModalOpen(false); setIsRegisterModalOpen(true); }}>Sim</Button>
-                </div>
-            </div>
-        </Modal>
+        {themeSettings.registrationEnabled && (
+            <>
+                <Modal isOpen={isRegisterModalOpen} onClose={() => setIsRegisterModalOpen(false)} title="Cadastrar Nova Academia">
+                    <RegisterForm onSave={handleRegisterSave} onClose={() => setIsRegisterModalOpen(false)} />
+                </Modal>
+                <Modal isOpen={isNotFoundModalOpen} onClose={() => setIsNotFoundModalOpen(false)} title="Usuário não encontrado">
+                    <div className="text-center">
+                        <p>Deseja cadastrar uma nova academia?</p>
+                        <div className="flex justify-center gap-4 mt-4">
+                            <Button variant="secondary" onClick={() => setIsNotFoundModalOpen(false)}>Não</Button>
+                            <Button onClick={() => { setIsNotFoundModalOpen(false); setIsRegisterModalOpen(true); }}>Sim</Button>
+                        </div>
+                    </div>
+                </Modal>
+            </>
+        )}
     </div>
   );
 };
