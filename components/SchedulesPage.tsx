@@ -185,10 +185,13 @@ const SchedulesPage: React.FC = () => {
                                         <span className="text-slate-600 font-medium">Professor:</span>
                                         <span className="font-medium text-slate-700">{professor?.name || 'N/A'}</span>
                                     </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-600 font-medium">Academia:</span>
-                                        <span className="font-medium text-slate-700">{academy?.name || 'N/A'}</span>
-                                    </div>
+                                    {/* Conditional display for academy name */}
+                                    {user?.role === 'general_admin' && academy && (
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-600 font-medium">Academia:</span>
+                                            <span className="font-medium text-slate-700">{academy.name}</span>
+                                        </div>
+                                    )}
                                     {requiredGrad && (
                                         <div className="flex justify-between items-center">
                                             <span className="text-slate-600 font-medium">Mínimo:</span>

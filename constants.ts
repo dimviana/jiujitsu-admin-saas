@@ -2,7 +2,7 @@ import { Academy, Graduation, Student, User, ThemeSettings, ClassSchedule, Atten
 
 export const MOCK_THEME: ThemeSettings = {
   logoUrl: 'https://tailwindui.com/img/logos/mark.svg?color=amber&shade=500',
-  systemName: 'Jiu-Jitsu Hub',
+  systemName: 'Jiu-Jitsu Admin',
   
   // Colors
   primaryColor: '#f59e0b', // Amber 500
@@ -33,8 +33,8 @@ export const MOCK_THEME: ThemeSettings = {
   // Configs
   publicPageEnabled: true,
   socialLoginEnabled: false,
-  copyrightText: '© 2024 Jiu-Jitsu Hub',
-  systemVersion: '1.2.0',
+  copyrightText: '© 2025 Jiu-JitsuAdmin',
+  systemVersion: '1.3.0',
   theme: 'light'
 };
 
