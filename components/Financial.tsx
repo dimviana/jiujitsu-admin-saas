@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useContext } from 'react';
+import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { Student } from '../types';
-import { Users, DollarSign, Upload } from 'lucide-react';
+import { Users, DollarSign, Upload, MessageSquareWarning } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -162,6 +162,40 @@ const StatCard: React.FC<{ title: string; value: string | number; icon: React.Re
     </Card>
 );
 
+// New Automatic Reminder Modal
+const ReminderModal: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    students: Student[];
+    onSendAll: () => void;
+}> = ({ isOpen, onClose, students, onSendAll }) => (
+    <Modal isOpen={isOpen} onClose={onClose} title="Lembretes de Pagamento">
+        <div className="space-y-4">
+            <div className="flex items-start bg-amber-50 p-4 rounded-lg border border-amber-200">
+                <MessageSquareWarning className="w-8 h-8 text-amber-500 mr-4 flex-shrink-0" />
+                <div>
+                    <h4 className="font-bold text-amber-800">Alunos com Vencimento Próximo</h4>
+                    <p className="text-sm text-amber-700 mt-1">Os seguintes alunos têm mensalidades vencendo nos próximos dias. Deseja enviar um lembrete via WhatsApp para todos?</p>
+                </div>
+            </div>
+
+            <div className="max-h-60 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                {students.map(student => (
+                    <div key={student.id} className="flex justify-between items-center p-2 bg-slate-50 rounded-md">
+                        <span className="font-medium text-slate-700">{student.name}</span>
+                        <span className="text-sm text-slate-500">Vence dia {student.paymentDueDateDay}</span>
+                    </div>
+                ))}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <Button variant="secondary" onClick={onClose}>Lembrar Mais Tarde</Button>
+                <Button onClick={onSendAll}>Enviar Lembretes para Todos</Button>
+            </div>
+        </div>
+    </Modal>
+);
+
 export const Financial: React.FC = () => {
     const { students, user, graduations, themeSettings, setThemeSettings, updateStudentPayment } = useContext(AppContext);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -170,6 +204,7 @@ export const Financial: React.FC = () => {
     const [isValuesModalOpen, setIsValuesModalOpen] = useState(false);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [feeAmount, setFeeAmount] = useState(themeSettings.monthlyFeeAmount);
+    const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
 
     const filteredStudents = useMemo(() => {
         if (user?.role === 'academy_admin' && user.academyId) {
@@ -205,9 +240,10 @@ export const Financial: React.FC = () => {
                 ? new Date(today.getFullYear(), today.getMonth() - 1, student.paymentDueDateDay)
                 : dueDateThisMonth;
             
-            const nextDueDate = dueDateThisMonth > today
-                ? dueDateThisMonth
-                : new Date(today.getFullYear(), today.getMonth() + 1, student.paymentDueDateDay);
+            let nextDueDate = new Date(today.getFullYear(), today.getMonth(), student.paymentDueDateDay);
+            if(today.getDate() > student.paymentDueDateDay){
+                nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+            }
 
             if (student.paymentStatus === 'unpaid') {
                 const daysSinceLastDue = Math.round((today.getTime() - lastDueDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -225,6 +261,15 @@ export const Financial: React.FC = () => {
         return { remindersToSend: reminders, overduePayments: overdue };
     }, [filteredStudents, themeSettings]);
 
+    // Effect for automatic reminder modal
+    useEffect(() => {
+        const reminderShown = sessionStorage.getItem('reminderModalShown');
+        if (remindersToSend.length > 0 && !reminderShown) {
+            setIsReminderModalOpen(true);
+            sessionStorage.setItem('reminderModalShown', 'true');
+        }
+    }, [remindersToSend]);
+
     const handleSaveFeeAmount = () => {
         setThemeSettings({ ...themeSettings, monthlyFeeAmount: feeAmount });
         setIsValuesModalOpen(false);
@@ -235,7 +280,14 @@ export const Financial: React.FC = () => {
         const message = `Olá ${name}, tudo bem? Passando para lembrar que sua mensalidade está próxima do vencimento. Qualquer dúvida, estamos à disposição!`;
         const encodedMessage = encodeURIComponent(message);
         const sanitizedPhone = phone.replace(/\D/g, '');
-        window.open(`https://wa.me/${sanitizedPhone}?text=${encodedMessage}`, '_blank');
+        window.open(`https://wa.me/55${sanitizedPhone}?text=${encodedMessage}`, '_blank');
+    };
+    
+    const handleSendAllReminders = () => {
+        remindersToSend.forEach(student => {
+            handleSendReminder(student.phone || '', student.name);
+        });
+        setIsReminderModalOpen(false);
     };
 
     const handleSendOverdueNotice = (phone: string, name: string) => {
@@ -243,7 +295,7 @@ export const Financial: React.FC = () => {
         const message = `Olá ${name}, tudo bem? Identificamos que sua mensalidade está em atraso. Por favor, regularize sua situação o mais breve possível. Obrigado!`;
         const encodedMessage = encodeURIComponent(message);
         const sanitizedPhone = phone.replace(/\D/g, '');
-        window.open(`https://wa.me/${sanitizedPhone}?text=${encodedMessage}`, '_blank');
+        window.open(`https://wa.me/55${sanitizedPhone}?text=${encodedMessage}`, '_blank');
     };
 
     const handleOpenHistoryModal = (student: Student) => {
@@ -432,6 +484,13 @@ export const Financial: React.FC = () => {
                     </div>
                 </div>
             </Modal>
+            
+            <ReminderModal 
+                isOpen={isReminderModalOpen}
+                onClose={() => setIsReminderModalOpen(false)}
+                students={remindersToSend}
+                onSendAll={handleSendAllReminders}
+            />
         </div>
     );
 };
