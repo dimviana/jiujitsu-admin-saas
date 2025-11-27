@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { MOCK_THEME } from '../constants';
 
@@ -41,18 +41,28 @@ interface AppContextType {
 export const AppContext = React.createContext<AppContextType>({} as AppContextType);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = React.useState<User | null>(null);
-    const [students, setStudents] = React.useState<Student[]>([]);
-    const [users, setUsers] = React.useState<User[]>([]);
-    const [academies, setAcademies] = React.useState<Academy[]>([]);
-    const [schedules, setSchedules] = React.useState<ClassSchedule[]>([]);
-    const [graduations, setGraduations] = React.useState<Graduation[]>([]);
-    const [professors, setProfessors] = React.useState<Professor[]>([]);
-    const [attendanceRecords, setAttendanceRecords] = React.useState<AttendanceRecord[]>([]);
-    const [activityLogs, setActivityLogs] = React.useState<ActivityLog[]>([]);
-    const [themeSettings, setLocalThemeSettings] = React.useState<ThemeSettings>(MOCK_THEME);
-    const [loading, setLoading] = React.useState(false);
-    const [notification, setNotification] = React.useState<NotificationType | null>(null);
+    // State Initialization with localStorage
+    const [user, setUser] = useState<User | null>(() => {
+        try {
+            const savedUser = localStorage.getItem('jiujitsu-user');
+            return savedUser ? JSON.parse(savedUser) : null;
+        } catch (error) {
+            console.error("Failed to parse user from localStorage", error);
+            return null;
+        }
+    });
+
+    const [students, setStudents] = useState<Student[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
+    const [academies, setAcademies] = useState<Academy[]>([]);
+    const [schedules, setSchedules] = useState<ClassSchedule[]>([]);
+    const [graduations, setGraduations] = useState<Graduation[]>([]);
+    const [professors, setProfessors] = useState<Professor[]>([]);
+    const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+    const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+    const [themeSettings, setLocalThemeSettings] = useState<ThemeSettings>(MOCK_THEME);
+    const [loading, setLoading] = useState(true); // Start with loading true
+    const [notification, setNotification] = useState<NotificationType | null>(null);
 
     const refreshData = async () => {
         setLoading(true);
@@ -71,6 +81,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 if (data.themeSettings && data.themeSettings.id) {
                     setLocalThemeSettings(data.themeSettings);
                 }
+            } else {
+                throw new Error("Failed to fetch data from server");
             }
         } catch (error) {
             console.error("Failed to fetch initial data", error);
@@ -93,6 +105,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         root.style.setProperty('--theme-text-primary', themeSettings.secondaryColor);
     }, [themeSettings]);
 
+    const handleLoginSuccess = async (userData: User) => {
+        localStorage.setItem('jiujitsu-user', JSON.stringify(userData));
+        setUser(userData);
+        await refreshData();
+        setNotification({ message: `Bem-vindo, ${userData.name.split(' ')[0]}!`, details: 'Login realizado com sucesso.', type: 'success' });
+    };
+    
     const login = async (email: string, pass: string) => {
         try {
             const res = await fetch('/api/login', {
@@ -102,9 +121,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
             if (res.ok) {
                 const data = await res.json();
-                setUser(data.user);
-                await refreshData();
-                setNotification({ message: `Bem-vindo, ${data.user.name.split(' ')[0]}!`, details: 'Login realizado com sucesso.', type: 'success' });
+                await handleLoginSuccess(data.user);
             } else {
                 const err = await res.json();
                 throw new Error(err.message || 'Login falhou');
@@ -116,6 +133,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const loginGoogle = async () => {
+        // Mock implementation
         await login('androiddiviana@gmail.com', 'mock_google');
     };
 
@@ -127,8 +145,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 body: JSON.stringify(data)
             });
             if (res.ok) {
+                // Log in the new user immediately after registration
                 await login(data.email, data.password);
-                 setNotification({ message: 'Cadastro Realizado', details: 'Sua academia foi cadastrada com sucesso!', type: 'success' });
+                setNotification({ message: 'Cadastro Realizado', details: 'Sua academia foi cadastrada com sucesso!', type: 'success' });
                 return { success: true };
             } else {
                  const err = await res.json();
@@ -141,6 +160,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const logout = () => {
+        localStorage.removeItem('jiujitsu-user');
         setUser(null);
         setNotification({ message: 'Até logo!', details: 'Você saiu do sistema com segurança.', type: 'success' });
     };
