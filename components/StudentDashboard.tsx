@@ -146,7 +146,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
     );
 };
 
-const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfirm: () => Promise<void>; amount: number }> = ({ student, onClose, onConfirm, amount }) => {
+const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfirm: () => Promise<void>; amount: number }> = ({ onClose, onConfirm, amount }) => {
     const [loading, setLoading] = useState(false);
     const [cardData, setCardData] = useState({
         number: '',

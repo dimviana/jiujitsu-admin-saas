@@ -1,4 +1,4 @@
-import React, { useState, useContext, FormEvent, useMemo, useEffect } from 'react';
+import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ClassSchedule, DayOfWeek } from '../types';
 import Card from '../components/ui/Card';
