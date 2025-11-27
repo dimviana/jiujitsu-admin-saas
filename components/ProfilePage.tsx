@@ -2,7 +2,6 @@ import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
 import { PhotoUploadModal } from './ui/PhotoUploadModal'; // FIX: Changed from alias to relative path
-import { Student } from '../types';
 
 const calculateTrainingTime = (startDateString?: string): string => {
     if (!startDateString) return "N/A";

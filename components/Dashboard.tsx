@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useContext } from 'react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import { Student, User, ClassSchedule, DayOfWeek, Graduation, ThemeSettings, AttendanceRecord } from '../types';
-import { Users, Briefcase, BookOpen, ChevronDown, Gift, Award, Calendar as CalendarIcon, DollarSign } from 'lucide-react';
+import { Users, Briefcase, BookOpen, Gift, Award, Calendar as CalendarIcon, DollarSign } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -400,7 +400,7 @@ const StudentBreakdownChart: React.FC<{ students: Student[] }> = ({ students }) 
                       paddingAngle={5}
                       cornerRadius={8}
                   >
-                      {data.map((entry, index) => (
+                      {data.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                   </Pie>
@@ -517,7 +517,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 Pagar Mensalidade
                              </Button>
                         </div>
-                        <StudentPerformanceTable students={students} onPayClick={(student) => {
+                        <StudentPerformanceTable students={students} onPayClick={() => {
                             setIsPaymentModalOpen(true);
                         }} />
                     </Card>

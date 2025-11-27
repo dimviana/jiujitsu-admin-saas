@@ -13,7 +13,7 @@ import GraduationsPage from './components/GraduationsPage';
 import AttendancePage from './components/AttendancePage';
 import Login from './components/Login';
 import AcademiesPage from './components/AcademiesPage'; // New Import
-import { SCHEDULES, ATTENDANCE_RECORDS } from './constants'; // Fallback
+import { SCHEDULES } from './constants'; // Fallback
 import Notification from './components/ui/Notification';
 import ProfilePage from './components/ProfilePage';
 
