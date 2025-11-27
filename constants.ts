@@ -33,8 +33,7 @@ export const MOCK_THEME: ThemeSettings = {
   // Configs
   publicPageEnabled: true,
   socialLoginEnabled: false,
-  // FIX: Added missing 'registrationEnabled' property required by ThemeSettings type.
-  registrationEnabled: false,
+  registrationEnabled: true,
   copyrightText: '© 2025 Jiu-JitsuAdmin',
   systemVersion: '1.3.0',
   theme: 'light'
@@ -162,7 +161,6 @@ export const SCHEDULES: ClassSchedule[] = [
     { id: 'c3', className: 'No-Gi Submission', dayOfWeek: 'Quarta-feira', startTime: '19:00', endTime: '20:30', professorId: 'prof1', academyId: 'master_admin_academy_01', assistantIds: [], requiredGraduationId: 'white'},
 ];
 
-// FIX: Removed `id` property from mock attendance records to match the `AttendanceRecord` type.
 export const ATTENDANCE_RECORDS: AttendanceRecord[] = [
     { studentId: 'student_01', scheduleId: 'c1', date: '2023-10-01', status: 'present' },
     { studentId: 'student_01', scheduleId: 'c1', date: '2023-10-08', status: 'present' },

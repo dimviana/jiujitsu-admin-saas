@@ -26,6 +26,8 @@ const dayNameToIndex: { [key in DayOfWeek]: number } = {
     'Quinta-feira': 4, 'Sexta-feira': 5, 'Sábado': 6
 };
 
+// ... (Rest of the sub-components remain the same)
+
 const BirthdayCard: React.FC<{ students: Student[], users: User[] }> = ({ students, users }) => {
     const today = new Date();
     const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { MOCK_THEME } from '../constants';
 
@@ -18,6 +18,8 @@ interface AppContextType {
     loading: boolean;
     notification: NotificationType | null;
     setNotification: (notification: NotificationType | null) => void;
+    globalAcademyFilter: string;
+    setGlobalAcademyFilter: (filter: string) => void;
     
     saveStudent: (student: Omit<Student, 'id' | 'paymentStatus' | 'lastSeen' | 'paymentHistory'> & { id?: string }) => Promise<void>;
     deleteStudent: (id: string) => Promise<void>;
@@ -41,28 +43,29 @@ interface AppContextType {
 export const AppContext = React.createContext<AppContextType>({} as AppContextType);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // State Initialization with localStorage
     const [user, setUser] = useState<User | null>(() => {
         try {
             const savedUser = localStorage.getItem('jiujitsu-user');
             return savedUser ? JSON.parse(savedUser) : null;
         } catch (error) {
-            console.error("Failed to parse user from localStorage", error);
             return null;
         }
     });
 
-    const [students, setStudents] = useState<Student[]>([]);
+    // Raw, unfiltered data from the API
+    const [allStudents, setAllStudents] = useState<Student[]>([]);
+    const [allProfessors, setAllProfessors] = useState<Professor[]>([]);
+    const [allSchedules, setAllSchedules] = useState<ClassSchedule[]>([]);
+    const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>([]);
+
     const [users, setUsers] = useState<User[]>([]);
     const [academies, setAcademies] = useState<Academy[]>([]);
-    const [schedules, setSchedules] = useState<ClassSchedule[]>([]);
     const [graduations, setGraduations] = useState<Graduation[]>([]);
-    const [professors, setProfessors] = useState<Professor[]>([]);
-    const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
     const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
     const [themeSettings, setLocalThemeSettings] = useState<ThemeSettings>(MOCK_THEME);
-    const [loading, setLoading] = useState(true); // Start with loading true
+    const [loading, setLoading] = useState(true);
     const [notification, setNotification] = useState<NotificationType | null>(null);
+    const [globalAcademyFilter, setGlobalAcademyFilter] = useState('all');
 
     const refreshData = async () => {
         setLoading(true);
@@ -70,13 +73,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const res = await fetch('/api/initial-data');
             if (res.ok) {
                 const data = await res.json();
-                setStudents(data.students);
+                setAllStudents(data.students);
                 setUsers(data.users);
                 setAcademies(data.academies);
                 setGraduations(data.graduations);
-                setProfessors(data.professors);
-                setSchedules(data.schedules);
-                setAttendanceRecords(data.attendanceRecords);
+                setAllProfessors(data.professors);
+                setAllSchedules(data.schedules);
+                setAllAttendance(data.attendanceRecords);
                 setActivityLogs(data.activityLogs);
                 if (data.themeSettings && data.themeSettings.id) {
                     setLocalThemeSettings(data.themeSettings);
@@ -94,6 +97,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     useEffect(() => {
         refreshData();
     }, []);
+
+    // Memoized, filtered data exposed to the app
+    const filteredData = useMemo(() => {
+        const academyIdToFilter = user?.role === 'general_admin' ? globalAcademyFilter : user?.academyId;
+
+        if (!academyIdToFilter || academyIdToFilter === 'all') {
+            return {
+                students: allStudents,
+                professors: allProfessors,
+                schedules: allSchedules,
+                attendanceRecords: allAttendance,
+            };
+        }
+
+        const students = allStudents.filter(s => s.academyId === academyIdToFilter);
+        const professors = allProfessors.filter(p => p.academyId === academyIdToFilter);
+        const schedules = allSchedules.filter(s => s.academyId === academyIdToFilter);
+        const studentIdsInAcademy = new Set(students.map(s => s.id));
+        const attendanceRecords = allAttendance.filter(ar => studentIdsInAcademy.has(ar.studentId));
+
+        return { students, professors, schedules, attendanceRecords };
+
+    }, [user, globalAcademyFilter, allStudents, allProfessors, allSchedules, allAttendance]);
+
 
     useEffect(() => {
         const root = document.documentElement;
@@ -133,7 +160,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const loginGoogle = async () => {
-        // Mock implementation
         await login('androiddiviana@gmail.com', 'mock_google');
     };
 
@@ -145,7 +171,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 body: JSON.stringify(data)
             });
             if (res.ok) {
-                // Log in the new user immediately after registration
                 await login(data.email, data.password);
                 setNotification({ message: 'Cadastro Realizado', details: 'Sua academia foi cadastrada com sucesso!', type: 'success' });
                 return { success: true };
@@ -162,6 +187,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const logout = () => {
         localStorage.removeItem('jiujitsu-user');
         setUser(null);
+        setGlobalAcademyFilter('all'); // Reset filter on logout
         setNotification({ message: 'Até logo!', details: 'Você saiu do sistema com segurança.', type: 'success' });
     };
 
@@ -198,8 +224,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return (
         <AppContext.Provider value={{
-            user, users, students, academies, schedules, graduations, professors,
-            themeSettings, attendanceRecords, activityLogs, loading, notification, setNotification,
+            user, users, academies, graduations, activityLogs,
+            students: filteredData.students, 
+            professors: filteredData.professors,
+            schedules: filteredData.schedules,
+            attendanceRecords: filteredData.attendanceRecords,
+            themeSettings, loading, notification, setNotification,
+            globalAcademyFilter, setGlobalAcademyFilter,
             saveStudent, deleteStudent, updateStudentPayment, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord,
