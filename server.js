@@ -65,7 +65,7 @@ app.post('/api/login', async (req, res) => {
                     throw new Error('Sua academia está em análise. Aguarde a aprovação do administrador.');
                 }
                 if (status === 'rejected') {
-                    throw new Error('O cadastro da sua academia foi recusado. Entre em contato com o suporte.');
+                    throw new Error('O cadastro da sua academia foi recusado. Entre em contato com a suporte.');
                 }
                 if (status === 'blocked') {
                     throw new Error('Acesso temporariamente suspenso. Entre em contato com a administração do sistema.');
@@ -114,6 +114,11 @@ app.post('/api/login', async (req, res) => {
         if (students.length > 0 && (students[0].password === password || !students[0].password)) {
              const student = students[0];
              
+             // Check blocked status
+             if (student.status === 'blocked') {
+                 return res.status(403).json({ message: 'Seu acesso foi temporariamente bloqueado. Contate a administração.' });
+             }
+
              // Check Academy Status for Student
              await checkAcademyStatus(student.academyId);
 
@@ -153,7 +158,7 @@ app.post('/api/login', async (req, res) => {
         res.status(401).json({ message: 'User or password invalid' });
     } catch (error) {
         console.error(error);
-        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') ? 403 : 500;
+        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') || error.message.includes('bloqueado') ? 403 : 500;
         res.status(status).json({ message: error.message || 'Server error' });
     }
 });
@@ -263,12 +268,29 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE class_schedules ADD COLUMN observations TEXT");
         }
 
+        // 9. status on Students
+        try {
+            await pool.query("SELECT status FROM students LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding status to students");
+            await pool.query("ALTER TABLE students ADD COLUMN status VARCHAR(50) DEFAULT 'active'");
+        }
+
+        // 10. status on Professors
+        try {
+            await pool.query("SELECT status FROM professors LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding status to professors");
+            await pool.query("ALTER TABLE professors ADD COLUMN status VARCHAR(50) DEFAULT 'active'");
+        }
+
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
             ...s, 
             isCompetitor: Boolean(s.isCompetitor),
             isInstructor: Boolean(s.isInstructor),
-            medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 } 
+            medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 },
+            status: s.status || 'active'
         }));
         const [payments] = await pool.query('SELECT * FROM payment_history');
         parsedStudents.forEach(s => { s.paymentHistory = payments.filter(p => p.studentId === s.id); });
@@ -286,7 +308,8 @@ app.get('/api/initial-data', async (req, res) => {
         const [professors] = await pool.query('SELECT * FROM professors');
         const parsedProfessors = professors.map(p => ({
             ...p,
-            isInstructor: Boolean(p.isInstructor)
+            isInstructor: Boolean(p.isInstructor),
+            status: p.status || 'active'
         }));
 
         const [schedules] = await pool.query('SELECT * FROM class_schedules');
@@ -383,6 +406,7 @@ app.post('/api/students', async (req, res) => {
                 isCompetitor: 0,
                 isInstructor: 0,
                 medals: '{}',
+                status: 'active',
                 ...data,
                 id, 
             };
@@ -399,6 +423,15 @@ app.post('/api/students', async (req, res) => {
     }
 });
 app.delete('/api/students/:id', deleteHandler('students'));
+app.post('/api/students/:id/status', async (req, res) => {
+    const { status } = req.body;
+    try {
+        await pool.query('UPDATE students SET status = ? WHERE id = ?', [status, req.params.id]);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
 
 app.post('/api/students/promote-instructor', async (req, res) => {
     const { studentId } = req.body;
@@ -421,8 +454,8 @@ app.post('/api/students/promote-instructor', async (req, res) => {
         
         if (existingProf.length === 0) {
              await conn.query(`
-                INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor, birthDate)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+                INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor, birthDate, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'active')
             `, [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl, student.birthDate]);
         } else {
              await conn.query('UPDATE professors SET isInstructor = 1, graduationId = ?, academyId = ? WHERE id = ?', 
@@ -491,6 +524,7 @@ app.post('/api/professors', async (req, res) => {
             await pool.query(`UPDATE professors SET ${updateFields} WHERE id = ?`, [...updateValues, id]);
         } else {
             data.id = `prof_${Date.now()}`;
+            if (!data.status) data.status = 'active';
             const keys = Object.keys(data).map(key => `\`${key}\``).join(',');
             const placeholders = Object.keys(data).map(() => '?').join(',');
             const values = Object.values(data);
@@ -504,6 +538,15 @@ app.post('/api/professors', async (req, res) => {
     }
 });
 app.delete('/api/professors/:id', deleteHandler('professors'));
+app.post('/api/professors/:id/status', async (req, res) => {
+    const { status } = req.body;
+    try {
+        await pool.query('UPDATE professors SET status = ? WHERE id = ?', [status, req.params.id]);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
 
 app.post('/api/schedules', async (req, res) => {
     const { assistantIds, ...schedule } = req.body;

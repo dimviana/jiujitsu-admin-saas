@@ -3,6 +3,8 @@
 
 
 
+
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { 
@@ -33,11 +35,13 @@ interface AppContextType {
     deleteStudent: (id: string) => Promise<void>;
     updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
     promoteStudentToInstructor: (studentId: string) => Promise<void>;
+    updateStudentStatus: (id: string, status: 'active' | 'blocked') => Promise<void>;
     setThemeSettings: (settings: ThemeSettings) => void;
     saveSchedule: (schedule: Omit<ClassSchedule, 'id'> & { id?: string }) => Promise<void>;
     deleteSchedule: (id: string) => Promise<void>;
     saveProfessor: (professor: Omit<Professor, 'id'> & { id?: string }) => Promise<void>;
     deleteProfessor: (id: string) => Promise<void>;
+    updateProfessorStatus: (id: string, status: 'active' | 'blocked') => Promise<void>;
     saveGraduation: (graduation: Omit<Graduation, 'id'> & { id?: string }) => Promise<void>;
     deleteGraduation: (id: string) => Promise<void>;
     updateGraduationRanks: (items: { id: string, rank: number }[]) => Promise<void>;
@@ -287,7 +291,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const deleteStudent = (id: string) => handleApiCall(`/api/students/${id}`, 'DELETE', null, 'Aluno removido com sucesso.');
     const updateStudentPayment = (id: string, status: 'paid' | 'unpaid') => handleApiCall('/api/students/payment', 'POST', { studentId: id, status, amount: effectiveThemeSettings.monthlyFeeAmount }, 'Status de pagamento atualizado.');
     const promoteStudentToInstructor = (studentId: string) => handleApiCall('/api/students/promote-instructor', 'POST', { studentId }, 'Aluno promovido a instrutor com sucesso.');
-    
+    const updateStudentStatus = (id: string, status: 'active' | 'blocked') => handleApiCall(`/api/students/${id}/status`, 'POST', { status }, `Status do aluno atualizado para ${status === 'active' ? 'Ativo' : 'Bloqueado'}.`);
+
     const setThemeSettings = (settings: ThemeSettings) => {
         const queryParams = (user?.role !== 'general_admin' && user?.academyId) ? `?academyId=${user.academyId}` : '';
         handleApiCall(`/api/settings${queryParams}`, 'POST', settings, 'Configurações salvas com sucesso.');
@@ -297,6 +302,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const deleteSchedule = (id: string) => handleApiCall(`/api/schedules/${id}`, 'DELETE', null, 'Horário removido com sucesso.');
     const saveProfessor = (professor: any) => handleApiCall('/api/professors', 'POST', professor, 'Professor salvo com sucesso.');
     const deleteProfessor = (id: string) => handleApiCall(`/api/professors/${id}`, 'DELETE', null, 'Professor removido com sucesso.');
+    const updateProfessorStatus = (id: string, status: 'active' | 'blocked') => handleApiCall(`/api/professors/${id}/status`, 'POST', { status }, `Status do professor atualizado para ${status === 'active' ? 'Ativo' : 'Bloqueado'}.`);
+
     const saveGraduation = (graduation: any) => handleApiCall('/api/graduations', 'POST', { ...graduation, id: graduation.id || `grad_${Date.now()}`}, 'Graduação salva com sucesso.');
     const deleteGraduation = (id: string) => handleApiCall(`/api/graduations/${id}`, 'DELETE', null, 'Graduação removida com sucesso.');
     const updateGraduationRanks = (items: { id: string, rank: number }[]) => handleApiCall('/api/graduations/reorder', 'POST', items, 'Ordem das graduações atualizada.');
@@ -318,8 +325,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             themeSettings: effectiveThemeSettings, 
             loading, notification, setNotification,
             globalAcademyFilter, setGlobalAcademyFilter,
-            saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, setThemeSettings,
-            saveSchedule, deleteSchedule, saveProfessor, deleteProfessor,
+            saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, updateStudentStatus, setThemeSettings,
+            saveSchedule, deleteSchedule, saveProfessor, deleteProfessor, updateProfessorStatus,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord, saveAcademy, updateAcademyStatus,
             login, loginGoogle, registerAcademy, logout,
             

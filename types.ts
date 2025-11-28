@@ -75,6 +75,7 @@ export interface Professor {
     blackBeltDate?: string;
     isInstructor?: boolean;
     birthDate?: string;
+    status?: 'active' | 'blocked';
 }
 
 export interface Graduation {
@@ -119,6 +120,7 @@ export interface Student {
   password?: string;
   lastSeen?: string;
   isInstructor?: boolean;
+  status?: 'active' | 'blocked';
 }
 
 export interface User {

@@ -1,6 +1,8 @@
+
+
 import React, { useContext, useState, FormEvent } from 'react';
 import { AppContext } from '../context/AppContext';
-import { Academy } from '../types';
+import { Academy, Student, Professor } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
@@ -51,7 +53,7 @@ const AcademyForm: React.FC<AcademyFormProps> = ({ academy, onSave, onClose }) =
 };
 
 const AcademiesPage: React.FC = () => {
-    const { academies, professors, students, loading, saveAcademy, updateAcademyStatus, user } = useContext(AppContext);
+    const { academies, professors, students, loading, saveAcademy, updateAcademyStatus, updateStudentStatus, updateProfessorStatus, user } = useContext(AppContext);
     const [expandedAcademy, setExpandedAcademy] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAcademy, setSelectedAcademy] = useState<Academy | null>(null);
@@ -59,8 +61,9 @@ const AcademiesPage: React.FC = () => {
 
     // Status Confirmation Modal State
     const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-    const [academyToUpdate, setAcademyToUpdate] = useState<Academy | null>(null);
-    const [statusToUpdate, setStatusToUpdate] = useState<'active' | 'rejected' | 'blocked' | null>(null);
+    const [targetToUpdate, setTargetToUpdate] = useState<Academy | Student | Professor | null>(null);
+    const [targetType, setTargetType] = useState<'academy' | 'student' | 'professor' | null>(null);
+    const [newStatus, setNewStatus] = useState<'active' | 'rejected' | 'blocked' | null>(null);
 
     const toggleAcademy = (id: string) => {
         setExpandedAcademy(prev => (prev === id ? null : id));
@@ -87,31 +90,58 @@ const AcademiesPage: React.FC = () => {
         setSelectedAcademy(null);
     };
 
+    // Academy Status Handler
     const handleStatusClick = (e: React.MouseEvent, academy: Academy, status: 'active' | 'rejected' | 'blocked') => {
         e.stopPropagation();
-        setAcademyToUpdate(academy);
-        setStatusToUpdate(status);
+        setTargetToUpdate(academy);
+        setTargetType('academy');
+        setNewStatus(status);
+        setIsStatusModalOpen(true);
+    };
+
+    // Student/Professor Status Handler
+    const handlePersonStatusClick = (person: Student | Professor, type: 'student' | 'professor', status: 'active' | 'blocked') => {
+        setTargetToUpdate(person);
+        setTargetType(type);
+        setNewStatus(status);
         setIsStatusModalOpen(true);
     };
 
     const confirmStatusUpdate = async () => {
-        if (academyToUpdate && statusToUpdate) {
-            await updateAcademyStatus(academyToUpdate.id, statusToUpdate);
+        if (!targetToUpdate || !newStatus || !targetType) return;
+
+        if (targetType === 'academy') {
+             await updateAcademyStatus(targetToUpdate.id, newStatus);
+        } else if (targetType === 'student') {
+             await updateStudentStatus(targetToUpdate.id, newStatus as 'active' | 'blocked');
+        } else if (targetType === 'professor') {
+             await updateProfessorStatus(targetToUpdate.id, newStatus as 'active' | 'blocked');
         }
+        setIsStatusModalOpen(false);
     };
 
     const getStatusMessage = () => {
-        if (!statusToUpdate) return '';
-        if (statusToUpdate === 'active') return 'Deseja aprovar/ativar esta academia? O administrador receberá acesso ao sistema.';
-        if (statusToUpdate === 'rejected') return 'Deseja rejeitar o cadastro desta academia?';
-        if (statusToUpdate === 'blocked') return 'ATENÇÃO: Ao bloquear esta academia, nenhum usuário vinculado conseguirá acessá-la. Deseja continuar?';
+        if (!newStatus) return '';
+        if (targetType === 'academy') {
+            if (newStatus === 'active') return 'Deseja aprovar/ativar esta academia? O administrador receberá acesso ao sistema.';
+            if (newStatus === 'rejected') return 'Deseja rejeitar o cadastro desta academia?';
+            if (newStatus === 'blocked') return 'ATENÇÃO: Ao bloquear esta academia, nenhum usuário vinculado conseguirá acessá-la. Deseja continuar?';
+        } else {
+            const typeLabel = targetType === 'student' ? 'aluno' : 'professor';
+            if (newStatus === 'blocked') return `Deseja bloquear o acesso deste ${typeLabel}? Ele não conseguirá mais fazer login.`;
+            if (newStatus === 'active') return `Deseja desbloquear este ${typeLabel}?`;
+        }
         return '';
     };
 
     const getStatusTitle = () => {
-        if (statusToUpdate === 'active') return 'Ativar Academia';
-        if (statusToUpdate === 'rejected') return 'Rejeitar Academia';
-        if (statusToUpdate === 'blocked') return 'Bloquear Academia';
+        if (targetType === 'academy') {
+             if (newStatus === 'active') return 'Ativar Academia';
+             if (newStatus === 'rejected') return 'Rejeitar Academia';
+             if (newStatus === 'blocked') return 'Bloquear Academia';
+        } else {
+            return newStatus === 'blocked' ? 'Bloquear Acesso' : 'Desbloquear Acesso';
+        }
         return 'Alterar Status';
     };
 
@@ -264,9 +294,20 @@ const AcademiesPage: React.FC = () => {
                                             </h3>
                                             <ul className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
                                                 {academyProfessors.length > 0 ? academyProfessors.map(prof => (
-                                                    <li key={prof.id} className="text-sm p-2 bg-white rounded border border-slate-100 shadow-sm flex items-center">
-                                                        <span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>
-                                                        {prof.name}
+                                                    <li key={prof.id} className={`text-sm p-2 bg-white rounded border border-slate-100 shadow-sm flex justify-between items-center ${prof.status === 'blocked' ? 'opacity-60 bg-red-50' : ''}`}>
+                                                        <div className="flex items-center">
+                                                            <span className={`w-2 h-2 rounded-full mr-2 ${prof.status === 'blocked' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                                                            <span className={prof.status === 'blocked' ? 'line-through text-slate-500' : ''}>{prof.name}</span>
+                                                        </div>
+                                                        {isGeneralAdmin && (
+                                                            <button 
+                                                                onClick={() => handlePersonStatusClick(prof, 'professor', prof.status === 'blocked' ? 'active' : 'blocked')}
+                                                                className={`p-1 rounded-full transition-colors ${prof.status === 'blocked' ? 'text-green-600 hover:bg-green-100' : 'text-red-400 hover:bg-red-50'}`}
+                                                                title={prof.status === 'blocked' ? "Desbloquear" : "Bloquear"}
+                                                            >
+                                                                {prof.status === 'blocked' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                                            </button>
+                                                        )}
                                                     </li>
                                                 )) : <li className="text-sm text-slate-400 italic p-2">Nenhum professor registrado.</li>}
                                             </ul>
@@ -278,11 +319,25 @@ const AcademiesPage: React.FC = () => {
                                             </h3>
                                             <ul className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
                                                 {academyStudents.length > 0 ? academyStudents.map(stud => (
-                                                    <li key={stud.id} className="text-sm p-2 bg-white rounded border border-slate-100 shadow-sm flex justify-between items-center">
-                                                        <span>{stud.name}</span>
-                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${stud.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                            {stud.paymentStatus === 'paid' ? 'Em dia' : 'Pendente'}
-                                                        </span>
+                                                    <li key={stud.id} className={`text-sm p-2 bg-white rounded border border-slate-100 shadow-sm flex justify-between items-center ${stud.status === 'blocked' ? 'opacity-60 bg-red-50' : ''}`}>
+                                                        <div className="flex items-center flex-grow">
+                                                            <span className={stud.status === 'blocked' ? 'line-through text-slate-500' : ''}>{stud.name}</span>
+                                                            {stud.status === 'blocked' && <span className="ml-2 text-[10px] bg-red-200 text-red-800 px-1 rounded">Bloqueado</span>}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${stud.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                {stud.paymentStatus === 'paid' ? 'Em dia' : 'Pendente'}
+                                                            </span>
+                                                            {isGeneralAdmin && (
+                                                                <button 
+                                                                    onClick={() => handlePersonStatusClick(stud, 'student', stud.status === 'blocked' ? 'active' : 'blocked')}
+                                                                    className={`p-1 rounded-full transition-colors ${stud.status === 'blocked' ? 'text-green-600 hover:bg-green-100' : 'text-red-400 hover:bg-red-50'}`}
+                                                                    title={stud.status === 'blocked' ? "Desbloquear" : "Bloquear"}
+                                                                >
+                                                                    {stud.status === 'blocked' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </li>
                                                 )) : <li className="text-sm text-slate-400 italic p-2">Nenhum aluno registrado.</li>}
                                             </ul>
@@ -309,7 +364,7 @@ const AcademiesPage: React.FC = () => {
                 message={getStatusMessage()}
                 confirmText="Sim"
                 cancelText="Não"
-                variant={statusToUpdate === 'active' ? 'success' : 'danger'}
+                variant={newStatus === 'active' ? 'success' : 'danger'}
             />
         </div>
     );
