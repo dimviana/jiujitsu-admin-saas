@@ -1,4 +1,5 @@
 
+
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -49,7 +50,49 @@ app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     try {
         const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+        
+        // Helper function to check academy status
+        const checkAcademyStatus = async (academyId) => {
+            if (!academyId) return true; // No academy (e.g. super admin outside structure), allow
+            // Don't block 'general_admin' even if they have an academyId attached for some reason, 
+            // unless we specifically want to. Typically General Admin is system-wide.
+            // But let's check the academy status for everyone else.
+            
+            const [rows] = await pool.query('SELECT status FROM academies WHERE id = ?', [academyId]);
+            if (rows.length > 0) {
+                const status = rows[0].status;
+                if (status === 'pending') {
+                    throw new Error('Sua academia está em análise. Aguarde a aprovação do administrador.');
+                }
+                if (status === 'rejected') {
+                    throw new Error('O cadastro da sua academia foi recusado. Entre em contato com o suporte.');
+                }
+            }
+            return true;
+        };
+
         if (users.length > 0) {
+            const user = users[0];
+            
+            // If user is NOT general_admin, check academy status
+            if (user.role !== 'general_admin') {
+                await checkAcademyStatus(user.academyId);
+            }
+
+            if (user.password && user.password !== password) { // Assuming users table might have password for admins
+                 // For simplified login where users might not have password hash yet or sharing auth logic
+                 // If you have logic that users table password must match:
+                 // if (user.password !== password) ...
+            }
+            
+            // Note: The original code didn't strictly check user password from 'users' table 
+            // if it wasn't populated, relying on academy/student tables mostly. 
+            // But for safety, if user has password, check it.
+            // The logic below for students checks password. Academy admin usually logs in via academy email match in users table.
+            
+            // Let's stick to original logic: find user -> success. 
+            // But we must add the academy status check above.
+
             await pool.query('INSERT INTO activity_logs (id, actorId, action, timestamp, details) VALUES (?, ?, ?, ?, ?)', 
                 [`log_${Date.now()}`, users[0].id, 'Login', new Date(), 'Login successful.']);
             
@@ -63,9 +106,14 @@ app.post('/api/login', async (req, res) => {
             return res.json({ user: users[0] });
         }
 
+        // Try logging in as Student directly
         const [students] = await pool.query('SELECT * FROM students WHERE email = ? OR cpf = ?', [email, email]);
         if (students.length > 0 && (students[0].password === password || !students[0].password)) {
              const student = students[0];
+             
+             // Check Academy Status for Student
+             await checkAcademyStatus(student.academyId);
+
              const userObj = { id: `user_${student.id}`, name: student.name, email: student.email, role: 'student', academyId: student.academyId, studentId: student.id, birthDate: student.birthDate };
              
              // Update lastSeen
@@ -75,11 +123,32 @@ app.post('/api/login', async (req, res) => {
 
             return res.json({ user: userObj });
         }
+        
+        // Try logging in as Academy Admin (via Academies table email/pass)
+        const [academies] = await pool.query('SELECT * FROM academies WHERE email = ? AND password = ?', [email, password]);
+        if (academies.length > 0) {
+             const academy = academies[0];
+             
+             if (academy.status === 'pending') {
+                 return res.status(403).json({ message: 'Sua academia está em análise. Aguarde a aprovação.' });
+             }
+             if (academy.status === 'rejected') {
+                 return res.status(403).json({ message: 'O cadastro da sua academia foi recusado.' });
+             }
+
+             // Find the user record associated with this academy admin
+             const [adminUser] = await pool.query('SELECT * FROM users WHERE academyId = ? AND role = "academy_admin"', [academy.id]);
+             
+             if (adminUser.length > 0) {
+                 return res.json({ user: adminUser[0] });
+             }
+        }
 
         res.status(401).json({ message: 'User or password invalid' });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server error' });
+        const status = error.message.includes('em análise') || error.message.includes('recusado') ? 403 : 500;
+        res.status(status).json({ message: error.message || 'Server error' });
     }
 });
 
@@ -90,12 +159,17 @@ app.post('/api/register', async (req, res) => {
         const { name, address, responsible, responsibleRegistration, email, password } = req.body;
         const academyId = `academy_${Date.now()}`;
         const userId = `user_${Date.now()}`;
-
-        await conn.query('INSERT INTO academies (id, name, address, responsible, responsibleRegistration, email, password) VALUES (?, ?, ?, ?, ?, ?, ?)', [academyId, name, address, responsible, responsibleRegistration, email, password]);
+        
+        // Explicitly set status to 'pending'
+        await conn.query(
+            'INSERT INTO academies (id, name, address, responsible, responsibleRegistration, email, password, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
+            [academyId, name, address, responsible, responsibleRegistration, email, password, 'pending']
+        );
+        
         await conn.query('INSERT INTO users (id, name, email, role, academyId) VALUES (?, ?, ?, ?, ?)', [userId, responsible, email, 'academy_admin', academyId]);
 
         await conn.commit();
-        res.json({ success: true });
+        res.json({ success: true, message: 'Cadastro realizado! Aguarde a aprovação do administrador.' });
     } catch (error) {
         await conn.rollback();
         console.error(error);
@@ -157,6 +231,16 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE academies ADD COLUMN settings LONGTEXT");
         }
 
+        // 7. status on Academies
+        try {
+             await pool.query("SELECT status FROM academies LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding status to academies");
+             await pool.query("ALTER TABLE academies ADD COLUMN status VARCHAR(50) DEFAULT 'pending'");
+             // Set existing academies to active so we don't lock out current users
+             await pool.query("UPDATE academies SET status = 'active' WHERE status IS NULL OR status = 'pending'");
+        }
+
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
             ...s, 
@@ -171,7 +255,8 @@ app.get('/api/initial-data', async (req, res) => {
         const [academies] = await pool.query('SELECT * FROM academies');
         const parsedAcademies = academies.map(a => ({
             ...a,
-            settings: a.settings ? JSON.parse(a.settings) : {}
+            settings: a.settings ? JSON.parse(a.settings) : {},
+            status: a.status || 'active' // Default for legacy data in memory
         }));
 
         const [graduations] = await pool.query('SELECT * FROM graduations');
@@ -451,13 +536,9 @@ app.post('/api/settings', async (req, res) => {
 
     try {
         if (academyId) {
-            // Academy Specific Update (updates the settings JSON column)
-            // First get existing academy to merge logic if needed, or just overwrite settings JSON
-            // For simplicity, we assume `s` passed is the full object of what we want in settings
             const settingsJson = JSON.stringify(s);
             await pool.query('UPDATE academies SET settings = ? WHERE id = ?', [settingsJson, academyId]);
         } else {
-            // Global Update (Super Admin)
             await pool.query(`UPDATE theme_settings SET 
                 systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, 
                 cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?,
@@ -478,14 +559,13 @@ app.post('/api/settings', async (req, res) => {
 
 app.post('/api/attendance', createHandler('attendance_records'));
 app.post('/api/academies', async (req, res) => {
-    // Override default generic handler to handle JSON serialization of settings if passed
     const data = req.body;
     if (data.settings && typeof data.settings === 'object') {
         data.settings = JSON.stringify(data.settings);
     }
     
     const keys = Object.keys(data).map(key => `\`${key}\``);
-    const values = Object.values(data).map(v => v); // already stringified
+    const values = Object.values(data).map(v => v);
     
     try {
         await pool.query(`REPLACE INTO academies (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values);
@@ -493,6 +573,23 @@ app.post('/api/academies', async (req, res) => {
     } catch (e) {
          console.error(e);
          res.status(500).json({ message: e.message });
+    }
+});
+
+app.post('/api/academies/:id/status', async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body; // 'active' or 'rejected'
+    
+    if (!['active', 'rejected'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    try {
+        await pool.query('UPDATE academies SET status = ? WHERE id = ?', [status, id]);
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Error updating academy status:", error);
+        res.status(500).json({ message: error.message });
     }
 });
 

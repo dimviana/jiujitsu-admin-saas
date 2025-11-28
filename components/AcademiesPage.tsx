@@ -1,3 +1,5 @@
+
+
 import React, { useContext, useState, FormEvent } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Academy } from '../types';
@@ -5,7 +7,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
-import { Building, ChevronDown, ChevronRight, User, Briefcase, Edit, Mail } from 'lucide-react';
+import { Building, ChevronDown, ChevronRight, User, Briefcase, Edit, Mail, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
 interface AcademyFormProps {
     academy: Partial<Academy> | null;
@@ -30,7 +32,6 @@ const AcademyForm: React.FC<AcademyFormProps> = ({ academy, onSave, onClose }) =
 
     const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
-        // Since we are editing, we assume ID exists or is handled by backend if new (though register handles new)
         onSave(formData as Academy);
     };
 
@@ -51,10 +52,11 @@ const AcademyForm: React.FC<AcademyFormProps> = ({ academy, onSave, onClose }) =
 };
 
 const AcademiesPage: React.FC = () => {
-    const { academies, professors, students, loading, saveAcademy } = useContext(AppContext); // Assuming saveAcademy exists in context now
+    const { academies, professors, students, loading, saveAcademy, updateAcademyStatus, user } = useContext(AppContext);
     const [expandedAcademy, setExpandedAcademy] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAcademy, setSelectedAcademy] = useState<Academy | null>(null);
+    const isGeneralAdmin = user?.role === 'general_admin';
 
     const toggleAcademy = (id: string) => {
         setExpandedAcademy(prev => (prev === id ? null : id));
@@ -81,6 +83,13 @@ const AcademiesPage: React.FC = () => {
         setSelectedAcademy(null);
     };
 
+    const handleStatusUpdate = async (e: React.MouseEvent, id: string, status: 'active' | 'rejected') => {
+        e.stopPropagation();
+        if (window.confirm(status === 'active' ? 'Deseja aprovar e ativar esta academia?' : 'Deseja rejeitar esta academia?')) {
+            await updateAcademyStatus(id, status);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-slate-800">Academias</h1>
@@ -93,23 +102,31 @@ const AcademiesPage: React.FC = () => {
                         const academyProfessors = professors.filter(p => p.academyId === academy.id);
                         const academyStudents = students.filter(s => s.academyId === academy.id);
                         const isExpanded = expandedAcademy === academy.id;
+                        
+                        const status = academy.status || 'active'; // Default to active if old data
+                        const isPending = status === 'pending';
+                        const isRejected = status === 'rejected';
 
                         return (
-                            <Card key={academy.id} className="p-0 overflow-hidden">
+                            <Card key={academy.id} className={`p-0 overflow-hidden ${isPending ? 'border-l-4 border-l-amber-500' : isRejected ? 'opacity-60 border-l-4 border-l-red-500' : ''}`}>
                                 <div 
-                                    className="w-full text-left p-4 flex justify-between items-center bg-slate-50 hover:bg-slate-100 cursor-pointer"
+                                    className="w-full text-left p-4 flex flex-col md:flex-row justify-between items-center bg-slate-50 hover:bg-slate-100 cursor-pointer gap-4"
                                     onClick={() => toggleAcademy(academy.id)}
                                 >
-                                    <div className="flex items-center">
-                                        <Building className="w-8 h-8 mr-4 text-primary bg-white p-1.5 rounded-full border border-slate-200"/>
+                                    <div className="flex items-center w-full md:w-auto">
+                                        <Building className={`w-8 h-8 mr-4 p-1.5 rounded-full border border-slate-200 ${isPending ? 'text-amber-500 bg-amber-50' : 'text-primary bg-white'}`}/>
                                         <div>
-                                            <h2 className="font-bold text-slate-800 text-lg">{academy.name}</h2>
+                                            <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                                {academy.name}
+                                                {isPending && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">Pendente</span>}
+                                                {isRejected && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold border border-red-200">Rejeitado</span>}
+                                            </h2>
                                             <p className="text-sm text-slate-500 flex items-center mt-1">
                                                 <Mail className="w-3 h-3 mr-1" /> {academy.email}
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center space-x-6">
+                                    <div className="flex items-center space-x-4 md:space-x-6 w-full md:w-auto justify-between md:justify-end">
                                         <div className="hidden md:flex items-center space-x-6">
                                             <div className="text-center">
                                                 <span className="block font-bold text-slate-700">{academyProfessors.length}</span>
@@ -122,13 +139,36 @@ const AcademiesPage: React.FC = () => {
                                         </div>
                                         
                                         <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
+                                            {isGeneralAdmin && isPending && (
+                                                <>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="success" 
+                                                        onClick={(e) => handleStatusUpdate(e, academy.id, 'active')}
+                                                        className="px-2"
+                                                        title="Aprovar"
+                                                    >
+                                                        <CheckCircle className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="danger" 
+                                                        onClick={(e) => handleStatusUpdate(e, academy.id, 'rejected')}
+                                                        className="px-2"
+                                                        title="Rejeitar"
+                                                    >
+                                                        <XCircle className="w-4 h-4" />
+                                                    </Button>
+                                                </>
+                                            )}
+                                            
                                             <Button 
                                                 size="sm" 
                                                 variant="secondary" 
                                                 onClick={(e) => handleEditClick(e, academy)}
                                                 className="flex items-center"
                                             >
-                                                <Edit className="w-4 h-4 mr-1" /> Editar
+                                                <Edit className="w-4 h-4 mr-1" /> <span className="hidden sm:inline">Editar</span>
                                             </Button>
                                             {isExpanded ? <ChevronDown className="w-5 h-5 text-slate-400"/> : <ChevronRight className="w-5 h-5 text-slate-400"/>}
                                         </div>
@@ -137,6 +177,13 @@ const AcademiesPage: React.FC = () => {
                                 
                                 {isExpanded && (
                                     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-200 bg-white animate-fade-in-down">
+                                        {isPending && (
+                                            <div className="col-span-full bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-lg flex items-center">
+                                                <AlertTriangle className="w-5 h-5 mr-2" />
+                                                <p className="text-sm">Esta academia aguarda aprovação. O administrador responsável não poderá acessar o sistema até que ela seja ativada.</p>
+                                            </div>
+                                        )}
+                                        
                                         <div className="col-span-full mb-2">
                                             <p className="text-sm text-slate-600"><strong>Endereço:</strong> {academy.address}</p>
                                             <p className="text-sm text-slate-600"><strong>Responsável:</strong> {academy.responsible} (CPF: {academy.responsibleRegistration})</p>

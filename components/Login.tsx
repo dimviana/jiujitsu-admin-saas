@@ -1,3 +1,5 @@
+
+
 import React, { useState, useContext, FormEvent, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Eye as IconEye, EyeOff as IconEyeOff } from 'lucide-react';
@@ -110,7 +112,10 @@ const Login: React.FC = () => {
 
   const handleRegisterSave = async (data: any) => {
     const result = await registerAcademy(data);
-    if (result.success) setIsRegisterModalOpen(false);
+    if (result.success) {
+        setIsRegisterModalOpen(false);
+        setError('');
+    }
     return result;
   };
   
@@ -134,7 +139,7 @@ const Login: React.FC = () => {
                             <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500">{showPassword ? <IconEyeOff className="w-5 h-5"/> : <IconEye className="w-5 h-5"/>}</button>
                         </div>
                     </div>
-                    {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+                    {error && <p className={`text-sm text-center p-2 rounded ${error.includes('sucesso') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{error}</p>}
                     <Button type="submit" disabled={loading} className="w-full">{loading ? 'Entrando...' : 'Entrar'}</Button>
                 </form>
                 {themeSettings.registrationEnabled && (
