@@ -1,4 +1,5 @@
 
+
 import React, { useContext, useState, FormEvent } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
@@ -189,33 +190,85 @@ const SettingsPage: React.FC = () => {
                         
                         {activeTab === 'pagamentos' && (
                             <div className="space-y-6 animate-fade-in-down">
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração Financeira</h2>
+                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração Financeira e Gateways</h2>
                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
-                                  {isAcademyAdmin ? 'Configure os dados de recebimento da sua academia.' : 'Configure os dados padrão do sistema.'}
+                                  {isAcademyAdmin ? 'Configure os dados de recebimento e integrações de pagamento da sua academia.' : 'Configure os dados padrão do sistema.'}
                                 </p>
-                                <Input 
-                                  label="Chave PIX" 
-                                  name="pixKey" 
-                                  value={settings.pixKey} 
-                                  onChange={handleChange}
-                                  placeholder="Email, CPF/CNPJ, Telefone ou Chave Aleatória"
-                                />
-                                <Input 
-                                  label="Nome do Titular da Chave" 
-                                  name="pixHolderName" 
-                                  value={settings.pixHolderName} 
-                                  onChange={handleChange}
-                                  placeholder="Nome que aparecerá para o pagador"
-                                  maxLength={25}
-                                />
-                                <Input 
-                                  label="Valor Padrão da Mensalidade (R$)"
-                                  name="monthlyFeeAmount"
-                                  type="number"
-                                  value={settings.monthlyFeeAmount} 
-                                  onChange={handleChange}
-                                  step="0.01"
-                                />
+                                
+                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Dados Gerais e PIX</h3>
+                                    <Input 
+                                        label="Valor Padrão da Mensalidade (R$)"
+                                        name="monthlyFeeAmount"
+                                        type="number"
+                                        value={settings.monthlyFeeAmount} 
+                                        onChange={handleChange}
+                                        step="0.01"
+                                    />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input 
+                                          label="Chave PIX" 
+                                          name="pixKey" 
+                                          value={settings.pixKey} 
+                                          onChange={handleChange}
+                                          placeholder="Email, CPF, Telefone..."
+                                        />
+                                        <Input 
+                                          label="Nome do Titular da Chave" 
+                                          name="pixHolderName" 
+                                          value={settings.pixHolderName} 
+                                          onChange={handleChange}
+                                          placeholder="Nome Completo"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Mercado Pago Section */}
+                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                    <h3 className="font-semibold text-blue-600 flex items-center">
+                                        Mercado Pago
+                                        <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Cartão de Crédito</span>
+                                    </h3>
+                                    <p className="text-xs text-[var(--theme-text-primary)]/60">Credenciais para processamento de cartão via Mercado Pago.</p>
+                                    <Input 
+                                        label="Access Token (Produção)" 
+                                        name="mercadoPagoAccessToken" 
+                                        value={settings.mercadoPagoAccessToken || ''} 
+                                        onChange={handleChange}
+                                        placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                    />
+                                    <Input 
+                                        label="Public Key" 
+                                        name="mercadoPagoPublicKey" 
+                                        value={settings.mercadoPagoPublicKey || ''} 
+                                        onChange={handleChange}
+                                        placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                                    />
+                                </div>
+
+                                {/* EFI Bank Section */}
+                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                    <h3 className="font-semibold text-orange-600 flex items-center">
+                                        EFI Bank (Efí)
+                                        <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Boleto / Pix API</span>
+                                    </h3>
+                                    <p className="text-xs text-[var(--theme-text-primary)]/60">Credenciais para emissão automatizada.</p>
+                                    <Input 
+                                        label="Client ID" 
+                                        name="efiClientId" 
+                                        value={settings.efiClientId || ''} 
+                                        onChange={handleChange}
+                                        placeholder="Client_Id_..."
+                                    />
+                                    <Input 
+                                        label="Client Secret" 
+                                        name="efiClientSecret" 
+                                        value={settings.efiClientSecret || ''} 
+                                        onChange={handleChange}
+                                        type="password"
+                                        placeholder="Client_Secret_..."
+                                    />
+                                </div>
                             </div>
                         )}
 

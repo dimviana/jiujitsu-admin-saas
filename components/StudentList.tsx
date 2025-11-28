@@ -1,3 +1,5 @@
+
+
 import React, { useState } from 'react';
 import { Student, Graduation } from '../types';
 import { Search, MoreVertical, MessageCircle, Award } from 'lucide-react';
@@ -115,7 +117,7 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
                         {student.phone && (
                             <button 
                                 onClick={() => handleWhatsAppClick(student.phone)}
-                                className="p-1.5 bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors"
+                                className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors shadow-sm"
                                 title="Abrir WhatsApp"
                             >
                                 <MessageCircle className="w-4 h-4" />

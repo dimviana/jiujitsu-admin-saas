@@ -284,6 +284,18 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE professors ADD COLUMN status VARCHAR(50) DEFAULT 'active'");
         }
 
+        // 11. Gateway Settings in theme_settings
+        try {
+             await pool.query("SELECT mercadoPagoAccessToken FROM theme_settings LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding Payment Gateway columns to theme_settings");
+             await pool.query("ALTER TABLE theme_settings ADD COLUMN mercadoPagoAccessToken TEXT");
+             await pool.query("ALTER TABLE theme_settings ADD COLUMN mercadoPagoPublicKey TEXT");
+             await pool.query("ALTER TABLE theme_settings ADD COLUMN efiClientId TEXT");
+             await pool.query("ALTER TABLE theme_settings ADD COLUMN efiClientSecret TEXT");
+        }
+
+
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
             ...s, 
@@ -630,13 +642,15 @@ app.post('/api/settings', async (req, res) => {
                 cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?,
                 useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?,
                 publicPageEnabled=?, registrationEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?,
-                socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?
+                socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?,
+                mercadoPagoAccessToken=?, mercadoPagoPublicKey=?, efiClientId=?, efiClientSecret=?
                 WHERE id = 1`,
                 [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
                  s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
                  s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount,
                  s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs,
-                 s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled]
+                 s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled,
+                 s.mercadoPagoAccessToken, s.mercadoPagoPublicKey, s.efiClientId, s.efiClientSecret]
             );
         }
         res.json({ success: true });

@@ -40,6 +40,12 @@ export interface ThemeSettings {
   reminderDaysBeforeDue: number;
   overdueDaysAfterDue: number;
   
+  // Payment Gateways
+  mercadoPagoAccessToken?: string;
+  mercadoPagoPublicKey?: string;
+  efiClientId?: string;
+  efiClientSecret?: string;
+  
   // Feature Flags & Integrations
   publicPageEnabled: boolean;
   registrationEnabled: boolean;
