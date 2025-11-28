@@ -5,7 +5,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
-import { Users } from 'lucide-react';
+import { Users, X } from 'lucide-react';
 import { ConfirmationModal } from './ui/ConfirmationModal';
 
 const validateCPF = (cpf: string): boolean => {
@@ -203,7 +203,7 @@ const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({ professor, onSave, 
 
 // Main page component
 const ProfessorsPage: React.FC = () => {
-  const { professors, academies, graduations, saveProfessor, deleteProfessor, loading, students } = useContext(AppContext);
+  const { professors, academies, graduations, saveProfessor, deleteProfessor, demoteInstructor, loading, students } = useContext(AppContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProfessor, setSelectedProfessor] = useState<Partial<Professor> | null>(null);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -212,6 +212,10 @@ const ProfessorsPage: React.FC = () => {
   // Confirmation Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [professorToDelete, setProfessorToDelete] = useState<Professor | null>(null);
+
+  // Demote Confirmation
+  const [isDemoteModalOpen, setIsDemoteModalOpen] = useState(false);
+  const [professorToDemote, setProfessorToDemote] = useState<Professor | null>(null);
 
 
   const professorDanData = useMemo(() => {
@@ -274,6 +278,20 @@ const ProfessorsPage: React.FC = () => {
       setProfessorToDelete(null);
     }
   };
+  
+  // Demote Instructor Handler
+  const handleDemoteClick = (e: React.MouseEvent, prof: Professor) => {
+      e.stopPropagation();
+      setProfessorToDemote(prof);
+      setIsDemoteModalOpen(true);
+  }
+  
+  const handleConfirmDemote = async () => {
+      if (professorToDemote) {
+          await demoteInstructor(professorToDemote.id);
+          setProfessorToDemote(null);
+      }
+  }
 
   const handleOpenPhotoModal = (prof: Professor) => {
     setProfessorForPhoto(prof);
@@ -316,17 +334,21 @@ const ProfessorsPage: React.FC = () => {
                     <Card key={prof.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-full relative">
                          {/* Visual Badge for Instructor */}
                          {prof.isInstructor && graduation && (
-                            <div className="absolute top-4 right-4 z-10">
-                                <span 
-                                    className="px-3 py-1 text-xs font-bold rounded-full shadow-md text-white border border-white"
-                                    style={{ 
-                                        backgroundColor: graduation.color,
-                                        color: graduation.color.toLowerCase() === '#ffffff' ? '#000' : '#fff'
-                                    }}
-                                >
+                            <button 
+                                onClick={(e) => handleDemoteClick(e, prof)}
+                                className="absolute top-4 right-4 z-10 px-3 py-1 rounded-full shadow-md border group transition-all hover:scale-105 hover:bg-red-50"
+                                style={{ 
+                                    backgroundColor: graduation.color,
+                                    borderColor: graduation.color,
+                                    color: graduation.color.toLowerCase() === '#ffffff' ? '#000' : '#fff'
+                                }}
+                                title="Clique para remover a promoção de instrutor (rebaixar a aluno)"
+                            >
+                                <span className="font-bold text-xs flex items-center">
                                     INSTRUTOR
+                                    <X className={`w-3 h-3 ml-1 opacity-60 group-hover:opacity-100 ${graduation.color.toLowerCase() === '#ffffff' ? 'text-black' : 'text-white'}`} />
                                 </span>
-                            </div>
+                            </button>
                         )}
                         <div className="h-2" style={{ backgroundColor: graduation?.color || '#e2e8f0' }}></div>
                         <div className="p-5 flex flex-col flex-grow">
@@ -428,6 +450,17 @@ const ProfessorsPage: React.FC = () => {
           message={`Tem certeza que deseja excluir o professor ${professorToDelete?.name}?`}
           confirmText="Sim, excluir"
           cancelText="Não"
+          variant="danger"
+      />
+      
+      <ConfirmationModal 
+          isOpen={isDemoteModalOpen}
+          onClose={() => setIsDemoteModalOpen(false)}
+          onConfirm={handleConfirmDemote}
+          title="Remover Promoção de Instrutor"
+          message={`Tem certeza que deseja remover o status de Instrutor de ${professorToDemote?.name}? Ele voltará a ser apenas um Aluno e será removido desta lista de professores.`}
+          confirmText="Sim, remover"
+          cancelText="Cancelar"
           variant="danger"
       />
     </div>

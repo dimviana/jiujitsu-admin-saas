@@ -1,5 +1,3 @@
-
-
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -480,6 +478,45 @@ app.post('/api/students/promote-instructor', async (req, res) => {
         await conn.rollback();
         console.error("Error promoting student:", error);
         res.status(500).json({ message: error.message });
+    } finally {
+        conn.release();
+    }
+});
+
+app.post('/api/students/demote-instructor', async (req, res) => {
+    const { professorId } = req.body;
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 1. Get Professor Data to find Student by CPF or ID logic
+        const [professors] = await conn.query('SELECT cpf, isInstructor FROM professors WHERE id = ?', [professorId]);
+        
+        if (professors.length > 0) {
+            const prof = professors[0];
+            
+            // Only proceed if they are marked as instructor (created from student promotion)
+            // or if we decide that manual professors can also be demoted (which deletes them).
+            // For safety, let's allow it but the client UI only shows button if isInstructor=true.
+
+            if (prof.cpf) {
+                // 2. Update Student table to remove isInstructor flag
+                await conn.query('UPDATE students SET isInstructor = 0 WHERE cpf = ?', [prof.cpf]);
+            }
+            
+            // 3. Delete from Professors table
+            // Note: If this professor is assigned to classes, this might fail due to FK constraints.
+            // Ideally, we should set them to null in class_schedules or block deletion.
+            // For now, let's assume if it fails, the error will propagate.
+            await conn.query('DELETE FROM professors WHERE id = ?', [professorId]);
+        }
+
+        await conn.commit();
+        res.json({ success: true });
+    } catch (error) {
+        await conn.rollback();
+        console.error("Error demoting instructor:", error);
+        res.status(500).json({ message: error.message.includes('foreign key constraint') ? 'Não é possível remover este instrutor pois ele possui turmas ou histórico vinculado.' : error.message });
     } finally {
         conn.release();
     }

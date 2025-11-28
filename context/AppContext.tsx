@@ -6,6 +6,8 @@
 
 
 
+
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { 
@@ -41,6 +43,7 @@ interface AppContextType {
     deleteStudent: (id: string) => Promise<void>;
     updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
     promoteStudentToInstructor: (studentId: string) => Promise<void>;
+    demoteInstructor: (professorId: string) => Promise<void>; // New function
     updateStudentStatus: (id: string, status: 'active' | 'blocked') => Promise<void>;
     setThemeSettings: (settings: ThemeSettings) => void;
     saveSchedule: (schedule: Omit<ClassSchedule, 'id'> & { id?: string }) => Promise<void>;
@@ -320,18 +323,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 body: body ? JSON.stringify(body) : null
             });
             if (!res.ok) {
-                 console.warn(`Simulating success for ${endpoint}`);
+                // If response is not OK, try to parse error message
+                const errData = await res.json().catch(() => ({ message: 'Erro desconhecido' }));
+                throw new Error(errData.message || 'Erro na requisição');
             }
             setNotification({ message: 'Sucesso!', details: successMessage, type: 'success' });
             await refreshData();
         } catch (e: any) {
-             console.warn(`Simulating success for ${endpoint} (Offline)`);
-             setNotification({ message: 'Sucesso (Demo)!', details: successMessage, type: 'success' });
-             if (endpoint.includes('academies') && method === 'POST') {
-                 // For saveAcademy mock update
-                 const updatedAcademy = body;
-                 setAllAcademies(prev => prev.map(a => a.id === updatedAcademy.id ? updatedAcademy : a));
-             }
+             console.error(`Error in ${endpoint}:`, e);
+             setNotification({ message: 'Erro', details: e.message || 'Ocorreu um erro ao processar sua solicitação.', type: 'error' });
         }
     };
 
@@ -339,6 +339,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const deleteStudent = (id: string) => handleApiCall(`/api/students/${id}`, 'DELETE', null, 'Aluno removido com sucesso.');
     const updateStudentPayment = (id: string, status: 'paid' | 'unpaid') => handleApiCall('/api/students/payment', 'POST', { studentId: id, status, amount: effectiveThemeSettings.monthlyFeeAmount }, 'Status de pagamento atualizado.');
     const promoteStudentToInstructor = (studentId: string) => handleApiCall('/api/students/promote-instructor', 'POST', { studentId }, 'Aluno promovido a instrutor com sucesso.');
+    const demoteInstructor = (professorId: string) => handleApiCall('/api/students/demote-instructor', 'POST', { professorId }, 'Promoção de instrutor removida. O aluno retornou ao status normal.');
     const updateStudentStatus = (id: string, status: 'active' | 'blocked') => handleApiCall(`/api/students/${id}/status`, 'POST', { status }, `Status do aluno atualizado para ${status === 'active' ? 'Ativo' : 'Bloqueado'}.`);
 
     const setThemeSettings = (settings: ThemeSettings) => {
@@ -374,7 +375,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             loading, notification, setNotification,
             globalAcademyFilter, setGlobalAcademyFilter,
             themeMode, setThemeMode,
-            saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, updateStudentStatus, setThemeSettings,
+            saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, demoteInstructor, updateStudentStatus, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor, updateProfessorStatus,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord, saveAcademy, updateAcademyStatus,
             login, loginGoogle, registerAcademy, logout,
