@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { 
@@ -192,12 +193,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             
             if (isDark) {
                 // Dark Mode Palette override
-                // Use requested colors
-                root.style.setProperty('--theme-bg', '#333232'); // Fundo principal
-                root.style.setProperty('--theme-card-bg', '#414040'); // Fundo dos cards (tom mais claro)
-                root.style.setProperty('--theme-text-primary', '#ffffff'); // Texto branco
-                
-                // Ícones e Destaques em Azul
+                // Base: #333232
+                // Text: #ffffff
+                // Icons: #0863c2
+                root.style.setProperty('--theme-bg', '#333232'); 
+                root.style.setProperty('--theme-card-bg', '#414040'); // Um pouco mais claro que o fundo para contraste
+                root.style.setProperty('--theme-text-primary', '#ffffff');
                 root.style.setProperty('--theme-primary', '#0863c2'); 
                 root.style.setProperty('--theme-secondary', '#ffffff'); 
                 root.style.setProperty('--theme-accent', '#0863c2');
