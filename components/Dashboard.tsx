@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useContext } from 'react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Student, User, ClassSchedule, DayOfWeek, Graduation, ThemeSettings, AttendanceRecord } from '../types';
-import { Users, Briefcase, BookOpen, Gift, Award, Calendar as CalendarIcon, DollarSign, TrendingUp, CheckCircle, ChevronRight } from 'lucide-react';
+import { Users, Briefcase, BookOpen, Gift, Award, Calendar as CalendarIcon, DollarSign, TrendingUp, CheckCircle, ChevronRight, Activity, Clock } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -322,7 +322,7 @@ const GraduationEligibilityCard: React.FC<{ students: Student[], graduations: Gr
         if (!students.length || !graduations.length) return [];
         
         const sortedGraduations = [...graduations].sort((a, b) => a.rank - b.rank);
-        const candidates = [];
+        const candidates: Array<{ student: Student, currentBelt: Graduation, nextBelt: Graduation, monthsInBelt: number, frequency: number }> = [];
 
         for (const student of students) {
             const currentBelt = sortedGraduations.find(g => g.id === student.beltId);
@@ -348,7 +348,13 @@ const GraduationEligibilityCard: React.FC<{ students: Student[], graduations: Gr
                     const frequency = totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0;
                     
                     if (frequency >= 70) {
-                        candidates.push({ student, currentBelt, nextBelt, monthsInBelt: monthsSincePromotion });
+                        candidates.push({ 
+                            student, 
+                            currentBelt, 
+                            nextBelt, 
+                            monthsInBelt: monthsSincePromotion, 
+                            frequency: Math.round(frequency) 
+                        });
                     }
                 }
             } else if (currentBelt.type === 'kids') {
@@ -356,7 +362,19 @@ const GraduationEligibilityCard: React.FC<{ students: Student[], graduations: Gr
                  const birthDate = student.birthDate ? new Date(student.birthDate) : new Date();
                  const age = now.getFullYear() - birthDate.getFullYear();
                  if (nextBelt.minAge && age >= nextBelt.minAge && monthsSincePromotion >= (currentBelt.minTimeInMonths || 6)) {
-                     candidates.push({ student, currentBelt, nextBelt, monthsInBelt: monthsSincePromotion });
+                     // Frequência é menos rígida para crianças neste exemplo, mas vamos calcular para exibir
+                     const relevantRecords = attendanceRecords.filter(r => r.studentId === student.id && new Date(r.date) >= promotionDateObj);
+                     const presentCount = relevantRecords.filter(r => r.status === 'present').length;
+                     const totalRecords = relevantRecords.length;
+                     const frequency = totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0;
+
+                     candidates.push({ 
+                         student, 
+                         currentBelt, 
+                         nextBelt, 
+                         monthsInBelt: monthsSincePromotion,
+                         frequency: Math.round(frequency)
+                     });
                  }
             }
         }
@@ -372,18 +390,28 @@ const GraduationEligibilityCard: React.FC<{ students: Student[], graduations: Gr
                 Aptos para Graduação
             </h3>
             <div className="space-y-3">
-                {eligibleStudents.map(({ student, currentBelt, nextBelt }) => (
-                     <div key={student.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-md border border-slate-100">
+                {eligibleStudents.map(({ student, currentBelt, nextBelt, monthsInBelt, frequency }) => (
+                     <div key={student.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-md border border-slate-100 hover:border-green-200 transition-colors">
                         <div className="flex items-center">
-                             <img src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} className="w-8 h-8 rounded-full mr-2 object-cover"/>
+                             <img src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} className="w-10 h-10 rounded-full mr-3 object-cover border-2 border-white shadow-sm"/>
                              <div>
-                                 <p className="text-sm font-semibold text-slate-800">{student.name}</p>
-                                 <div className="flex items-center text-xs text-slate-500">
-                                     {currentBelt.name} <ChevronRight className="w-3 h-3 mx-1"/> {nextBelt.name}
+                                 <p className="text-sm font-bold text-slate-800">{student.name}</p>
+                                 <div className="flex items-center text-xs text-slate-600 font-medium mb-1">
+                                     {currentBelt.name} <ChevronRight className="w-3 h-3 mx-1 text-slate-400"/> {nextBelt.name}
+                                 </div>
+                                 <div className="flex items-center gap-3 text-[10px] text-slate-500">
+                                     <span className="flex items-center bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                         <Clock className="w-3 h-3 mr-1 text-amber-500" /> {monthsInBelt} meses
+                                     </span>
+                                     <span className="flex items-center bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                         <Activity className="w-3 h-3 mr-1 text-blue-500" /> {frequency}% freq
+                                     </span>
                                  </div>
                              </div>
                         </div>
-                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        <div className="flex flex-col items-center justify-center pl-2 border-l border-slate-100">
+                            <CheckCircle className="w-6 h-6 text-green-500" />
+                        </div>
                      </div>
                 ))}
             </div>

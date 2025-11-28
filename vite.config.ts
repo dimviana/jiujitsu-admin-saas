@@ -3,14 +3,15 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  const cwd = (process as any).cwd();
+  const env = loadEnv(mode, cwd, '');
   return {
     plugins: [react()],
     base: '/',
     envPrefix: 'REACT_APP_',
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './'),
+        '@': path.resolve(cwd, './'),
       },
     },
     build: {
