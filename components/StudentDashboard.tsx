@@ -7,32 +7,340 @@ import Input from './ui/Input';
 import StudentAttendanceChart from './charts/StudentAttendanceChart';
 import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle } from 'lucide-react';
 
-// ... (previous helper functions: generateBRCode, PixPaymentModal, CreditCardModal, UploadProofModal, calculateTrainingTime, calculateAge, StatCard)
+// --- Helper Functions & Components ---
 
-// New helper for consistent belt styling
-const getBeltStyle = (belt: Graduation) => {
-    if (!belt) return { backgroundColor: '#e2e8f0' };
-    if (!belt.color2) return { backgroundColor: belt.color };
-    
-    const angle = belt.gradientAngle ?? 90;
-    const h = (belt.gradientHardness ?? 0) / 100;
-    const c1 = belt.color;
-    const c2 = belt.color2;
-    const c3 = belt.color3 || belt.color2;
+const generateBRCode = (
+    key: string, name: string, amount: number, txid: string
+): string => {
+    const safeName = name.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const city = "BRASILIA";
 
-    if (c3 !== c2) {
-        const s1 = h * 33.33;
-        const s2 = 50 - (h * 16.67);
-        const s3 = 50 + (h * 16.67);
-        const s4 = 100 - (h * 33.33);
-        return { background: `linear-gradient(${angle}deg, ${c1} ${s1}%, ${c2} ${s2}%, ${c2} ${s3}%, ${c3} ${s4}%)` };
+    const format = (id: string, value: string) => {
+        const len = value.length.toString().padStart(2, '0');
+        return `${id}${len}${value}`;
+    };
+
+    const merchantAccountInfo = format('00', 'BR.GOV.BCB.PIX') + format('01', key);
+    const additionalData = format('05', txid);
+
+    const payload = [
+        format('00', '01'),
+        format('26', merchantAccountInfo),
+        format('52', '0000'),
+        format('53', '986'),
+        format('54', amount.toFixed(2)),
+        format('58', 'BR'),
+        format('59', safeName),
+        format('60', city),
+        format('62', additionalData),
+    ].join('');
+
+    const payloadWithCrc = payload + '6304';
+
+    let crc = 0xFFFF;
+    for (let i = 0; i < payloadWithCrc.length; i++) {
+        crc ^= payloadWithCrc.charCodeAt(i) << 8;
+        for (let j = 0; j < 8; j += 2) {
+            crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
+        }
     }
-    const s1 = h * 50;
-    const s2 = 100 - (h * 50);
-    return { background: `linear-gradient(${angle}deg, ${c1} ${s1}%, ${c2} ${s2}%)` };
+    const crc16 = (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+
+    return payloadWithCrc + crc16;
 };
 
-// ... (StudentDashboardProps interface)
+
+const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProceedToUpload: () => void; themeSettings: ThemeSettings }> = ({ student, onClose, onProceedToUpload, themeSettings }) => {
+    const pixCodeRef = useRef<HTMLInputElement>(null);
+    const [copySuccess, setCopySuccess] = useState('');
+    const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
+
+    useEffect(() => {
+        if (countdown > 0) {
+            const timer = setInterval(() => {
+                setCountdown(prev => prev - 1);
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [countdown]);
+    
+    const isExpired = countdown === 0;
+    const minutes = String(Math.floor(countdown / 60)).padStart(2, '0');
+    const seconds = String(countdown % 60).padStart(2, '0');
+
+
+    const brCode = useMemo(() => {
+        if (!themeSettings.pixKey || !themeSettings.pixHolderName) {
+            return null;
+        }
+        // O txid deve ser alfanumérico e ter no máximo 25 caracteres para o payload do QR Code.
+        const txid = (`JJHUB${student.id}${Date.now()}`.replace(/[^a-zA-Z0-9]/g, '')).slice(0, 25);
+
+        return generateBRCode(
+            themeSettings.pixKey,
+            themeSettings.pixHolderName,
+            themeSettings.monthlyFeeAmount,
+            txid
+        );
+    }, [themeSettings, student]);
+
+    const handleCopy = () => {
+        if (pixCodeRef.current) {
+            pixCodeRef.current.select();
+            navigator.clipboard.writeText(pixCodeRef.current.value);
+            setCopySuccess('Copiado!');
+            setTimeout(() => setCopySuccess(''), 2000);
+        }
+    };
+    
+    if (!brCode) {
+        return (
+             <Modal isOpen={true} onClose={onClose} title="Pagamento via PIX">
+                 <div className="text-center">
+                    <p className="text-slate-600">A configuração de PIX não foi realizada pelo administrador.</p>
+                    <p className="text-sm text-slate-500 mt-2">Por favor, entre em contato com a academia.</p>
+                    <div className="mt-6 flex justify-end">
+                        <Button variant="secondary" onClick={onClose}>Fechar</Button>
+                    </div>
+                </div>
+             </Modal>
+        );
+    }
+    
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(brCode)}`;
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Pagamento via PIX">
+            <div className="space-y-4 text-center">
+                 {isExpired ? (
+                    <div className="flex flex-col items-center justify-center p-8">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-red-500 mb-4" fill="none" viewBox="0 0 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <h3 className="text-xl font-bold text-slate-800">Código PIX Expirado</h3>
+                        <p className="text-slate-600 mt-2">O tempo para pagamento acabou. Por favor, feche esta janela e clique em "Pagar Mensalidade" para gerar um novo código.</p>
+                        <Button onClick={onClose} className="mt-6">Fechar</Button>
+                    </div>
+                ) : (
+                    <>
+                        <div className="bg-amber-100 text-amber-800 font-bold p-3 rounded-lg">
+                            Este código expira em: {minutes}:{seconds}
+                        </div>
+                        <p className="text-slate-600">Pague a mensalidade no valor de <span className="font-bold">{themeSettings.monthlyFeeAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> usando o QR Code ou o código abaixo.</p>
+                        <img src={qrCodeUrl} alt="PIX QR Code" className="mx-auto my-4 border-4 border-slate-200 rounded-lg"/>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-700">PIX Copia e Cola</label>
+                            <div className="flex gap-2">
+                                <Input readOnly value={brCode} ref={pixCodeRef} />
+                                <Button onClick={handleCopy} variant="secondary">{copySuccess || 'Copiar'}</Button>
+                            </div>
+                        </div>
+                         <div className="mt-6 pt-6 border-t border-slate-200 flex flex-col items-center">
+                             <p className="font-semibold text-amber-600 mb-2">Já realizou o pagamento?</p>
+                             <Button onClick={onProceedToUpload}>Anexar Comprovante</Button>
+                         </div>
+                    </>
+                )}
+            </div>
+        </Modal>
+    );
+};
+
+const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfirm: () => Promise<void>; amount: number }> = ({ onClose, onConfirm, amount }) => {
+    const [loading, setLoading] = useState(false);
+    const [cardData, setCardData] = useState({
+        number: '',
+        name: '',
+        expiry: '',
+        cvc: ''
+    });
+
+    const handleFormatCardNumber = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let val = e.target.value.replace(/\D/g, '');
+        val = val.replace(/(\d{4})/g, '$1 ').trim();
+        setCardData(prev => ({ ...prev, number: val.substring(0, 19) }));
+    };
+
+    const handleFormatExpiry = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let val = e.target.value.replace(/\D/g, '');
+        if (val.length >= 2) {
+            val = val.substring(0, 2) + '/' + val.substring(2, 4);
+        }
+        setCardData(prev => ({ ...prev, expiry: val }));
+    };
+
+    const handlePayment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        // Simulating API latency
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await onConfirm();
+        setLoading(false);
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Pagamento com Cartão de Crédito">
+            <form onSubmit={handlePayment} className="space-y-4">
+                <div className="bg-slate-50 p-4 rounded-lg mb-4 text-center border border-slate-100">
+                    <p className="text-sm text-slate-500">Valor a pagar</p>
+                    <p className="text-3xl font-bold text-slate-800">{amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                </div>
+
+                <Input 
+                    label="Número do Cartão" 
+                    value={cardData.number} 
+                    onChange={handleFormatCardNumber} 
+                    placeholder="0000 0000 0000 0000" 
+                    required 
+                />
+                <Input 
+                    label="Nome do Titular" 
+                    value={cardData.name} 
+                    onChange={(e) => setCardData(prev => ({ ...prev, name: e.target.value.toUpperCase() }))} 
+                    placeholder="COMO ESTÁ NO CARTÃO" 
+                    required 
+                />
+                <div className="grid grid-cols-2 gap-4">
+                    <Input 
+                        label="Validade" 
+                        value={cardData.expiry} 
+                        onChange={handleFormatExpiry} 
+                        placeholder="MM/AA" 
+                        maxLength={5} 
+                        required 
+                    />
+                    <Input 
+                        label="CVV" 
+                        value={cardData.cvc} 
+                        onChange={(e) => setCardData(prev => ({ ...prev, cvc: e.target.value.replace(/\D/g, '').substring(0, 4) }))} 
+                        placeholder="123" 
+                        type="password"
+                        maxLength={4} 
+                        required 
+                    />
+                </div>
+
+                <div className="pt-4 flex items-center justify-end gap-3">
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
+                    <Button type="submit" disabled={loading} className="w-full sm:w-auto">
+                        {loading ? (
+                            <><Loader className="w-4 h-4 mr-2 animate-spin" /> Processando...</>
+                        ) : (
+                            'Pagar Agora'
+                        )}
+                    </Button>
+                </div>
+            </form>
+        </Modal>
+    );
+};
+
+const UploadProofModal: React.FC<{ onConfirm: () => Promise<void>; onClose: () => void; }> = ({ onConfirm, onClose }) => {
+    const [receiptFile, setReceiptFile] = useState<File | null>(null);
+    const [isPaying, setIsPaying] = useState(false);
+    
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            if (e.target.files[0].type === 'application/pdf') {
+                setReceiptFile(e.target.files[0]);
+            } else {
+                alert('Por favor, selecione um arquivo PDF.');
+                e.target.value = ''; // Clear the input
+                setReceiptFile(null);
+            }
+        }
+    };
+    
+    const handleSendReceipt = async () => {
+        if (!receiptFile) return;
+        setIsPaying(true);
+        await onConfirm();
+        setIsPaying(false);
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Enviar Comprovante de Pagamento">
+            <div className="space-y-4">
+                <p className="text-slate-600">Para confirmar seu pagamento, por favor, anexe o comprovante em formato PDF.</p>
+                <label
+                    htmlFor="receipt-upload"
+                    className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100"
+                >
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Upload className="w-8 h-8 mb-3 text-slate-400" />
+                        <p className="mb-2 text-sm text-slate-500">
+                            <span className="font-semibold">Clique para enviar comprovante</span>
+                        </p>
+                        <p className="text-xs text-slate-500">Apenas arquivos PDF (obrigatório)</p>
+                    </div>
+                    <input id="receipt-upload" type="file" className="hidden" accept="application/pdf" onChange={handleFileChange} />
+                </label>
+                 {receiptFile && (
+                    <p className="text-center text-sm text-green-600 font-medium">Arquivo: {receiptFile.name}</p>
+                )}
+                <div className="flex justify-end gap-2 mt-4">
+                    <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleSendReceipt} disabled={!receiptFile || isPaying}>
+                        {isPaying ? 'Enviando...' : 'Enviar Comprovante'}
+                    </Button>
+                </div>
+            </div>
+        </Modal>
+    )
+}
+
+const calculateTrainingTime = (startDateString?: string): { years: number; months: number; totalMonths: number } => {
+  if (!startDateString) return { years: 0, months: 0, totalMonths: 0 };
+  const startDate = new Date(startDateString);
+  const now = new Date();
+  
+  let years = now.getFullYear() - startDate.getFullYear();
+  let months = now.getMonth() - startDate.getMonth();
+  
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  
+  return { years, months, totalMonths: years * 12 + months };
+};
+
+const calculateAge = (birthDate: string): number => {
+    const today = new Date();
+    const birthDateObj = new Date(birthDate);
+    let age = today.getFullYear() - birthDateObj.getFullYear();
+    const m = today.getMonth() - birthDateObj.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDateObj.getDate())) {
+        age--;
+    }
+    return age;
+};
+
+const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string | React.ReactNode; color: string }> = ({ icon, title, value, color }) => (
+  <Card className="flex items-center p-5">
+    <div className={`p-3 rounded-lg mr-4`} style={{ backgroundColor: `${color}1A`}}>
+        <div style={{ color: color }}>{icon}</div>
+    </div>
+    <div>
+      <p className="text-sm font-medium text-slate-500">{title}</p>
+      <p className="text-xl font-bold text-slate-800">{value}</p>
+    </div>
+  </Card>
+  
+);
+
+interface StudentDashboardProps {
+  student?: Student;
+  user?: User;
+  students: Student[];
+  graduations: Graduation[];
+  schedules: ClassSchedule[];
+  themeSettings: ThemeSettings;
+  updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
+  users?: User[];
+}
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ 
     student: studentProp, 
@@ -43,7 +351,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     themeSettings, 
     updateStudentPayment 
 }) => {
-    // ... (state and effects logic remains identical)
     const [paymentModalState, setPaymentModalState] = useState<'closed' | 'pix' | 'card' | 'upload'>('closed');
     const [paymentSuccess, setPaymentSuccess] = useState(false);
 
@@ -125,6 +432,29 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         }, 3000);
     };
 
+    const getBeltStyle = (grad: Graduation) => {
+        if (!grad.color2) return { background: grad.color };
+
+        const angle = grad.gradientAngle ?? 90;
+        const hardness = (grad.gradientHardness ?? 0) / 100;
+        const color3 = grad.color3 || grad.color2;
+
+        const c1End = 33.33 * hardness;
+        const c2Start = 50 - (16.67 * hardness);
+        const c2End = 50 + (16.67 * hardness);
+        const c3Start = 100 - (33.33 * hardness);
+
+        return {
+            background: `linear-gradient(${angle}deg,
+                ${grad.color} 0%,
+                ${grad.color} ${c1End}%,
+                ${grad.color2} ${c2Start}%,
+                ${grad.color2} ${c2End}%,
+                ${color3} ${c3Start}%,
+                ${color3} 100%
+            )`
+        };
+    };
 
     if (!studentData || !graduation) {
         return <div className="text-center p-8 text-slate-500">Carregando dados do aluno...</div>;
@@ -210,7 +540,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             </div>
                              <div 
                                 className="w-full h-8 rounded-md flex items-center justify-end shadow-inner relative overflow-hidden" 
-                                style={{
+                                style={{ 
                                     ...getBeltStyle(graduation),
                                     border: '1px solid rgba(0,0,0,0.1)' 
                                 }}

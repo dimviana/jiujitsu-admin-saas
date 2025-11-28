@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Student, Graduation } from '../types';
@@ -10,33 +11,6 @@ import { Award as IconAward, FileText, Baby, Briefcase } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
 import { ConfirmationModal } from './ui/ConfirmationModal';
-
-// ... (existing helper functions: validateCPF, formatDateForInput, StudentForm component, calculateAge) ...
-
-// Helper logic for rendering belts (replicated to avoid import issues)
-const getBeltStyle = (belt: Graduation) => {
-    if (!belt) return { backgroundColor: '#e2e8f0' };
-    if (!belt.color2) return { backgroundColor: belt.color };
-    
-    const angle = belt.gradientAngle ?? 90;
-    const h = (belt.gradientHardness ?? 0) / 100;
-    const c1 = belt.color;
-    const c2 = belt.color2;
-    const c3 = belt.color3 || belt.color2;
-
-    if (c3 !== c2) {
-        const s1 = h * 33.33;
-        const s2 = 50 - (h * 16.67);
-        const s3 = 50 + (h * 16.67);
-        const s4 = 100 - (h * 33.33);
-        return { background: `linear-gradient(${angle}deg, ${c1} ${s1}%, ${c2} ${s2}%, ${c2} ${s3}%, ${c3} ${s4}%)` };
-    }
-    const s1 = h * 50;
-    const s2 = 100 - (h * 50);
-    return { background: `linear-gradient(${angle}deg, ${c1} ${s1}%, ${c2} ${s2}%)` };
-};
-
-// ... (Rest of imports and logic above remains the same, until StudentForm) ...
 
 const validateCPF = (cpf: string): boolean => {
     if (typeof cpf !== 'string') return false;
@@ -60,6 +34,7 @@ const validateCPF = (cpf: string): boolean => {
     return true;
 };
 
+// Helper to format date string from API/DB (often includes time or is ISO) to YYYY-MM-DD for input type="date"
 const formatDateForInput = (dateString?: string) => {
     if (!dateString) return '';
     try {
@@ -76,7 +51,6 @@ interface StudentFormProps {
 }
 
 const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) => {
-    // ... (StudentForm implementation from existing file) ...
     const { academies, graduations, user } = useContext(AppContext);
     const [preview, setPreview] = useState<string | null>(student?.imageUrl || null);
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -95,6 +69,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
         stripes: 0,
         isCompetitor: false,
         ...student,
+        // Ensure dates are correctly formatted for input fields
         birthDate: formatDateForInput(student?.birthDate),
         firstGraduationDate: formatDateForInput(student?.firstGraduationDate),
         lastPromotionDate: formatDateForInput(student?.lastPromotionDate),
@@ -138,6 +113,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
             setCpfError('Por favor, insira um CPF válido.');
             return;
         }
+        // Include the preview image in the saved data
         onSave({ ...formData, imageUrl: preview || undefined } as any);
     };
 
@@ -230,6 +206,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
             </div>
         </form>
         
+        {/* Image Upload Modal specifically for the Form context */}
         {isPhotoModalOpen && (
             <PhotoUploadModal
                 isOpen={isPhotoModalOpen}
@@ -260,7 +237,6 @@ const calculateAge = (birthDate: string): number => {
 
 const StudentsPage: React.FC = () => {
     const { students, academies, saveStudent, deleteStudent, loading, graduations, attendanceRecords, schedules, themeSettings, updateStudentPayment, promoteStudentToInstructor } = useContext(AppContext);
-    // ... (rest of the state management code remains the same)
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Partial<Student> | null>(null);
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -268,14 +244,15 @@ const StudentsPage: React.FC = () => {
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
     const [activeTab, setActiveTab] = useState<'adults' | 'kids'>('adults');
     
+    // Confirmation Modal States
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
 
+    // Instructor Promotion Modal States
     const [isInstructorPromoteModalOpen, setIsInstructorPromoteModalOpen] = useState(false);
     const [studentToPromoteInstructor, setStudentToPromoteInstructor] = useState<Student | null>(null);
 
     const eligibilityData = useMemo(() => {
-        // ... (Eligibility logic remains the same, omitted for brevity but preserved in output)
         const data = new Map<string, { eligible: boolean; nextBelt: Graduation | null; reason: string }>();
         if (!students.length || !graduations.length) return data;
         
@@ -306,6 +283,7 @@ const StudentsPage: React.FC = () => {
             
             const age = calculateAge(student.birthDate || '');
 
+            // Kids' belt logic
             if (currentBelt.type === 'kids') {
                 const adultBlueBelt = sortedGraduations.find(g => g.name === 'Azul' && g.type === 'adult');
                 if (currentBelt.name === 'Verde' && age >= 16 && adultBlueBelt) {
@@ -318,9 +296,10 @@ const StudentsPage: React.FC = () => {
                     continue;
                 }
                 data.set(student.id, { eligible: false, nextBelt, reason: `Idade insuficiente (${age} anos).` });
-                continue; 
+                continue; // End kids logic
             }
             
+            // Adult belt logic
             if (currentBelt.type === 'adult') {
                 const relevantRecords = attendanceRecords.filter(r => r.studentId === student.id && new Date(r.date) >= new Date(promotionDate));
                 const presentCount = relevantRecords.filter(r => r.status === 'present').length;
@@ -332,12 +311,13 @@ const StudentsPage: React.FC = () => {
                     continue;
                 }
 
+                // Black Belt to Coral
                 if (currentBelt.name === 'Preta') {
                     if (student.stripes < 6) {
                         data.set(student.id, { eligible: false, nextBelt, reason: `Requer 6 graus na faixa preta (atualmente ${student.stripes}).` });
                         continue;
                     }
-                    if (monthsSincePromotion >= 84) { 
+                    if (monthsSincePromotion >= 84) { // 7 years
                         data.set(student.id, { eligible: true, nextBelt, reason: `Cumpriu 7 anos como 6º grau.` });
                         continue;
                     }
@@ -345,12 +325,13 @@ const StudentsPage: React.FC = () => {
                     continue;
                 }
 
+                // Coral Belt to Red
                 if (currentBelt.name === 'Coral') {
                      if (student.stripes < 8) {
                         data.set(student.id, { eligible: false, nextBelt, reason: `Requer 8 graus na faixa coral (atualmente ${student.stripes}).` });
                         continue;
                     }
-                     if (monthsSincePromotion >= 120) { 
+                     if (monthsSincePromotion >= 120) { // 10 years
                         data.set(student.id, { eligible: true, nextBelt, reason: `Cumpriu 10 anos como 8º grau.` });
                         continue;
                     }
@@ -358,6 +339,7 @@ const StudentsPage: React.FC = () => {
                     continue;
                 }
 
+                // Standard adult belts (White, Blue, Purple, Brown)
                 if (student.stripes < 4) {
                     data.set(student.id, { eligible: false, nextBelt, reason: `Requer 4 graus (atualmente ${student.stripes}).` });
                     continue;
@@ -382,20 +364,23 @@ const StudentsPage: React.FC = () => {
     }, [students, activeTab]);
 
 
-    // ... (rest of action handlers remain the same)
     const handlePromoteStudent = async (studentId: string) => {
         const student = students.find(s => s.id === studentId);
         const eligibility = eligibilityData.get(studentId);
+        
         if (!student || !eligibility || !eligibility.eligible || !eligibility.nextBelt) {
             alert('Este aluno não está elegível para promoção.');
             return;
         }
+
         if (window.confirm(`Promover ${student.name} para a faixa ${eligibility.nextBelt.name}?`)) {
+            // Destructure to remove fields that should not be passed to saveStudent and to keep the existing password
             const { paymentStatus, lastSeen, paymentHistory, password, ...studentToSave } = student;
+            
             const promotedStudentData = {
                 ...studentToSave,
                 beltId: eligibility.nextBelt.id,
-                stripes: 0,
+                stripes: 0, // Always reset stripes to 0 upon promotion
                 lastPromotionDate: new Date().toISOString().split('T')[0],
             };
             await saveStudent(promotedStudentData);
@@ -405,10 +390,12 @@ const StudentsPage: React.FC = () => {
     const handleGenerateCertificate = (student: Student) => {
         const graduation = graduations.find(g => g.id === student.beltId);
         const academy = academies.find(a => a.id === student.academyId);
+        
         if (!graduation || !academy) {
             alert("Dados de graduação ou academia não encontrados.");
             return;
         }
+        
         generateCertificate(student, graduation, academy);
     };
 
@@ -427,11 +414,13 @@ const StudentsPage: React.FC = () => {
         handleCloseModal();
     };
     
+    // NEW: Open Delete Confirmation Modal
     const handleDeleteClick = (student: Student) => {
         setStudentToDelete(student);
         setIsDeleteModalOpen(true);
     };
 
+    // NEW: Confirm Delete Action
     const handleConfirmDelete = async () => {
         if (studentToDelete) {
             await deleteStudent(studentToDelete.id);
@@ -514,6 +503,8 @@ const StudentsPage: React.FC = () => {
                         const stripes = student.stripes;
                         const eligibility = eligibilityData.get(student.id);
 
+                        // Determinar se pode ser promovido a instrutor (Faixa Azul = rank aprox 101/2 no seed, mas vamos checar pelo nome ou tipo 'adult' e não ser branca)
+                        // Lógica: Faixa Azul ou superior (Rank > 1 ou específico) e type == 'adult'
                         const blueBeltRank = graduations.find(g => g.name === 'Azul' && g.type === 'adult')?.rank || 999;
                         const isEligibleForInstructor = belt && belt.type === 'adult' && belt.rank >= blueBeltRank && !student.isInstructor;
                         
@@ -521,7 +512,11 @@ const StudentsPage: React.FC = () => {
                             <Card key={student.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-[328px]">
                                 <div 
                                     className="h-2" 
-                                    style={belt ? getBeltStyle(belt) : { background: '#e2e8f0' }}
+                                    style={{ 
+                                        background: belt?.color2 
+                                            ? `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)` 
+                                            : belt?.color || '#e2e8f0' 
+                                    }}
                                 ></div>
                                 <div className="p-5 flex flex-col flex-grow">
                                     <div className="flex items-center mb-4">
@@ -554,7 +549,11 @@ const StudentsPage: React.FC = () => {
                                                 <div className="flex items-center">
                                                     <span 
                                                         className="w-4 h-4 rounded-full mr-2 border border-slate-300" 
-                                                        style={getBeltStyle(belt)}
+                                                        style={{ 
+                                                            background: belt.color2 
+                                                                ? `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)` 
+                                                                : belt.color 
+                                                        }}
                                                     ></span>
                                                     <span className="font-medium text-slate-700">{belt.name}</span>
                                                     {/* Visual Indicator for Kids Belt */}
@@ -566,7 +565,6 @@ const StudentsPage: React.FC = () => {
                                                 </div>
                                             </div>
                                         )}
-                                        {/* ... other student details ... */}
                                         <div className="flex justify-between items-center">
                                             <span className="text-slate-600 font-medium">Idade:</span>
                                             <span className="font-medium text-slate-700">{calculateAge(student.birthDate || '')} anos</span>
@@ -590,7 +588,12 @@ const StudentsPage: React.FC = () => {
                                         <div className="pt-4 mt-4">
                                             <div 
                                                 className="w-full h-7 rounded-md flex items-center justify-end" 
-                                                style={belt ? getBeltStyle(belt) : { background: '#e2e8f0', border: '1px solid rgba(0,0,0,0.1)' }}
+                                                style={{ 
+                                                    background: belt?.color2 
+                                                        ? `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)` 
+                                                        : belt?.color || '#e2e8f0', 
+                                                    border: '1px solid rgba(0,0,0,0.1)' 
+                                                }}
                                                 title={`${belt?.name} - ${stripes} grau(s)`}
                                             >
                                                 <div className="h-full w-1/4 bg-black flex items-center justify-center space-x-1 p-1">

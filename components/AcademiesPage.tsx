@@ -2,7 +2,7 @@
 
 import React, { useContext, useState, FormEvent } from 'react';
 import { AppContext } from '../context/AppContext';
-import { Academy, Student, Professor } from '../types';
+import { Academy, Student, Professor, Graduation } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
@@ -15,6 +15,30 @@ interface AcademyFormProps {
     onSave: (academy: Academy) => void;
     onClose: () => void;
 }
+
+const getBeltStyle = (grad: Graduation) => {
+    if (!grad.color2) return { background: grad.color };
+
+    const angle = grad.gradientAngle ?? 90;
+    const hardness = (grad.gradientHardness ?? 0) / 100;
+    const color3 = grad.color3 || grad.color2;
+
+    const c1End = 33.33 * hardness;
+    const c2Start = 50 - (16.67 * hardness);
+    const c2End = 50 + (16.67 * hardness);
+    const c3Start = 100 - (33.33 * hardness);
+
+    return {
+        background: `linear-gradient(${angle}deg,
+            ${grad.color} 0%,
+            ${grad.color} ${c1End}%,
+            ${grad.color2} ${c2Start}%,
+            ${grad.color2} ${c2End}%,
+            ${color3} ${c3Start}%,
+            ${color3} 100%
+        )`
+    };
+};
 
 const AcademyForm: React.FC<AcademyFormProps> = ({ academy, onSave, onClose }) => {
     const [formData, setFormData] = useState({
@@ -53,7 +77,7 @@ const AcademyForm: React.FC<AcademyFormProps> = ({ academy, onSave, onClose }) =
 };
 
 const AcademiesPage: React.FC = () => {
-    const { academies, professors, students, loading, saveAcademy, updateAcademyStatus, updateStudentStatus, updateProfessorStatus, user } = useContext(AppContext);
+    const { academies, professors, students, loading, saveAcademy, updateAcademyStatus, updateStudentStatus, updateProfessorStatus, user, graduations } = useContext(AppContext);
     const [expandedAcademy, setExpandedAcademy] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedAcademy, setSelectedAcademy] = useState<Academy | null>(null);
@@ -293,23 +317,26 @@ const AcademiesPage: React.FC = () => {
                                                 <Briefcase className="w-4 h-4 mr-2 text-primary"/> Corpo Docente
                                             </h3>
                                             <ul className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
-                                                {academyProfessors.length > 0 ? academyProfessors.map(prof => (
-                                                    <li key={prof.id} className={`text-sm p-2 bg-white rounded border border-slate-100 shadow-sm flex justify-between items-center ${prof.status === 'blocked' ? 'opacity-60 bg-red-50' : ''}`}>
-                                                        <div className="flex items-center">
-                                                            <span className={`w-2 h-2 rounded-full mr-2 ${prof.status === 'blocked' ? 'bg-red-500' : 'bg-green-500'}`}></span>
-                                                            <span className={prof.status === 'blocked' ? 'line-through text-slate-500' : ''}>{prof.name}</span>
-                                                        </div>
-                                                        {isGeneralAdmin && (
-                                                            <button 
-                                                                onClick={() => handlePersonStatusClick(prof, 'professor', prof.status === 'blocked' ? 'active' : 'blocked')}
-                                                                className={`p-1 rounded-full transition-colors ${prof.status === 'blocked' ? 'text-green-600 hover:bg-green-100' : 'text-red-400 hover:bg-red-50'}`}
-                                                                title={prof.status === 'blocked' ? "Desbloquear" : "Bloquear"}
-                                                            >
-                                                                {prof.status === 'blocked' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                                                            </button>
-                                                        )}
-                                                    </li>
-                                                )) : <li className="text-sm text-slate-400 italic p-2">Nenhum professor registrado.</li>}
+                                                {academyProfessors.length > 0 ? academyProfessors.map(prof => {
+                                                    const belt = graduations.find(g => g.id === prof.graduationId);
+                                                    return (
+                                                        <li key={prof.id} className={`text-sm p-2 bg-white rounded border border-slate-100 shadow-sm flex justify-between items-center ${prof.status === 'blocked' ? 'opacity-60 bg-red-50' : ''}`}>
+                                                            <div className="flex items-center">
+                                                                {belt && <span className={`w-2 h-2 rounded-full mr-2`} style={getBeltStyle(belt)}></span>}
+                                                                <span className={prof.status === 'blocked' ? 'line-through text-slate-500' : ''}>{prof.name}</span>
+                                                            </div>
+                                                            {isGeneralAdmin && (
+                                                                <button 
+                                                                    onClick={() => handlePersonStatusClick(prof, 'professor', prof.status === 'blocked' ? 'active' : 'blocked')}
+                                                                    className={`p-1 rounded-full transition-colors ${prof.status === 'blocked' ? 'text-green-600 hover:bg-green-100' : 'text-red-400 hover:bg-red-50'}`}
+                                                                    title={prof.status === 'blocked' ? "Desbloquear" : "Bloquear"}
+                                                                >
+                                                                    {prof.status === 'blocked' ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                                                                </button>
+                                                            )}
+                                                        </li>
+                                                    );
+                                                }) : <li className="text-sm text-slate-400 italic p-2">Nenhum professor registrado.</li>}
                                             </ul>
                                         </div>
                                         {/* Students List */}

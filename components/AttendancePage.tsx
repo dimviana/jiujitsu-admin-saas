@@ -1,6 +1,8 @@
+
+
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { DayOfWeek, Student } from '../types';
+import { DayOfWeek, Student, Graduation } from '../types';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
@@ -12,6 +14,30 @@ const DAYS_OF_WEEK_MAP: { [key: number]: DayOfWeek } = { 0: 'Domingo', 1: 'Segun
 
 // --- Helper Functions ---
 const toYYYYMMDD = (date: Date) => date.toISOString().split('T')[0];
+
+const getBeltStyle = (grad: Graduation) => {
+    if (!grad.color2) return { background: grad.color };
+
+    const angle = grad.gradientAngle ?? 90;
+    const hardness = (grad.gradientHardness ?? 0) / 100;
+    const color3 = grad.color3 || grad.color2;
+
+    const c1End = 33.33 * hardness;
+    const c2Start = 50 - (16.67 * hardness);
+    const c2End = 50 + (16.67 * hardness);
+    const c3Start = 100 - (33.33 * hardness);
+
+    return {
+        background: `linear-gradient(${angle}deg,
+            ${grad.color} 0%,
+            ${grad.color} ${c1End}%,
+            ${grad.color2} ${c2Start}%,
+            ${grad.color2} ${c2End}%,
+            ${color3} ${c3Start}%,
+            ${color3} 100%
+        )`
+    };
+};
 
 // --- Sub-components ---
 
@@ -124,7 +150,7 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
                                                     <p className="font-medium text-slate-700 text-sm">{student.name}</p>
                                                     {belt && (
                                                         <div className="flex items-center mt-0.5">
-                                                            <div className="w-6 h-1.5 rounded-sm mr-1.5 border border-slate-200" style={{ backgroundColor: belt.color }}></div>
+                                                            <div className="w-6 h-1.5 rounded-sm mr-1.5 border border-slate-200" style={getBeltStyle(belt)}></div>
                                                             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{belt.name}</span>
                                                         </div>
                                                     )}
@@ -407,7 +433,7 @@ const StudentView: React.FC = () => {
                                        <h2 className="font-bold text-slate-800 text-sm truncate">{student.name}</h2>
                                        {belt && (
                                            <div className="mt-1 flex items-center text-xs text-slate-500">
-                                               <span className="w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: belt.color, border: '1px solid #ddd' }}></span>
+                                               <span className="w-2 h-2 rounded-full mr-1.5" style={getBeltStyle(belt)}></span>
                                                {belt.name}
                                            </div>
                                        )}

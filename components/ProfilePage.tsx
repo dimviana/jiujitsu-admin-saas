@@ -1,3 +1,5 @@
+
+
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
@@ -29,29 +31,31 @@ const calculateTrainingTime = (startDateString?: string): string => {
     return `${years} anos, ${months} meses e ${days} dias`;
 };
 
-const getBeltStyle = (belt: Graduation) => {
-    if (!belt) return { backgroundColor: '#e2e8f0' };
-    if (!belt.color2) return { backgroundColor: belt.color };
-    
-    const angle = belt.gradientAngle ?? 90;
-    const h = (belt.gradientHardness ?? 0) / 100;
-    const c1 = belt.color;
-    const c2 = belt.color2;
-    const c3 = belt.color3 || belt.color2;
+const getBeltStyle = (grad: Graduation) => {
+    if (!grad.color2) return { background: grad.color };
 
-    if (c3 !== c2) {
-        const s1 = h * 33.33;
-        const s2 = 50 - (h * 16.67);
-        const s3 = 50 + (h * 16.67);
-        const s4 = 100 - (h * 33.33);
-        return { background: `linear-gradient(${angle}deg, ${c1} ${s1}%, ${c2} ${s2}%, ${c2} ${s3}%, ${c3} ${s4}%)` };
-    }
-    const s1 = h * 50;
-    const s2 = 100 - (h * 50);
-    return { background: `linear-gradient(${angle}deg, ${c1} ${s1}%, ${c2} ${s2}%)` };
+    const angle = grad.gradientAngle ?? 90;
+    const hardness = (grad.gradientHardness ?? 0) / 100;
+    const color3 = grad.color3 || grad.color2;
+
+    const c1End = 33.33 * hardness;
+    const c2Start = 50 - (16.67 * hardness);
+    const c2End = 50 + (16.67 * hardness);
+    const c3Start = 100 - (33.33 * hardness);
+
+    return {
+        background: `linear-gradient(${angle}deg,
+            ${grad.color} 0%,
+            ${grad.color} ${c1End}%,
+            ${grad.color2} ${c2Start}%,
+            ${grad.color2} ${c2End}%,
+            ${color3} ${c3Start}%,
+            ${color3} 100%
+        )`
+    };
 };
 
-// ... (StudentEditForm component remains unchanged) ...
+// Simplified Edit Form for Students
 const StudentEditForm: React.FC<{ student: Student; onSave: (data: Partial<Student>) => void; onClose: () => void }> = ({ student, onSave, onClose }) => {
     const [formData, setFormData] = useState({
         name: student.name,

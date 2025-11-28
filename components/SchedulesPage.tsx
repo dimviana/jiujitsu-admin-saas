@@ -1,7 +1,8 @@
 
+
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ClassSchedule, DayOfWeek } from '../types';
+import { ClassSchedule, DayOfWeek, Graduation } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -14,6 +15,30 @@ interface ScheduleFormProps {
   onSave: (schedule: Omit<ClassSchedule, 'id'> & { id?: string }) => void;
   onClose: () => void;
 }
+
+const getBeltStyle = (grad: Graduation) => {
+    if (!grad.color2) return { backgroundColor: grad.color };
+
+    const angle = grad.gradientAngle ?? 90;
+    const hardness = (grad.gradientHardness ?? 0) / 100;
+    const color3 = grad.color3 || grad.color2;
+
+    const c1End = 33.33 * hardness;
+    const c2Start = 50 - (16.67 * hardness);
+    const c2End = 50 + (16.67 * hardness);
+    const c3Start = 100 - (33.33 * hardness);
+
+    return {
+        background: `linear-gradient(${angle}deg,
+            ${grad.color} 0%,
+            ${grad.color} ${c1End}%,
+            ${grad.color2} ${c2Start}%,
+            ${grad.color2} ${c2End}%,
+            ${color3} ${c3Start}%,
+            ${color3} 100%
+        )`
+    };
+};
 
 const DAYS_OF_WEEK_ORDER: DayOfWeek[] = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
@@ -290,7 +315,7 @@ const SchedulesPage: React.FC = () => {
                                             <div className="flex items-center">
                                                 <div 
                                                     className="w-3 h-3 rounded-full mr-2 border border-slate-300 shadow-sm" 
-                                                    style={{ backgroundColor: requiredGrad.color }}
+                                                    style={getBeltStyle(requiredGrad)}
                                                 />
                                                 <span className="text-sm font-semibold text-slate-700">{requiredGrad.name}</span>
                                             </div>

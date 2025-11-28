@@ -26,8 +26,24 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
     if (!belt) return { backgroundColor: '#ccc' };
     
     if (belt.color2) {
+        const angle = belt.gradientAngle ?? 90;
+        const hardness = (belt.gradientHardness ?? 0) / 100;
+        const color3 = belt.color3 || belt.color2;
+
+        const c1End = 33.33 * hardness;
+        const c2Start = 50 - (16.67 * hardness);
+        const c2End = 50 + (16.67 * hardness);
+        const c3Start = 100 - (33.33 * hardness);
+
         return {
-            background: `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)`
+            background: `linear-gradient(${angle}deg,
+                ${belt.color} 0%,
+                ${belt.color} ${c1End}%,
+                ${belt.color2} ${c2Start}%,
+                ${belt.color2} ${c2End}%,
+                ${color3} ${c3Start}%,
+                ${color3} 100%
+            )`
         };
     }
     return { backgroundColor: belt.color };

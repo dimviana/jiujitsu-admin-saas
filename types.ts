@@ -1,3 +1,5 @@
+
+
 export type Role = 'general_admin' | 'academy_admin' | 'student';
 
 export type DayOfWeek = 'Domingo' | 'Segunda-feira' | 'Terça-feira' | 'Quarta-feira' | 'Quinta-feira' | 'Sexta-feira' | 'Sábado';
@@ -88,13 +90,13 @@ export interface Graduation {
   color: string;
   color2?: string; // Middle color for gradient
   color3?: string; // End color for gradient
-  gradientAngle?: number; // 0-360
-  gradientHardness?: number; // 0-100 (0=smooth, 100=hard stripes)
   minTimeInMonths: number;
   rank: number;
   type: 'adult' | 'kids';
   minAge?: number;
   maxAge?: number;
+  gradientAngle?: number; // 0-360 degrees
+  gradientHardness?: number; // 0-100% (transição suave vs dura)
 }
 
 export interface PaymentHistory {
