@@ -1,3 +1,4 @@
+
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -309,6 +310,22 @@ app.get('/api/initial-data', async (req, res) => {
              console.log("Migrating: Adding gradientAngle and gradientHardness to graduations");
              await pool.query("ALTER TABLE graduations ADD COLUMN gradientAngle INTEGER DEFAULT 90");
              await pool.query("ALTER TABLE graduations ADD COLUMN gradientHardness INTEGER DEFAULT 0");
+        }
+        
+        // 14. Ensure CPF column on Students
+        try {
+            await pool.query("SELECT cpf FROM students LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding cpf to students");
+            await pool.query("ALTER TABLE students ADD COLUMN cpf VARCHAR(255)");
+        }
+        
+        // 15. Ensure CPF column on Professors
+        try {
+            await pool.query("SELECT cpf FROM professors LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding cpf to professors");
+            await pool.query("ALTER TABLE professors ADD COLUMN cpf VARCHAR(255)");
         }
 
 

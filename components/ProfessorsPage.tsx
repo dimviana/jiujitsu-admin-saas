@@ -1,5 +1,4 @@
 
-
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Professor, Student, Graduation } from '../types';
@@ -435,7 +434,9 @@ const ProfessorsPage: React.FC = () => {
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-600 font-medium">CPF:</span>
-                                    <span className="text-slate-700">{prof.cpf}</span>
+                                    <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">
+                                        {prof.cpf ? prof.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : 'N/A'}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-600 font-medium">Nascimento:</span>

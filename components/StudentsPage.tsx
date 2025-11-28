@@ -1,4 +1,3 @@
-
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Student, Graduation } from '../types';
@@ -42,6 +41,30 @@ const formatDateForInput = (dateString?: string) => {
     } catch (e) {
         return '';
     }
+};
+
+const getBeltStyle = (grad: Graduation) => {
+    if (!grad.color2) return { background: grad.color };
+
+    const angle = grad.gradientAngle ?? 90;
+    const hardness = (grad.gradientHardness ?? 0) / 100;
+    const color3 = grad.color3 || grad.color2;
+
+    const c1End = 33.33 * hardness;
+    const c2Start = 50 - (16.67 * hardness);
+    const c2End = 50 + (16.67 * hardness);
+    const c3Start = 100 - (33.33 * hardness);
+
+    return {
+        background: `linear-gradient(${angle}deg,
+            ${grad.color} 0%,
+            ${grad.color} ${c1End}%,
+            ${grad.color2} ${c2Start}%,
+            ${grad.color2} ${c2End}%,
+            ${color3} ${c3Start}%,
+            ${color3} 100%
+        )`
+    };
 };
 
 interface StudentFormProps {
@@ -549,11 +572,7 @@ const StudentsPage: React.FC = () => {
                                                 <div className="flex items-center">
                                                     <span 
                                                         className="w-4 h-4 rounded-full mr-2 border border-slate-300" 
-                                                        style={{ 
-                                                            background: belt.color2 
-                                                                ? `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)` 
-                                                                : belt.color 
-                                                        }}
+                                                        style={getBeltStyle(belt)} // Use the gradient function here
                                                     ></span>
                                                     <span className="font-medium text-slate-700">{belt.name}</span>
                                                     {/* Visual Indicator for Kids Belt */}
@@ -569,9 +588,11 @@ const StudentsPage: React.FC = () => {
                                             <span className="text-slate-600 font-medium">Idade:</span>
                                             <span className="font-medium text-slate-700">{calculateAge(student.birthDate || '')} anos</span>
                                         </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-slate-600 font-medium">Registro:</span>
-                                            <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{student.fjjpe_registration}</span>
+                                         <div className="flex justify-between items-center">
+                                            <span className="text-slate-600 font-medium">CPF:</span>
+                                            <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">
+                                                {student.cpf ? student.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : 'N/A'}
+                                            </span>
                                         </div>
                                          <div className="flex justify-between items-center">
                                             <span className="text-slate-600 font-medium">Telefone:</span>
