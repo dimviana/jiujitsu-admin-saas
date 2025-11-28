@@ -1,11 +1,12 @@
+
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { Professor } from '../types';
+import { Professor, Student } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
-import { Users, X } from 'lucide-react';
+import { Users, X, MessageCircle, ExternalLink } from 'lucide-react';
 import { ConfirmationModal } from './ui/ConfirmationModal';
 
 const validateCPF = (cpf: string): boolean => {
@@ -217,6 +218,9 @@ const ProfessorsPage: React.FC = () => {
   const [isDemoteModalOpen, setIsDemoteModalOpen] = useState(false);
   const [professorToDemote, setProfessorToDemote] = useState<Professor | null>(null);
 
+  // Students List Modal State
+  const [studentsListModal, setStudentsListModal] = useState<{ professorName: string, students: Student[] } | null>(null);
+
 
   const professorDanData = useMemo(() => {
     const data = new Map<string, { dan: number }>();
@@ -312,6 +316,22 @@ const ProfessorsPage: React.FC = () => {
       handleClosePhotoModal();
   };
 
+  const handleWhatsAppClick = (phone: string | undefined) => {
+      if (!phone) return;
+      const cleanPhone = phone.replace(/\D/g, '');
+      const url = `https://wa.me/55${cleanPhone}`;
+      window.open(url, '_blank');
+  };
+
+  const handleShowStudents = (e: React.MouseEvent, prof: Professor) => {
+      e.stopPropagation();
+      const associatedStudents = students.filter(s => s.academyId === prof.academyId);
+      setStudentsListModal({
+          professorName: prof.name,
+          students: associatedStudents
+      });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-4">
@@ -397,7 +417,14 @@ const ProfessorsPage: React.FC = () => {
                                     <span className="text-slate-600 font-medium flex items-center">
                                         <Users className="w-3 h-3 mr-1" /> Alunos Associados:
                                     </span>
-                                    <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200">{studentCount}</span>
+                                    <button 
+                                        onClick={(e) => handleShowStudents(e, prof)}
+                                        className="font-semibold text-primary bg-amber-50 hover:bg-amber-100 transition-colors px-2 py-0.5 rounded text-xs border border-amber-200 cursor-pointer flex items-center"
+                                        title="Ver alunos"
+                                    >
+                                        {studentCount}
+                                        <ExternalLink className="w-3 h-3 ml-1" />
+                                    </button>
                                 </div>
                             </div>
 
@@ -433,6 +460,57 @@ const ProfessorsPage: React.FC = () => {
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={selectedProfessor?.id ? 'Editar Professor' : 'Adicionar Professor'}>
         <ProfessorForm professor={selectedProfessor} onSave={handleSave} onClose={handleCloseModal} />
       </Modal>
+
+      {/* Associated Students Modal */}
+      {studentsListModal && (
+          <Modal isOpen={true} onClose={() => setStudentsListModal(null)} title={`Alunos de ${studentsListModal.professorName}`} size="lg">
+              <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                  {studentsListModal.students.length > 0 ? (
+                      <div className="space-y-2">
+                          {studentsListModal.students.map(student => {
+                              const belt = graduations.find(g => g.id === student.beltId);
+                              return (
+                                  <div key={student.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:border-slate-200 transition-colors">
+                                      <div className="flex items-center">
+                                          <img 
+                                              src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
+                                              alt={student.name} 
+                                              className="w-10 h-10 rounded-full object-cover mr-3 border border-slate-200"
+                                          />
+                                          <div>
+                                              <p className="font-semibold text-slate-800 text-sm">{student.name}</p>
+                                              {belt && (
+                                                  <div className="flex items-center text-xs text-slate-500">
+                                                      <span className="w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: belt.color, border: '1px solid #ddd' }}></span>
+                                                      {belt.name}
+                                                  </div>
+                                              )}
+                                          </div>
+                                      </div>
+                                      {student.phone && (
+                                          <button
+                                              onClick={() => handleWhatsAppClick(student.phone)}
+                                              className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors shadow-sm flex items-center justify-center"
+                                              title="Conversar no WhatsApp"
+                                          >
+                                              <MessageCircle className="w-4 h-4" />
+                                          </button>
+                                      )}
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  ) : (
+                      <div className="text-center py-8 text-slate-500">
+                          Nenhum aluno associado a esta academia no momento.
+                      </div>
+                  )}
+              </div>
+              <div className="mt-6 flex justify-end pt-4 border-t border-slate-100">
+                  <Button variant="secondary" onClick={() => setStudentsListModal(null)}>Fechar</Button>
+              </div>
+          </Modal>
+      )}
 
       {isPhotoModalOpen && professorForPhoto && (
           <PhotoUploadModal
