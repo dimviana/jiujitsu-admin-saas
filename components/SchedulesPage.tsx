@@ -1,5 +1,3 @@
-
-
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ClassSchedule, DayOfWeek, Graduation } from '../types';
@@ -239,7 +237,7 @@ const SchedulesPage: React.FC = () => {
       // In a real app, this would call an API to register the booking
       setNotification({
           message: 'Agendamento Confirmado',
-          details: `Você agendou sua presença na aula de ${bookingSchedule?.className}.`,
+          details: `Você confirmou presença na aula de ${bookingSchedule?.className}.`,
           type: 'success'
       });
       setIsBookingModalOpen(false);
@@ -377,7 +375,7 @@ const SchedulesPage: React.FC = () => {
           onClose={() => setIsBookingModalOpen(false)}
           onConfirm={handleConfirmBooking}
           title="Agendar Aula"
-          message={`Deseja confirmar o agendamento para a aula de ${bookingSchedule?.className} (${bookingSchedule?.dayOfWeek})?`}
+          message={`Deseja confirmar sua presença na aula de ${bookingSchedule?.className} (${bookingSchedule?.dayOfWeek})?`}
           confirmText="Confirmar Presença"
           variant="success"
       />

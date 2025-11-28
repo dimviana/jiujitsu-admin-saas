@@ -1,12 +1,10 @@
-
-
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { DayOfWeek, Student, Graduation } from '../types';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import Button from '../components/ui/Button';
-import { Check, X, UserCheck } from 'lucide-react';
+import { Check, X, UserCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 
 // --- Constants ---
 const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -45,7 +43,7 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
     const { schedules, users, students, graduations, attendanceRecords, saveAttendanceRecord, setNotification } = useContext(AppContext);
     const dayOfWeek = DAYS_OF_WEEK_MAP[date.getDay()];
     
-    const todaysSchedules = useMemo(() => schedules.filter(s => s.dayOfWeek === dayOfWeek), [schedules, dayOfWeek]);
+    const todaysSchedules = useMemo(() => schedules.filter(s => s.dayOfWeek === dayOfWeek).sort((a,b) => a.startTime.localeCompare(b.startTime)), [schedules, dayOfWeek]);
     const dateStr = toYYYYMMDD(date);
 
     const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent'>>(() => {
@@ -215,6 +213,10 @@ const CalendarView: React.FC = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
 
+    const changeMonth = (offset: number) => {
+        setCurrentDate(new Date(year, month + offset, 1));
+    };
+
     const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         setCurrentDate(new Date(year, parseInt(e.target.value), 1));
     };
@@ -224,24 +226,6 @@ const CalendarView: React.FC = () => {
              setCurrentDate(new Date(newYear, month, 1));
         }
     };
-
-    const scheduledDaysInMonth = useMemo(() => {
-        const monthSchedules = new Set<number>();
-        schedules.forEach(schedule => {
-            const dayIndex = Object.entries(DAYS_OF_WEEK_MAP).find(([_, name]) => name === schedule.dayOfWeek)?.[0];
-            if(dayIndex !== undefined) {
-                 const numDayIndex = parseInt(dayIndex, 10);
-                 for (let day = 1; day <= 31; day++) {
-                    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-                    // Check if valid date for month
-                    if (date.getMonth() === currentDate.getMonth() && date.getDay() === numDayIndex) {
-                        monthSchedules.add(day);
-                    }
-                 }
-            }
-        });
-        return monthSchedules;
-    }, [schedules, currentDate]);
 
     const calendarCells = useMemo(() => {
         const cells = [];
@@ -267,27 +251,46 @@ const CalendarView: React.FC = () => {
         return cells;
     }, [year, month]);
 
-    const handleDayClick = (day: number) => {
-        setSelectedDate(new Date(year, month, day));
+    const getDaySchedules = (date: Date) => {
+        const dayName = DAYS_OF_WEEK_MAP[date.getDay()];
+        return schedules.filter(s => s.dayOfWeek === dayName).sort((a,b) => a.startTime.localeCompare(b.startTime));
+    };
+
+    const handleDayClick = (date: Date) => {
+        setSelectedDate(date);
     };
 
     return (
         <Card>
-            <div className="p-4 flex items-center gap-4 border-b border-slate-200">
-                <input
-                    type="number"
-                    value={year}
-                    onChange={handleYearChange}
-                    className="bg-white text-slate-900 p-2 rounded-md border border-slate-300 focus:ring-amber-500 w-24 text-center font-medium"
-                    placeholder="Ano"
-                />
-                <select
-                    value={month}
-                    onChange={handleMonthChange}
-                    className="bg-white text-slate-900 p-2 rounded-md border border-slate-300 focus:ring-amber-500 font-medium min-w-[140px]"
-                >
-                    {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                </select>
+            <div className="p-4 flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                    <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <h2 className="text-lg font-bold text-slate-800 capitalize w-40 text-center">
+                        {MONTH_NAMES[month]} {year}
+                    </h2>
+                    <button onClick={() => changeMonth(1)} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                    <select
+                        value={month}
+                        onChange={handleMonthChange}
+                        className="bg-white text-slate-700 p-2 rounded-md border border-slate-300 focus:ring-primary text-sm"
+                    >
+                        {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                    </select>
+                    <input
+                        type="number"
+                        value={year}
+                        onChange={handleYearChange}
+                        className="bg-white text-slate-700 p-2 rounded-md border border-slate-300 focus:ring-primary w-20 text-center text-sm"
+                        placeholder="Ano"
+                    />
+                </div>
             </div>
             
             <div className="grid grid-cols-7 text-center font-bold">
@@ -299,31 +302,46 @@ const CalendarView: React.FC = () => {
             </div>
             <div className="grid grid-cols-7 border-l border-slate-200">
                 {calendarCells.map((cell) => {
-                    const hasSchedule = cell.isCurrentMonth && scheduledDaysInMonth.has(cell.day);
+                    const daySchedules = cell.isCurrentMonth ? getDaySchedules(cell.date) : [];
+                    const hasSchedule = daySchedules.length > 0;
+                    const isToday = toYYYYMMDD(cell.date) === toYYYYMMDD(new Date());
                     
-                    let cellBg = 'bg-white';
+                    let cellClasses = "min-h-[120px] p-2 border-b border-r border-slate-200 text-left align-top transition-all relative group flex flex-col";
+                    
                     if (!cell.isCurrentMonth) {
-                         cellBg = 'bg-slate-50/50';
-                    } else if (hasSchedule) {
-                         cellBg = 'bg-amber-50/30';
+                        cellClasses += " bg-slate-50/30 text-slate-400";
+                    } else {
+                        cellClasses += " bg-white text-slate-700 cursor-pointer hover:bg-slate-50";
                     }
 
-                    let textColor = 'text-slate-700';
-                     if (!cell.isCurrentMonth) {
-                        textColor = 'text-slate-400';
-                    }
-                    
                     return (
                         <div 
                             key={cell.date.toString()}
-                            onClick={() => cell.isCurrentMonth && hasSchedule && handleDayClick(cell.day)}
-                            className={`h-28 p-2 border-b border-r border-slate-200 text-left align-top transition-all ${cellBg} ${textColor} ${hasSchedule && cell.isCurrentMonth ? 'cursor-pointer hover:bg-amber-50 relative group' : ''}`}
+                            onClick={() => cell.isCurrentMonth && handleDayClick(cell.date)}
+                            className={cellClasses}
                         >
-                            <span className={`font-semibold text-sm inline-block w-7 h-7 text-center leading-7 rounded-full ${cell.isCurrentMonth && toYYYYMMDD(cell.date) === toYYYYMMDD(new Date()) ? 'bg-amber-500 text-white' : ''}`}>{cell.day}</span>
+                            <div className="flex justify-between items-start">
+                                <span className={`font-semibold text-sm inline-block w-7 h-7 text-center leading-7 rounded-full 
+                                    ${isToday ? 'bg-primary text-white shadow-sm' : ''}
+                                `}>
+                                    {cell.day}
+                                </span>
+                            </div>
+                            
                             {hasSchedule && cell.isCurrentMonth && (
-                                <div className="mt-1">
-                                    <span className="inline-block w-2 h-2 bg-amber-500 rounded-full"></span>
-                                    <span className="text-xs text-amber-600 ml-1 font-medium group-hover:underline">Ver Aulas</span>
+                                <div className="mt-2 space-y-1 flex-grow">
+                                    {daySchedules.slice(0, 3).map((sched, idx) => (
+                                        <div key={idx} className="text-[10px] text-slate-600 bg-amber-50 px-1.5 py-0.5 rounded truncate border border-amber-100 flex items-center">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 flex-shrink-0"></span>
+                                            <span className="font-medium">{sched.startTime}</span>
+                                            <span className="ml-1 opacity-80 truncate hidden xl:inline">{sched.className}</span>
+                                        </div>
+                                    ))}
+                                    {daySchedules.length > 3 && (
+                                        <div className="text-[10px] text-slate-400 pl-1">
+                                            + {daySchedules.length - 3} aulas
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

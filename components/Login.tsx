@@ -2,7 +2,7 @@
 
 import React, { useState, useContext, FormEvent, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
-import { Eye as IconEye, EyeOff as IconEyeOff } from 'lucide-react';
+import { Eye as IconEye, EyeOff as IconEyeOff, Facebook } from 'lucide-react';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
@@ -79,6 +79,11 @@ const Login: React.FC = () => {
     setLoading(false);
   };
 
+  const handleFacebookLogin = () => {
+      // Mocked handler since actual FB SDK requires valid App ID and domain whitelisting
+      setError("Login com Facebook requer configuração de App ID válida.");
+  };
+
   useEffect(() => {
     if (window.google && themeSettings.socialLoginEnabled && themeSettings.googleClientId) {
         try {
@@ -142,14 +147,41 @@ const Login: React.FC = () => {
                     {error && <p className={`text-sm text-center p-2 rounded ${error.includes('sucesso') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{error}</p>}
                     <Button type="submit" disabled={loading} className="w-full">{loading ? 'Entrando...' : 'Entrar'}</Button>
                 </form>
-                {themeSettings.registrationEnabled && (
-                    <div className="text-center mt-6 text-sm">
-                        <button onClick={() => setIsRegisterModalOpen(true)} className="font-semibold text-[var(--theme-accent)] hover:underline">Cadastre-se</button>
-                    </div>
-                )}
+                
                 {themeSettings.socialLoginEnabled && (
                     <div className="mt-6">
-                        <div id="googleBtn"></div>
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-slate-300"></div>
+                            </div>
+                            <div className="relative flex justify-center text-sm">
+                                <span className="px-2 bg-[var(--theme-card-bg)] text-slate-500">Ou entre com</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 space-y-3">
+                            {/* Google Button Container (Rendered by script) */}
+                            <div id="googleBtn" className="w-full flex justify-center"></div>
+
+                            {/* Facebook Button */}
+                            <button
+                                type="button"
+                                onClick={handleFacebookLogin}
+                                disabled={loading}
+                                className="w-full inline-flex justify-center items-center py-2.5 px-4 border border-transparent rounded text-sm font-medium text-white bg-[#1877F2] hover:bg-[#1864D9] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1877F2] transition-colors disabled:opacity-50 shadow-sm"
+                            >
+                                <Facebook className="w-5 h-5 mr-2" />
+                                <span>Entrar com Facebook</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {themeSettings.registrationEnabled && (
+                    <div className="text-center mt-6 text-sm pt-4 border-t border-[var(--theme-text-primary)]/10">
+                        <button onClick={() => setIsRegisterModalOpen(true)} className="font-semibold text-[var(--theme-accent)] hover:underline">
+                            Não tem uma conta? Cadastre sua academia
+                        </button>
                     </div>
                 )}
             </div>
