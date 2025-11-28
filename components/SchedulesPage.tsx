@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ClassSchedule, DayOfWeek } from '../types';
@@ -5,7 +6,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
-import { Heart, Shield, Users } from 'lucide-react';
+import { Heart, Shield, Users, FileText } from 'lucide-react';
 
 interface ScheduleFormProps {
   schedule: Partial<ClassSchedule> | null;
@@ -26,6 +27,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
     assistantIds: [] as string[],
     academyId: user?.role === 'academy_admin' ? user.academyId || '' : (schedule?.academyId || ''),
     requiredGraduationId: '',
+    observations: '',
     ...schedule
   });
 
@@ -37,7 +39,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
       return professors.filter(p => p.academyId === formData.academyId);
   }, [professors, formData.academyId]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     if (name === 'assistantIds' && e.target instanceof HTMLSelectElement) {
       const selectedIds = Array.from(e.target.selectedOptions)
@@ -113,6 +115,18 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
         </select>
       </div>
       
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Observações da Aula</label>
+        <textarea
+            name="observations"
+            rows={3}
+            value={formData.observations || ''}
+            onChange={handleChange}
+            className={selectStyles}
+            placeholder="Ex: Trazer equipamento No-Gi, foco em defesa pessoal..."
+        />
+      </div>
+
       <div className="flex justify-end gap-4 pt-4">
         <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
         <Button type="submit">Salvar</Button>
@@ -274,6 +288,13 @@ const SchedulesPage: React.FC = () => {
                                                     </span>
                                                 ))}
                                             </div>
+                                        </div>
+                                    )}
+                                    
+                                    {schedule.observations && (
+                                        <div className="bg-amber-50 p-3 rounded-md border border-amber-100 text-sm text-slate-700 mt-2 flex items-start">
+                                            <FileText className="w-4 h-4 mr-2 mt-0.5 text-amber-500 flex-shrink-0" />
+                                            <p className="whitespace-pre-wrap">{schedule.observations}</p>
                                         </div>
                                     )}
                                 </div>

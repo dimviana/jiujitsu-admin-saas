@@ -254,6 +254,14 @@ app.get('/api/initial-data', async (req, res) => {
              // Set existing academies to active so we don't lock out current users
              await pool.query("UPDATE academies SET status = 'active' WHERE status IS NULL OR status = 'pending'");
         }
+        
+        // 8. observations on ClassSchedules
+        try {
+             await pool.query("SELECT observations FROM class_schedules LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding observations to class_schedules");
+             await pool.query("ALTER TABLE class_schedules ADD COLUMN observations TEXT");
+        }
 
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
@@ -505,6 +513,7 @@ app.post('/api/schedules', async (req, res) => {
     schedule.professorId = sanitize(schedule.professorId);
     schedule.academyId = sanitize(schedule.academyId);
     schedule.requiredGraduationId = sanitize(schedule.requiredGraduationId);
+    schedule.observations = sanitize(schedule.observations);
 
     const conn = await pool.getConnection();
     try {
@@ -512,8 +521,8 @@ app.post('/api/schedules', async (req, res) => {
         const id = schedule.id || `schedule_${Date.now()}`;
         
         await conn.query(`
-            INSERT INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId, observations) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
             className = VALUES(className),
             dayOfWeek = VALUES(dayOfWeek),
@@ -521,8 +530,9 @@ app.post('/api/schedules', async (req, res) => {
             endTime = VALUES(endTime),
             professorId = VALUES(professorId),
             academyId = VALUES(academyId),
-            requiredGraduationId = VALUES(requiredGraduationId)
-        `, [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, schedule.professorId, schedule.academyId, schedule.requiredGraduationId]);
+            requiredGraduationId = VALUES(requiredGraduationId),
+            observations = VALUES(observations)
+        `, [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, schedule.professorId, schedule.academyId, schedule.requiredGraduationId, schedule.observations]);
         
         await conn.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [id]);
         if (assistantIds && assistantIds.length > 0) {

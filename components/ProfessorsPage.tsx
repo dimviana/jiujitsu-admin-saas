@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Professor } from '../types';
@@ -7,7 +8,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
-import { Users, Calendar } from 'lucide-react';
+import { Users } from 'lucide-react';
 
 const validateCPF = (cpf: string): boolean => {
     if (typeof cpf !== 'string') return false;

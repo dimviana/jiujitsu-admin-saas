@@ -143,6 +143,7 @@ export interface ClassSchedule {
     academyId: string;
     requiredGraduationId?: string;
     assistantIds: string[];
+    observations?: string;
 }
 
 export interface AttendanceRecord {
