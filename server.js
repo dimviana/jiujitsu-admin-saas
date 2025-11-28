@@ -488,8 +488,19 @@ app.post('/api/schedules', async (req, res) => {
     try {
         await conn.beginTransaction();
         const id = schedule.id || `schedule_${Date.now()}`;
-        await conn.query(`REPLACE INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, schedule.professorId, schedule.academyId, schedule.requiredGraduationId]);
+        
+        await conn.query(`
+            INSERT INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+            className = VALUES(className),
+            dayOfWeek = VALUES(dayOfWeek),
+            startTime = VALUES(startTime),
+            endTime = VALUES(endTime),
+            professorId = VALUES(professorId),
+            academyId = VALUES(academyId),
+            requiredGraduationId = VALUES(requiredGraduationId)
+        `, [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, schedule.professorId, schedule.academyId, schedule.requiredGraduationId]);
         
         await conn.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [id]);
         if (assistantIds && assistantIds.length > 0) {
