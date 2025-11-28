@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Professor } from '../types';
@@ -9,6 +6,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { Users } from 'lucide-react';
+import { ConfirmationModal } from './ui/ConfirmationModal';
 
 const validateCPF = (cpf: string): boolean => {
     if (typeof cpf !== 'string') return false;
@@ -211,6 +209,11 @@ const ProfessorsPage: React.FC = () => {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [professorForPhoto, setProfessorForPhoto] = useState<Professor | null>(null);
 
+  // Confirmation Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [professorToDelete, setProfessorToDelete] = useState<Professor | null>(null);
+
+
   const professorDanData = useMemo(() => {
     const data = new Map<string, { dan: number }>();
     const blackBeltRank = graduations.find(g => g.name === 'Preta')?.rank || 5;
@@ -258,9 +261,17 @@ const ProfessorsPage: React.FC = () => {
     handleCloseModal();
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este professor?')) {
-      await deleteProfessor(id);
+  // Open Delete Confirmation
+  const handleDeleteClick = (prof: Professor) => {
+      setProfessorToDelete(prof);
+      setIsDeleteModalOpen(true);
+  };
+
+  // Confirm Delete
+  const handleConfirmDelete = async () => {
+    if (professorToDelete) {
+      await deleteProfessor(professorToDelete.id);
+      setProfessorToDelete(null);
     }
   };
 
@@ -387,7 +398,7 @@ const ProfessorsPage: React.FC = () => {
                                 </div>
                                 <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end gap-2">
                                     <Button size="sm" variant="secondary" onClick={() => handleOpenModal(prof)}>Editar</Button>
-                                    <Button size="sm" variant="danger" onClick={() => handleDelete(prof.id)}>Excluir</Button>
+                                    <Button size="sm" variant="danger" onClick={() => handleDeleteClick(prof)}>Excluir</Button>
                                 </div>
                             </div>
                         </div>
@@ -408,6 +419,17 @@ const ProfessorsPage: React.FC = () => {
               onClose={handleClosePhotoModal}
           />
       )}
+
+      <ConfirmationModal 
+          isOpen={isDeleteModalOpen}
+          onClose={() => setIsDeleteModalOpen(false)}
+          onConfirm={handleConfirmDelete}
+          title="Excluir Professor"
+          message={`Tem certeza que deseja excluir o professor ${professorToDelete?.name}?`}
+          confirmText="Sim, excluir"
+          cancelText="Não"
+          variant="danger"
+      />
     </div>
   );
 };

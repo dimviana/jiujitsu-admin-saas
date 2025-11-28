@@ -9,6 +9,7 @@ import { StudentDashboard } from './StudentDashboard';
 import { Award as IconAward, FileText, Baby, Briefcase } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
+import { ConfirmationModal } from './ui/ConfirmationModal';
 
 const validateCPF = (cpf: string): boolean => {
     if (typeof cpf !== 'string') return false;
@@ -241,6 +242,10 @@ const StudentsPage: React.FC = () => {
     const [studentForPhoto, setStudentForPhoto] = useState<Student | null>(null);
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
     const [activeTab, setActiveTab] = useState<'adults' | 'kids'>('adults');
+    
+    // Confirmation Modal States
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
 
     const eligibilityData = useMemo(() => {
         const data = new Map<string, { eligible: boolean; nextBelt: Graduation | null; reason: string }>();
@@ -404,11 +409,19 @@ const StudentsPage: React.FC = () => {
         handleCloseModal();
     };
     
-    const handleDeleteStudent = async (studentId: string) => {
-      if(window.confirm('Tem certeza que deseja excluir este aluno?')) {
-        await deleteStudent(studentId);
-      }
-    }
+    // NEW: Open Delete Confirmation Modal
+    const handleDeleteClick = (student: Student) => {
+        setStudentToDelete(student);
+        setIsDeleteModalOpen(true);
+    };
+
+    // NEW: Confirm Delete Action
+    const handleConfirmDelete = async () => {
+        if (studentToDelete) {
+            await deleteStudent(studentToDelete.id);
+            setStudentToDelete(null);
+        }
+    };
 
     const handleOpenPhotoModal = (student: Student) => {
         setStudentForPhoto(student);
@@ -607,7 +620,7 @@ const StudentsPage: React.FC = () => {
                                             >
                                                 <FileText className="w-4 h-4" />
                                             </Button>
-                                            <Button size="sm" variant="danger" onClick={() => handleDeleteStudent(student.id)}>Excluir</Button>
+                                            <Button size="sm" variant="danger" onClick={() => handleDeleteClick(student)}>Excluir</Button>
                                         </div>
                                     </div>
                                 </div>
@@ -652,6 +665,17 @@ const StudentsPage: React.FC = () => {
                     />
                 </Modal>
             )}
+
+            <ConfirmationModal 
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirm={handleConfirmDelete}
+                title="Excluir Aluno"
+                message={`Tem certeza que deseja excluir o aluno ${studentToDelete?.name}? Esta ação não pode ser desfeita.`}
+                confirmText="Sim, excluir"
+                cancelText="Não"
+                variant="danger"
+            />
         </div>
     );
 };

@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useContext, useState, FormEvent } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Academy } from '../types';
@@ -10,6 +6,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import { Building, ChevronDown, ChevronRight, User, Briefcase, Edit, Mail, CheckCircle, XCircle, AlertTriangle, Lock, Unlock } from 'lucide-react';
+import { ConfirmationModal } from './ui/ConfirmationModal';
 
 interface AcademyFormProps {
     academy: Partial<Academy> | null;
@@ -60,6 +57,11 @@ const AcademiesPage: React.FC = () => {
     const [selectedAcademy, setSelectedAcademy] = useState<Academy | null>(null);
     const isGeneralAdmin = user?.role === 'general_admin';
 
+    // Status Confirmation Modal State
+    const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+    const [academyToUpdate, setAcademyToUpdate] = useState<Academy | null>(null);
+    const [statusToUpdate, setStatusToUpdate] = useState<'active' | 'rejected' | 'blocked' | null>(null);
+
     const toggleAcademy = (id: string) => {
         setExpandedAcademy(prev => (prev === id ? null : id));
     };
@@ -85,17 +87,32 @@ const AcademiesPage: React.FC = () => {
         setSelectedAcademy(null);
     };
 
-    const handleStatusUpdate = async (e: React.MouseEvent, id: string, status: 'active' | 'rejected' | 'blocked') => {
+    const handleStatusClick = (e: React.MouseEvent, academy: Academy, status: 'active' | 'rejected' | 'blocked') => {
         e.stopPropagation();
-        
-        let confirmMessage = '';
-        if (status === 'active') confirmMessage = 'Deseja aprovar/ativar esta academia?';
-        else if (status === 'rejected') confirmMessage = 'Deseja rejeitar esta academia?';
-        else if (status === 'blocked') confirmMessage = 'ATENÇÃO: Ao bloquear esta academia, nenhum usuário vinculado conseguirá acessá-la. Deseja continuar?';
+        setAcademyToUpdate(academy);
+        setStatusToUpdate(status);
+        setIsStatusModalOpen(true);
+    };
 
-        if (window.confirm(confirmMessage)) {
-            await updateAcademyStatus(id, status);
+    const confirmStatusUpdate = async () => {
+        if (academyToUpdate && statusToUpdate) {
+            await updateAcademyStatus(academyToUpdate.id, statusToUpdate);
         }
+    };
+
+    const getStatusMessage = () => {
+        if (!statusToUpdate) return '';
+        if (statusToUpdate === 'active') return 'Deseja aprovar/ativar esta academia? O administrador receberá acesso ao sistema.';
+        if (statusToUpdate === 'rejected') return 'Deseja rejeitar o cadastro desta academia?';
+        if (statusToUpdate === 'blocked') return 'ATENÇÃO: Ao bloquear esta academia, nenhum usuário vinculado conseguirá acessá-la. Deseja continuar?';
+        return '';
+    };
+
+    const getStatusTitle = () => {
+        if (statusToUpdate === 'active') return 'Ativar Academia';
+        if (statusToUpdate === 'rejected') return 'Rejeitar Academia';
+        if (statusToUpdate === 'blocked') return 'Bloquear Academia';
+        return 'Alterar Status';
     };
 
     return (
@@ -161,7 +178,7 @@ const AcademiesPage: React.FC = () => {
                                                             <Button 
                                                                 size="sm" 
                                                                 variant="success" 
-                                                                onClick={(e) => handleStatusUpdate(e, academy.id, 'active')}
+                                                                onClick={(e) => handleStatusClick(e, academy, 'active')}
                                                                 className="px-2"
                                                                 title="Aprovar"
                                                             >
@@ -170,7 +187,7 @@ const AcademiesPage: React.FC = () => {
                                                             <Button 
                                                                 size="sm" 
                                                                 variant="danger" 
-                                                                onClick={(e) => handleStatusUpdate(e, academy.id, 'rejected')}
+                                                                onClick={(e) => handleStatusClick(e, academy, 'rejected')}
                                                                 className="px-2"
                                                                 title="Rejeitar"
                                                             >
@@ -185,7 +202,7 @@ const AcademiesPage: React.FC = () => {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="success"
-                                                                    onClick={(e) => handleStatusUpdate(e, academy.id, 'active')}
+                                                                    onClick={(e) => handleStatusClick(e, academy, 'active')}
                                                                     className="px-2"
                                                                     title="Desbloquear Academia"
                                                                 >
@@ -195,7 +212,7 @@ const AcademiesPage: React.FC = () => {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="danger"
-                                                                    onClick={(e) => handleStatusUpdate(e, academy.id, 'blocked')}
+                                                                    onClick={(e) => handleStatusClick(e, academy, 'blocked')}
                                                                     className="px-2 bg-slate-800 hover:bg-slate-900 text-white border-slate-900"
                                                                     title="Bloquear Academia"
                                                                 >
@@ -283,6 +300,17 @@ const AcademiesPage: React.FC = () => {
                     <AcademyForm academy={selectedAcademy} onSave={handleSave} onClose={handleCloseModal} />
                 </Modal>
             )}
+
+            <ConfirmationModal 
+                isOpen={isStatusModalOpen}
+                onClose={() => setIsStatusModalOpen(false)}
+                onConfirm={confirmStatusUpdate}
+                title={getStatusTitle()}
+                message={getStatusMessage()}
+                confirmText="Sim"
+                cancelText="Não"
+                variant={statusToUpdate === 'active' ? 'success' : 'danger'}
+            />
         </div>
     );
 };
