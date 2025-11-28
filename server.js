@@ -254,6 +254,13 @@ app.delete('/api/professors/:id', deleteHandler('professors'));
 
 app.post('/api/schedules', async (req, res) => {
     const { assistantIds, ...schedule } = req.body;
+    
+    // Sanitize Foreign Keys: Convert empty strings to null
+    const sanitize = (val) => (val === '' || val === undefined ? null : val);
+    schedule.professorId = sanitize(schedule.professorId);
+    schedule.academyId = sanitize(schedule.academyId);
+    schedule.requiredGraduationId = sanitize(schedule.requiredGraduationId);
+
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
@@ -271,6 +278,7 @@ app.post('/api/schedules', async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         await conn.rollback();
+        console.error("Error saving schedule:", error);
         res.status(500).send(error.message);
     } finally {
         conn.release();
