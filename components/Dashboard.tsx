@@ -446,8 +446,8 @@ const AttendanceChart: React.FC<{ records: AttendanceRecord[] }> = ({ records })
         <div className="flex justify-between items-center mb-4">
            <h3 className="text-lg font-semibold text-[var(--theme-text-primary)]">Relatório de Frequência</h3>
         </div>
-        {/* Adjusted height for mobile responsiveness */}
-        <div style={{ width: '100%' }} className="h-[250px] sm:h-[300px]">
+        {/* Adjusted size to approx 880x440 responsive */}
+        <div style={{ width: '100%', maxWidth: '880px', margin: '0 auto' }} className="h-[300px] md:h-[440px]">
           <ResponsiveContainer>
             <BarChart data={data} barGap={4}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0, 0, 0, 0.05)" />
