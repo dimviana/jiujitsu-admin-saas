@@ -61,7 +61,7 @@ export interface Academy {
   email: string;
   password?: string; // In real app, never expose this on frontend
   settings?: Partial<ThemeSettings>; // JSON override for specific academy settings
-  status?: 'pending' | 'active' | 'rejected';
+  status?: 'pending' | 'active' | 'rejected' | 'blocked';
 }
 
 export interface Professor {

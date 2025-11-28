@@ -1,6 +1,8 @@
 
 
 
+
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { 
@@ -41,7 +43,7 @@ interface AppContextType {
     updateGraduationRanks: (items: { id: string, rank: number }[]) => Promise<void>;
     saveAttendanceRecord: (record: Omit<AttendanceRecord, 'id'>) => Promise<void>;
     saveAcademy: (academy: Academy) => Promise<void>;
-    updateAcademyStatus: (id: string, status: 'active' | 'rejected') => Promise<void>; // New function
+    updateAcademyStatus: (id: string, status: 'active' | 'rejected' | 'blocked') => Promise<void>; // New function
 
     login: (email: string, pass: string) => Promise<void>;
     loginGoogle: (credential: string) => Promise<void>;
@@ -300,7 +302,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updateGraduationRanks = (items: { id: string, rank: number }[]) => handleApiCall('/api/graduations/reorder', 'POST', items, 'Ordem das graduações atualizada.');
     const saveAttendanceRecord = (record: Omit<AttendanceRecord, 'id'>) => handleApiCall('/api/attendance', 'POST', record, 'Frequência salva com sucesso.');
     const saveAcademy = (academy: Academy) => handleApiCall('/api/academies', 'POST', academy, 'Academia atualizada com sucesso.');
-    const updateAcademyStatus = (id: string, status: 'active' | 'rejected') => handleApiCall(`/api/academies/${id}/status`, 'POST', { status }, `Academia ${status === 'active' ? 'aprovada' : 'rejeitada'} com sucesso.`);
+    const updateAcademyStatus = (id: string, status: 'active' | 'rejected' | 'blocked') => {
+        let action = '';
+        if (status === 'active') action = 'aprovada/ativada';
+        if (status === 'rejected') action = 'rejeitada';
+        if (status === 'blocked') action = 'bloqueada';
+        
+        return handleApiCall(`/api/academies/${id}/status`, 'POST', { status }, `Academia ${action} com sucesso.`);
+    };
 
     return (
         <AppContext.Provider value={{

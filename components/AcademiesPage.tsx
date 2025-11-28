@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useContext, useState, FormEvent } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Academy } from '../types';
@@ -7,7 +9,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
-import { Building, ChevronDown, ChevronRight, User, Briefcase, Edit, Mail, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Building, ChevronDown, ChevronRight, User, Briefcase, Edit, Mail, CheckCircle, XCircle, AlertTriangle, Lock, Unlock } from 'lucide-react';
 
 interface AcademyFormProps {
     academy: Partial<Academy> | null;
@@ -83,9 +85,15 @@ const AcademiesPage: React.FC = () => {
         setSelectedAcademy(null);
     };
 
-    const handleStatusUpdate = async (e: React.MouseEvent, id: string, status: 'active' | 'rejected') => {
+    const handleStatusUpdate = async (e: React.MouseEvent, id: string, status: 'active' | 'rejected' | 'blocked') => {
         e.stopPropagation();
-        if (window.confirm(status === 'active' ? 'Deseja aprovar e ativar esta academia?' : 'Deseja rejeitar esta academia?')) {
+        
+        let confirmMessage = '';
+        if (status === 'active') confirmMessage = 'Deseja aprovar/ativar esta academia?';
+        else if (status === 'rejected') confirmMessage = 'Deseja rejeitar esta academia?';
+        else if (status === 'blocked') confirmMessage = 'ATENÇÃO: Ao bloquear esta academia, nenhum usuário vinculado conseguirá acessá-la. Deseja continuar?';
+
+        if (window.confirm(confirmMessage)) {
             await updateAcademyStatus(id, status);
         }
     };
@@ -106,20 +114,27 @@ const AcademiesPage: React.FC = () => {
                         const status = academy.status || 'active'; // Default to active if old data
                         const isPending = status === 'pending';
                         const isRejected = status === 'rejected';
+                        const isBlocked = status === 'blocked';
+
+                        let cardClass = '';
+                        if (isPending) cardClass = 'border-l-4 border-l-amber-500';
+                        else if (isRejected) cardClass = 'opacity-60 border-l-4 border-l-red-500';
+                        else if (isBlocked) cardClass = 'opacity-80 border-l-4 border-l-slate-800 bg-slate-50';
 
                         return (
-                            <Card key={academy.id} className={`p-0 overflow-hidden ${isPending ? 'border-l-4 border-l-amber-500' : isRejected ? 'opacity-60 border-l-4 border-l-red-500' : ''}`}>
+                            <Card key={academy.id} className={`p-0 overflow-hidden ${cardClass}`}>
                                 <div 
                                     className="w-full text-left p-4 flex flex-col md:flex-row justify-between items-center bg-slate-50 hover:bg-slate-100 cursor-pointer gap-4"
                                     onClick={() => toggleAcademy(academy.id)}
                                 >
                                     <div className="flex items-center w-full md:w-auto">
-                                        <Building className={`w-8 h-8 mr-4 p-1.5 rounded-full border border-slate-200 ${isPending ? 'text-amber-500 bg-amber-50' : 'text-primary bg-white'}`}/>
+                                        <Building className={`w-8 h-8 mr-4 p-1.5 rounded-full border border-slate-200 ${isPending ? 'text-amber-500 bg-amber-50' : isBlocked ? 'text-slate-600 bg-slate-200' : 'text-primary bg-white'}`}/>
                                         <div>
                                             <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2">
                                                 {academy.name}
                                                 {isPending && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold border border-amber-200">Pendente</span>}
                                                 {isRejected && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold border border-red-200">Rejeitado</span>}
+                                                {isBlocked && <span className="text-xs bg-slate-200 text-slate-800 px-2 py-0.5 rounded-full font-semibold border border-slate-300 flex items-center"><Lock className="w-3 h-3 mr-1"/> Bloqueado</span>}
                                             </h2>
                                             <p className="text-sm text-slate-500 flex items-center mt-1">
                                                 <Mail className="w-3 h-3 mr-1" /> {academy.email}
@@ -139,26 +154,56 @@ const AcademiesPage: React.FC = () => {
                                         </div>
                                         
                                         <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
-                                            {isGeneralAdmin && isPending && (
+                                            {isGeneralAdmin && (
                                                 <>
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="success" 
-                                                        onClick={(e) => handleStatusUpdate(e, academy.id, 'active')}
-                                                        className="px-2"
-                                                        title="Aprovar"
-                                                    >
-                                                        <CheckCircle className="w-4 h-4" />
-                                                    </Button>
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="danger" 
-                                                        onClick={(e) => handleStatusUpdate(e, academy.id, 'rejected')}
-                                                        className="px-2"
-                                                        title="Rejeitar"
-                                                    >
-                                                        <XCircle className="w-4 h-4" />
-                                                    </Button>
+                                                    {isPending && (
+                                                        <>
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="success" 
+                                                                onClick={(e) => handleStatusUpdate(e, academy.id, 'active')}
+                                                                className="px-2"
+                                                                title="Aprovar"
+                                                            >
+                                                                <CheckCircle className="w-4 h-4" />
+                                                            </Button>
+                                                            <Button 
+                                                                size="sm" 
+                                                                variant="danger" 
+                                                                onClick={(e) => handleStatusUpdate(e, academy.id, 'rejected')}
+                                                                className="px-2"
+                                                                title="Rejeitar"
+                                                            >
+                                                                <XCircle className="w-4 h-4" />
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    
+                                                    {!isPending && !isRejected && (
+                                                        <>
+                                                            {isBlocked ? (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="success"
+                                                                    onClick={(e) => handleStatusUpdate(e, academy.id, 'active')}
+                                                                    className="px-2"
+                                                                    title="Desbloquear Academia"
+                                                                >
+                                                                    <Unlock className="w-4 h-4" />
+                                                                </Button>
+                                                            ) : (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="danger"
+                                                                    onClick={(e) => handleStatusUpdate(e, academy.id, 'blocked')}
+                                                                    className="px-2 bg-slate-800 hover:bg-slate-900 text-white border-slate-900"
+                                                                    title="Bloquear Academia"
+                                                                >
+                                                                    <Lock className="w-4 h-4" />
+                                                                </Button>
+                                                            )}
+                                                        </>
+                                                    )}
                                                 </>
                                             )}
                                             
@@ -181,6 +226,12 @@ const AcademiesPage: React.FC = () => {
                                             <div className="col-span-full bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-lg flex items-center">
                                                 <AlertTriangle className="w-5 h-5 mr-2" />
                                                 <p className="text-sm">Esta academia aguarda aprovação. O administrador responsável não poderá acessar o sistema até que ela seja ativada.</p>
+                                            </div>
+                                        )}
+                                        {isBlocked && (
+                                            <div className="col-span-full bg-slate-800 border border-slate-700 text-white p-3 rounded-lg flex items-center shadow-lg">
+                                                <Lock className="w-5 h-5 mr-2" />
+                                                <p className="text-sm">Esta academia está bloqueada. Nenhum usuário vinculado consegue realizar login.</p>
                                             </div>
                                         )}
                                         

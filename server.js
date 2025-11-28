@@ -67,6 +67,9 @@ app.post('/api/login', async (req, res) => {
                 if (status === 'rejected') {
                     throw new Error('O cadastro da sua academia foi recusado. Entre em contato com o suporte.');
                 }
+                if (status === 'blocked') {
+                    throw new Error('Acesso temporariamente suspenso. Entre em contato com a administração do sistema.');
+                }
             }
             return true;
         };
@@ -135,6 +138,9 @@ app.post('/api/login', async (req, res) => {
              if (academy.status === 'rejected') {
                  return res.status(403).json({ message: 'O cadastro da sua academia foi recusado.' });
              }
+             if (academy.status === 'blocked') {
+                 return res.status(403).json({ message: 'Acesso temporariamente suspenso. Contate o administrador.' });
+             }
 
              // Find the user record associated with this academy admin
              const [adminUser] = await pool.query('SELECT * FROM users WHERE academyId = ? AND role = "academy_admin"', [academy.id]);
@@ -147,7 +153,7 @@ app.post('/api/login', async (req, res) => {
         res.status(401).json({ message: 'User or password invalid' });
     } catch (error) {
         console.error(error);
-        const status = error.message.includes('em análise') || error.message.includes('recusado') ? 403 : 500;
+        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') ? 403 : 500;
         res.status(status).json({ message: error.message || 'Server error' });
     }
 });
@@ -605,9 +611,9 @@ app.post('/api/academies', async (req, res) => {
 
 app.post('/api/academies/:id/status', async (req, res) => {
     const { id } = req.params;
-    const { status } = req.body; // 'active' or 'rejected'
+    const { status } = req.body; // 'active', 'rejected', or 'blocked'
     
-    if (!['active', 'rejected'].includes(status)) {
+    if (!['active', 'rejected', 'blocked'].includes(status)) {
         return res.status(400).json({ message: 'Invalid status' });
     }
 
