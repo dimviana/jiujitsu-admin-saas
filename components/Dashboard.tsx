@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useContext } from 'react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { Student, User, ClassSchedule, DayOfWeek, Graduation, ThemeSettings, AttendanceRecord } from '../types';
-import { Users, Briefcase, BookOpen, Gift, Award, Calendar as CalendarIcon, DollarSign } from 'lucide-react';
+import { Users, Briefcase, BookOpen, Gift, Award, Calendar as CalendarIcon, DollarSign, TrendingUp, CheckCircle, ChevronRight } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -73,13 +73,13 @@ interface StatCardProps {
     bgColor: string;
 }
 const StatCard: React.FC<StatCardProps> = ({ icon, title, value, color, bgColor }) => (
-    <Card className={`flex items-center p-4`}>
-        <div className={`p-3 rounded-lg ${bgColor}`}>
-            <div style={{ color }}>{icon}</div>
+    <Card className={`flex flex-col sm:flex-row items-start sm:items-center p-3 sm:p-4 h-full`}>
+        <div className={`p-2 sm:p-3 rounded-lg ${bgColor} mb-2 sm:mb-0`}>
+            <div style={{ color }} className="scale-75 sm:scale-100 transform origin-top-left sm:origin-center">{icon}</div>
         </div>
-        <div className="ml-4">
-            <p className="text-sm text-slate-500">{title}</p>
-            <p className="text-2xl font-bold text-slate-800">{value}</p>
+        <div className="sm:ml-4">
+            <p className="text-xs sm:text-sm text-slate-500 font-medium">{title}</p>
+            <p className="text-xl sm:text-2xl font-bold text-slate-800">{value}</p>
         </div>
     </Card>
 );
@@ -316,6 +316,82 @@ const CompetitionsCard: React.FC<CompetitionsCardProps> = ({ students, onCompeti
     );
 };
 
+// --- New Insight Card: Graduation Eligibility ---
+const GraduationEligibilityCard: React.FC<{ students: Student[], graduations: Graduation[], attendanceRecords: AttendanceRecord[] }> = ({ students, graduations, attendanceRecords }) => {
+    const eligibleStudents = useMemo(() => {
+        if (!students.length || !graduations.length) return [];
+        
+        const sortedGraduations = [...graduations].sort((a, b) => a.rank - b.rank);
+        const candidates = [];
+
+        for (const student of students) {
+            const currentBelt = sortedGraduations.find(g => g.id === student.beltId);
+            if (!currentBelt) continue;
+
+            const nextBelt = sortedGraduations.find(g => g.rank > currentBelt.rank);
+            if (!nextBelt) continue; // Already max belt
+
+            const promotionDate = student.lastPromotionDate || student.firstGraduationDate;
+            if (!promotionDate) continue;
+
+            const promotionDateObj = new Date(promotionDate);
+            const now = new Date();
+            const monthsSincePromotion = (now.getFullYear() - promotionDateObj.getFullYear()) * 12 + (now.getMonth() - promotionDateObj.getMonth());
+
+            if (currentBelt.type === 'adult') {
+                const timeReq = currentBelt.minTimeInMonths;
+                if (monthsSincePromotion >= timeReq) {
+                     // Check attendance
+                    const relevantRecords = attendanceRecords.filter(r => r.studentId === student.id && new Date(r.date) >= promotionDateObj);
+                    const presentCount = relevantRecords.filter(r => r.status === 'present').length;
+                    const totalRecords = relevantRecords.length;
+                    const frequency = totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0;
+                    
+                    if (frequency >= 70) {
+                        candidates.push({ student, currentBelt, nextBelt, monthsInBelt: monthsSincePromotion });
+                    }
+                }
+            } else if (currentBelt.type === 'kids') {
+                // Simplified Check for kids: Time & Age (if applicable)
+                 const birthDate = student.birthDate ? new Date(student.birthDate) : new Date();
+                 const age = now.getFullYear() - birthDate.getFullYear();
+                 if (nextBelt.minAge && age >= nextBelt.minAge && monthsSincePromotion >= (currentBelt.minTimeInMonths || 6)) {
+                     candidates.push({ student, currentBelt, nextBelt, monthsInBelt: monthsSincePromotion });
+                 }
+            }
+        }
+        return candidates.slice(0, 5); // Show top 5
+    }, [students, graduations, attendanceRecords]);
+
+    if (eligibleStudents.length === 0) return null;
+
+    return (
+        <Card className="border-l-4 border-l-green-500">
+             <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2 text-green-600" />
+                Aptos para Graduação
+            </h3>
+            <div className="space-y-3">
+                {eligibleStudents.map(({ student, currentBelt, nextBelt }) => (
+                     <div key={student.id} className="flex items-center justify-between p-2 bg-slate-50 rounded-md border border-slate-100">
+                        <div className="flex items-center">
+                             <img src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} className="w-8 h-8 rounded-full mr-2 object-cover"/>
+                             <div>
+                                 <p className="text-sm font-semibold text-slate-800">{student.name}</p>
+                                 <div className="flex items-center text-xs text-slate-500">
+                                     {currentBelt.name} <ChevronRight className="w-3 h-3 mx-1"/> {nextBelt.name}
+                                 </div>
+                             </div>
+                        </div>
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                     </div>
+                ))}
+            </div>
+        </Card>
+    )
+}
+
+
 const AttendanceChart: React.FC<{ records: AttendanceRecord[] }> = ({ records }) => {
     const { themeSettings } = useContext(AppContext);
   
@@ -340,14 +416,15 @@ const AttendanceChart: React.FC<{ records: AttendanceRecord[] }> = ({ records })
     return (
       <Card className="h-full">
         <div className="flex justify-between items-center mb-4">
-           <h3 className="text-lg font-semibold text-[var(--theme-text-primary)]">Relatório de Frequência (Últimos 9 dias)</h3>
+           <h3 className="text-lg font-semibold text-[var(--theme-text-primary)]">Relatório de Frequência</h3>
         </div>
-        <div style={{ width: '100%', height: 300 }}>
+        {/* Adjusted height for mobile responsiveness */}
+        <div style={{ width: '100%' }} className="h-[250px] sm:h-[300px]">
           <ResponsiveContainer>
-            <BarChart data={data} barGap={8}>
+            <BarChart data={data} barGap={4}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0, 0, 0, 0.05)" />
-              <XAxis dataKey="name" tick={{ fill: 'var(--theme-text-primary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'var(--theme-text-primary)', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <XAxis dataKey="name" tick={{ fill: 'var(--theme-text-primary)', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} />
+              <YAxis tick={{ fill: 'var(--theme-text-primary)', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip 
                   cursor={{fill: 'rgba(245, 158, 11, 0.1)'}}
                   contentStyle={{ 
@@ -355,10 +432,11 @@ const AttendanceChart: React.FC<{ records: AttendanceRecord[] }> = ({ records })
                       borderColor: '#E5E7EB',
                       color: '#1F2937',
                       borderRadius: '0.75rem',
+                      fontSize: '12px'
                   }}
               />
-              <Bar dataKey="Presentes" fill={themeSettings.chartColor1} radius={[5, 5, 0, 0]} barSize={10} />
-              <Bar dataKey="Ausentes" fill={themeSettings.chartColor2} radius={[5, 5, 0, 0]} barSize={10} />
+              <Bar dataKey="Presentes" fill={themeSettings.chartColor1} radius={[3, 3, 0, 0]} barSize={8} />
+              <Bar dataKey="Ausentes" fill={themeSettings.chartColor2} radius={[3, 3, 0, 0]} barSize={8} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -440,26 +518,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold text-slate-800">Bom dia, {user?.name?.split(' ')[0]}!</h1>
-                  <p className="text-slate-500 mt-1">Bem-vindo ao painel da sua academia.</p>
+                  <h1 className="text-2xl md:text-3xl font-bold text-slate-800">Bom dia, {user?.name?.split(' ')[0]}!</h1>
+                  <p className="text-slate-500 mt-1 text-sm md:text-base">Bem-vindo ao painel da sua academia.</p>
                 </div>
                 <div className="hidden md:block">
                     <Button variant="secondary"><CalendarIcon className="w-4 h-4 mr-2" /> {new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</Button>
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-8 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
+                <div className="lg:col-span-8 space-y-4 md:space-y-6">
+                    {/* Updated Grid for Mobile (2 cols) */}
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                        {stats.map(stat => <StatCard key={stat.title} {...stat} />)}
                     </div>
+                    
                     <AttendanceChart records={attendanceRecords} />
+                    
                     <Card>
                         <div className="flex justify-between items-center mb-4">
                              <h3 className="text-lg font-semibold text-slate-800">Alunos com Pendências</h3>
                              <Button size="sm" onClick={() => setIsPaymentModalOpen(true)} disabled={overdueStudents.length === 0}>
                                 <DollarSign className="w-4 h-4 mr-2" />
-                                Pagar Mensalidade
+                                Pagar
                              </Button>
                         </div>
                         <StudentPerformanceTable students={students} onPayClick={() => {
@@ -467,7 +548,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         }} />
                     </Card>
                 </div>
-                <div className="lg:col-span-4 space-y-6">
+                <div className="lg:col-span-4 space-y-4 md:space-y-6">
+                    <GraduationEligibilityCard students={students} graduations={graduations} attendanceRecords={attendanceRecords} />
                     <BirthdayCard students={students} users={users} />
                     <CommunityCard />
                     <CalendarWidget selectedDate={selectedDate} onDateChange={setSelectedDate} schedules={schedules} />

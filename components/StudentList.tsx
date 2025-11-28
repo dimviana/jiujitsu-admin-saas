@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Student, Graduation } from '../types';
-import { Search, MoreVertical, MessageCircle, Award } from 'lucide-react';
+import { Search, MoreVertical, MessageCircle, Award, Phone } from 'lucide-react';
 
 interface StudentListProps {
   students: Student[];
@@ -23,9 +23,10 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
     return graduations.find(g => g.id === beltId)?.color || '#ccc';
   };
 
-  const handleWhatsAppReminder = (student: Student) => {
-      const message = `Olá ${student.name}, notamos que sua mensalidade está em aberto. Por favor, regularize sua situação na recepção.`;
-      const url = `https://wa.me/${student.phone}?text=${encodeURIComponent(message)}`;
+  const handleWhatsAppClick = (phone: string | undefined) => {
+      if (!phone) return;
+      const cleanPhone = phone.replace(/\D/g, '');
+      const url = `https://wa.me/55${cleanPhone}`;
       window.open(url, '_blank');
   };
 
@@ -62,6 +63,7 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
             <tr>
               <th className="px-6 py-4 font-semibold">Aluno</th>
               <th className="px-6 py-4 font-semibold">Graduação</th>
+              <th className="px-6 py-4 font-semibold">Contato</th>
               <th className="px-6 py-4 font-semibold">Status Financeiro</th>
               <th className="px-6 py-4 font-semibold">Ações</th>
             </tr>
@@ -72,7 +74,7 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
                 <td className="px-6 py-4">
                   <div className="flex items-center">
                     <img 
-                      src={student.imageUrl} 
+                      src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
                       alt={student.name} 
                       className="w-10 h-10 rounded-full object-cover mr-4 border-2 border-white shadow-sm"
                     />
@@ -108,6 +110,20 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
                   </div>
                 </td>
                 <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-600 font-medium">{student.phone || 'N/A'}</span>
+                        {student.phone && (
+                            <button 
+                                onClick={() => handleWhatsAppClick(student.phone)}
+                                className="p-1.5 bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors"
+                                title="Abrir WhatsApp"
+                            >
+                                <MessageCircle className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </td>
+                <td className="px-6 py-4">
                   {student.paymentStatus === 'paid' ? (
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                       Em Dia
@@ -120,13 +136,6 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center space-x-2">
-                    <button 
-                        onClick={() => handleWhatsAppReminder(student)}
-                        className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-full transition-colors"
-                        title="Enviar Cobrança WhatsApp"
-                    >
-                      <MessageCircle className="w-5 h-5" />
-                    </button>
                     <button className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-full transition-colors" title="Graduar">
                        <Award className="w-5 h-5" />
                     </button>
