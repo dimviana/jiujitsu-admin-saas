@@ -14,9 +14,12 @@ interface GraduationFormProps {
 }
 
 const GraduationForm: React.FC<GraduationFormProps> = ({ graduation, onSave, onClose }) => {
+  const [useGradient, setUseGradient] = useState(!!graduation?.color2);
   const [formData, setFormData] = useState({
     name: '',
     color: '#FFFFFF',
+    color2: '',
+    color3: '',
     minTimeInMonths: 0,
     rank: 0,
     type: 'adult' as 'adult' | 'kids',
@@ -32,7 +35,12 @@ const GraduationForm: React.FC<GraduationFormProps> = ({ graduation, onSave, onC
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    const dataToSave = { ...formData };
+    if (!useGradient) {
+        dataToSave.color2 = '';
+        dataToSave.color3 = '';
+    }
+    onSave(dataToSave);
   };
 
   const selectStyles = "w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-md px-3 py-2 focus:ring-amber-500 focus:border-amber-500";
@@ -42,7 +50,43 @@ const GraduationForm: React.FC<GraduationFormProps> = ({ graduation, onSave, onC
     <form onSubmit={handleSubmit} className="space-y-4">
       <Input label="Nome da Faixa" name="name" value={formData.name} onChange={handleChange} required />
       <Input label="Ordem (Rank)" name="rank" type="number" value={formData.rank} onChange={handleChange} required readOnly/>
-      <Input label="Cor" name="color" type="color" value={formData.color} onChange={handleChange} required />
+      
+      <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-3">
+          <div className="flex items-center gap-2 mb-2">
+              <input 
+                type="checkbox" 
+                id="useGradient" 
+                checked={useGradient} 
+                onChange={(e) => setUseGradient(e.target.checked)}
+                className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+              />
+              <label htmlFor="useGradient" className="text-sm font-medium text-slate-700">Estilo Gradiente (3 Cores)</label>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Input label={useGradient ? "Cor Início" : "Cor"} name="color" type="color" value={formData.color} onChange={handleChange} required />
+              {useGradient && (
+                  <>
+                    <Input label="Cor Meio" name="color2" type="color" value={formData.color2 || '#ffffff'} onChange={handleChange} />
+                    <Input label="Cor Fim" name="color3" type="color" value={formData.color3 || '#ffffff'} onChange={handleChange} />
+                  </>
+              )}
+          </div>
+          
+          {/* Preview */}
+          <div className="mt-2">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Pré-visualização</label>
+              <div 
+                className="h-8 w-full rounded border border-slate-300 shadow-sm"
+                style={{ 
+                    background: useGradient && formData.color2 
+                        ? `linear-gradient(90deg, ${formData.color} 0%, ${formData.color2} 50%, ${formData.color3 || formData.color2} 100%)` 
+                        : formData.color 
+                }}
+              ></div>
+          </div>
+      </div>
+
        <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Graduação</label>
             <select name="type" value={formData.type} onChange={handleChange} className={selectStyles}>
@@ -263,7 +307,14 @@ const GraduationsPage: React.FC = () => {
                   <td className="p-4 text-slate-800 font-medium">{grad.name}</td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <span className="w-6 h-6 rounded-full border border-slate-200 shadow-sm" style={{ backgroundColor: grad.color }}></span>
+                      <span 
+                        className="w-12 h-6 rounded-sm border border-slate-200 shadow-sm" 
+                        style={{ 
+                            background: grad.color2 
+                                ? `linear-gradient(90deg, ${grad.color} 0%, ${grad.color2} 50%, ${grad.color3 || grad.color2} 100%)` 
+                                : grad.color 
+                        }}
+                      ></span>
                     </div>
                   </td>
                   <td className="p-4 text-slate-600 text-sm">
@@ -338,10 +389,24 @@ const GraduationsPage: React.FC = () => {
                                         <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
                                             <div className="text-right mr-4">
                                                 <div className="flex items-center justify-end text-sm text-slate-600">
-                                                    <span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: currentBelt.color}}></span>
+                                                    <span 
+                                                        className="w-4 h-2 rounded-full mr-2" 
+                                                        style={{ 
+                                                            background: currentBelt.color2 
+                                                                ? `linear-gradient(90deg, ${currentBelt.color} 0%, ${currentBelt.color2} 50%, ${currentBelt.color3 || currentBelt.color2} 100%)` 
+                                                                : currentBelt.color 
+                                                        }}
+                                                    ></span>
                                                     {currentBelt.name}
                                                     <ChevronRight className="w-4 h-4 mx-1 text-slate-400" />
-                                                    <span className="w-2 h-2 rounded-full mr-2" style={{backgroundColor: nextBelt.color}}></span>
+                                                    <span 
+                                                        className="w-4 h-2 rounded-full mr-2" 
+                                                        style={{ 
+                                                            background: nextBelt.color2 
+                                                                ? `linear-gradient(90deg, ${nextBelt.color} 0%, ${nextBelt.color2} 50%, ${nextBelt.color3 || nextBelt.color2} 100%)` 
+                                                                : nextBelt.color 
+                                                        }}
+                                                    ></span>
                                                     <span className="font-bold text-slate-800">{nextBelt.name}</span>
                                                 </div>
                                                 <p className="text-xs text-green-600 font-medium mt-1">{reason}</p>

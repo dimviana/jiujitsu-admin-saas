@@ -515,7 +515,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                 <span className="font-bold text-slate-700">{graduation.name}</span>
                                 <span className="font-bold text-slate-700">{nextGraduation?.name || 'Faixa Preta'}</span>
                             </div>
-                             <div className="w-full h-8 rounded-md flex items-center justify-end shadow-inner relative overflow-hidden" style={{ backgroundColor: graduation.color, border: '1px solid rgba(0,0,0,0.1)' }}>
+                             <div 
+                                className="w-full h-8 rounded-md flex items-center justify-end shadow-inner relative overflow-hidden" 
+                                style={{ 
+                                    background: graduation.color2 
+                                        ? `linear-gradient(90deg, ${graduation.color} 0%, ${graduation.color2} 50%, ${graduation.color3 || graduation.color2} 100%)` 
+                                        : graduation.color, 
+                                    border: '1px solid rgba(0,0,0,0.1)' 
+                                }}
+                             >
                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/5 pointer-events-none"></div>
                                 <div className="h-full w-1/4 bg-black flex items-center justify-center space-x-1 p-1 z-10 shadow-xl">
                                     {Array.from({ length: stripes }).map((_, index) => (

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Professor, Student } from '../types';
@@ -370,7 +371,14 @@ const ProfessorsPage: React.FC = () => {
                                 </span>
                             </button>
                         )}
-                        <div className="h-2" style={{ backgroundColor: graduation?.color || '#e2e8f0' }}></div>
+                        <div 
+                            className="h-2" 
+                            style={{ 
+                                background: graduation?.color2 
+                                    ? `linear-gradient(90deg, ${graduation.color} 0%, ${graduation.color2} 50%, ${graduation.color3 || graduation.color2} 100%)` 
+                                    : graduation?.color || '#e2e8f0' 
+                            }}
+                        ></div>
                         <div className="p-5 flex flex-col flex-grow">
                             <div className="flex items-center mb-4">
                                 <button onClick={() => handleOpenPhotoModal(prof)} className="relative group flex-shrink-0">
@@ -394,7 +402,14 @@ const ProfessorsPage: React.FC = () => {
                                     <div className="flex justify-between items-center">
                                         <span className="text-slate-600 font-medium">Graduação:</span>
                                         <div className="flex items-center">
-                                            <span className="w-4 h-4 rounded-full mr-2 border border-slate-300 shadow-sm" style={{ backgroundColor: graduation.color }}></span>
+                                            <span 
+                                                className="w-4 h-4 rounded-full mr-2 border border-slate-300 shadow-sm" 
+                                                style={{ 
+                                                    background: graduation.color2 
+                                                        ? `linear-gradient(90deg, ${graduation.color} 0%, ${graduation.color2} 50%, ${graduation.color3 || graduation.color2} 100%)` 
+                                                        : graduation.color 
+                                                }}
+                                            ></span>
                                             <span className="font-medium text-slate-700">{graduation.name}</span>
                                         </div>
                                     </div>
@@ -432,7 +447,12 @@ const ProfessorsPage: React.FC = () => {
                                 <div className="pt-4 mt-4">
                                     <div 
                                         className="w-full h-8 rounded-md flex items-center justify-end shadow-inner relative overflow-hidden" 
-                                        style={{ backgroundColor: graduation?.color || '#e2e8f0', border: '1px solid rgba(0,0,0,0.1)' }}
+                                        style={{ 
+                                            background: graduation?.color2 
+                                                ? `linear-gradient(90deg, ${graduation.color} 0%, ${graduation.color2} 50%, ${graduation.color3 || graduation.color2} 100%)` 
+                                                : graduation?.color || '#e2e8f0', 
+                                            border: '1px solid rgba(0,0,0,0.1)' 
+                                        }}
                                         title={`${graduation?.name}${dan > 0 ? ` - ${dan}º Dan` : ''}`}
                                     >
                                         <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/5 pointer-events-none"></div>

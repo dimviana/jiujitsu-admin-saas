@@ -293,6 +293,15 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE theme_settings ADD COLUMN efiClientSecret TEXT");
         }
 
+        // 12. Gradient Colors on Graduations
+        try {
+             await pool.query("SELECT color2 FROM graduations LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding color2 and color3 to graduations");
+             await pool.query("ALTER TABLE graduations ADD COLUMN color2 VARCHAR(255)");
+             await pool.query("ALTER TABLE graduations ADD COLUMN color3 VARCHAR(255)");
+        }
+
 
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 

@@ -88,6 +88,8 @@ export interface Graduation {
   id: string;
   name: string;
   color: string;
+  color2?: string; // Middle color for gradient
+  color3?: string; // End color for gradient
   minTimeInMonths: number;
   rank: number;
   type: 'adult' | 'kids';

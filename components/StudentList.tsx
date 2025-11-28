@@ -21,8 +21,16 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
     return matchesSearch && matchesBelt;
   });
 
-  const getBeltColor = (beltId: string) => {
-    return graduations.find(g => g.id === beltId)?.color || '#ccc';
+  const getBeltStyle = (beltId: string) => {
+    const belt = graduations.find(g => g.id === beltId);
+    if (!belt) return { backgroundColor: '#ccc' };
+    
+    if (belt.color2) {
+        return {
+            background: `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)`
+        };
+    }
+    return { backgroundColor: belt.color };
   };
 
   const handleWhatsAppClick = (phone: string | undefined) => {
@@ -90,7 +98,7 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
                   <div className="flex items-center space-x-2">
                      <div 
                         className="w-24 h-6 rounded flex items-center justify-end px-1 shadow-sm border border-slate-200"
-                        style={{ backgroundColor: getBeltColor(student.beltId) }}
+                        style={getBeltStyle(student.beltId)}
                      >
                         {student.beltId !== 'black' && student.beltId !== 'white' && (
                              <div className="w-6 h-full bg-black ml-auto relative">

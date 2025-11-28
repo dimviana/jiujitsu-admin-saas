@@ -510,7 +510,14 @@ const StudentsPage: React.FC = () => {
                         
                         return (
                             <Card key={student.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-[328px]">
-                                <div className="h-2" style={{ backgroundColor: belt?.color || '#e2e8f0' }}></div>
+                                <div 
+                                    className="h-2" 
+                                    style={{ 
+                                        background: belt?.color2 
+                                            ? `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)` 
+                                            : belt?.color || '#e2e8f0' 
+                                    }}
+                                ></div>
                                 <div className="p-5 flex flex-col flex-grow">
                                     <div className="flex items-center mb-4">
                                         <button onClick={() => handleOpenPhotoModal(student)} className="relative group flex-shrink-0">
@@ -540,7 +547,14 @@ const StudentsPage: React.FC = () => {
                                             <div className="flex justify-between items-center">
                                                 <span className="text-slate-600 font-medium">Graduação:</span>
                                                 <div className="flex items-center">
-                                                    <span className="w-4 h-4 rounded-full mr-2 border border-slate-300" style={{ backgroundColor: belt.color }}></span>
+                                                    <span 
+                                                        className="w-4 h-4 rounded-full mr-2 border border-slate-300" 
+                                                        style={{ 
+                                                            background: belt.color2 
+                                                                ? `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)` 
+                                                                : belt.color 
+                                                        }}
+                                                    ></span>
                                                     <span className="font-medium text-slate-700">{belt.name}</span>
                                                     {/* Visual Indicator for Kids Belt */}
                                                     {belt.type === 'kids' && (
@@ -574,7 +588,12 @@ const StudentsPage: React.FC = () => {
                                         <div className="pt-4 mt-4">
                                             <div 
                                                 className="w-full h-7 rounded-md flex items-center justify-end" 
-                                                style={{ backgroundColor: belt?.color || '#e2e8f0', border: '1px solid rgba(0,0,0,0.1)' }}
+                                                style={{ 
+                                                    background: belt?.color2 
+                                                        ? `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)` 
+                                                        : belt?.color || '#e2e8f0', 
+                                                    border: '1px solid rgba(0,0,0,0.1)' 
+                                                }}
                                                 title={`${belt?.name} - ${stripes} grau(s)`}
                                             >
                                                 <div className="h-full w-1/4 bg-black flex items-center justify-center space-x-1 p-1">

@@ -148,7 +148,16 @@ const ProfilePage: React.FC = () => {
                         <h2 className="text-2xl font-bold text-slate-800">{studentData.name}</h2>
                         <p className="text-slate-500">{academy?.name}</p>
                         <div className="mt-4 flex items-center bg-slate-100 px-3 py-1 rounded-full">
-                            {graduation && <span className="w-5 h-5 rounded-full mr-2 border border-slate-300" style={{ backgroundColor: graduation.color }}></span>}
+                            {graduation && (
+                                <span 
+                                    className="w-5 h-5 rounded-full mr-2 border border-slate-300" 
+                                    style={{ 
+                                        background: graduation.color2 
+                                            ? `linear-gradient(90deg, ${graduation.color} 0%, ${graduation.color2} 50%, ${graduation.color3 || graduation.color2} 100%)` 
+                                            : graduation.color 
+                                    }}
+                                ></span>
+                            )}
                             <span className="font-semibold text-slate-700">{graduation?.name}</span>
                         </div>
                     </div>
