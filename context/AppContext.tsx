@@ -1,13 +1,3 @@
-
-
-
-
-
-
-
-
-
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { 
@@ -202,14 +192,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             
             if (isDark) {
                 // Dark Mode Palette override
-                root.style.setProperty('--theme-primary', effectiveThemeSettings.primaryColor);
-                root.style.setProperty('--theme-secondary', '#f8fafc'); // Light text for secondary elements in dark mode
-                root.style.setProperty('--theme-accent', effectiveThemeSettings.primaryColor);
+                // Use requested colors
+                root.style.setProperty('--theme-bg', '#333232'); // Fundo principal
+                root.style.setProperty('--theme-card-bg', '#414040'); // Fundo dos cards (tom mais claro)
+                root.style.setProperty('--theme-text-primary', '#ffffff'); // Texto branco
                 
-                // Dark Backgrounds
-                root.style.setProperty('--theme-bg', '#0f172a'); // Slate 900
-                root.style.setProperty('--theme-card-bg', '#1e293b'); // Slate 800
-                root.style.setProperty('--theme-text-primary', '#f1f5f9'); // Slate 100
+                // Ícones e Destaques em Azul
+                root.style.setProperty('--theme-primary', '#0863c2'); 
+                root.style.setProperty('--theme-secondary', '#ffffff'); 
+                root.style.setProperty('--theme-accent', '#0863c2');
                 
                 root.classList.add('dark');
             } else {
