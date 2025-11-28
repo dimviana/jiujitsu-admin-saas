@@ -280,7 +280,21 @@ const ProfessorsPage: React.FC = () => {
                 const { dan } = professorDanData.get(prof.id) || { dan: 0 };
                 
                 return (
-                    <Card key={prof.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-full">
+                    <Card key={prof.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-full relative">
+                         {/* Visual Badge for Instructor */}
+                         {prof.isInstructor && graduation && (
+                            <div className="absolute top-4 right-4 z-10">
+                                <span 
+                                    className="px-3 py-1 text-xs font-bold rounded-full shadow-md text-white border border-white"
+                                    style={{ 
+                                        backgroundColor: graduation.color,
+                                        color: graduation.color.toLowerCase() === '#ffffff' ? '#000' : '#fff'
+                                    }}
+                                >
+                                    INSTRUTOR
+                                </span>
+                            </div>
+                        )}
                         <div className="h-2" style={{ backgroundColor: graduation?.color || '#e2e8f0' }}></div>
                         <div className="p-5 flex flex-col flex-grow">
                             <div className="flex items-center mb-4">

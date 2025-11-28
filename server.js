@@ -92,15 +92,35 @@ app.post('/api/register', async (req, res) => {
 
 app.get('/api/initial-data', async (req, res) => {
     try {
+        // Ensure isInstructor column exists (Migration Helper)
+        try {
+            await pool.query("SELECT isInstructor FROM students LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding isInstructor to students/professors");
+            await pool.query("ALTER TABLE students ADD COLUMN isInstructor BOOLEAN DEFAULT FALSE");
+            await pool.query("ALTER TABLE professors ADD COLUMN isInstructor BOOLEAN DEFAULT FALSE");
+        }
+
         const [students] = await pool.query('SELECT * FROM students');
-        const parsedStudents = students.map(s => ({ ...s, isCompetitor: Boolean(s.isCompetitor), medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 } }));
+        const parsedStudents = students.map(s => ({ 
+            ...s, 
+            isCompetitor: Boolean(s.isCompetitor),
+            isInstructor: Boolean(s.isInstructor),
+            medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 } 
+        }));
         const [payments] = await pool.query('SELECT * FROM payment_history');
         parsedStudents.forEach(s => { s.paymentHistory = payments.filter(p => p.studentId === s.id); });
 
         const [users] = await pool.query('SELECT * FROM users');
         const [academies] = await pool.query('SELECT * FROM academies');
         const [graduations] = await pool.query('SELECT * FROM graduations');
+        
         const [professors] = await pool.query('SELECT * FROM professors');
+        const parsedProfessors = professors.map(p => ({
+            ...p,
+            isInstructor: Boolean(p.isInstructor)
+        }));
+
         const [schedules] = await pool.query('SELECT * FROM class_schedules');
         const [assistants] = await pool.query('SELECT * FROM schedule_assistants');
         const parsedSchedules = schedules.map(s => ({ ...s, assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId) }));
@@ -112,7 +132,7 @@ app.get('/api/initial-data', async (req, res) => {
         let parsedSettings = settings[0] || {};
         parsedSettings = { ...parsedSettings, useGradient: Boolean(parsedSettings.useGradient), publicPageEnabled: Boolean(parsedSettings.publicPageEnabled), registrationEnabled: Boolean(parsedSettings.registrationEnabled), socialLoginEnabled: Boolean(parsedSettings.socialLoginEnabled) };
 
-        res.json({ students: parsedStudents, users, academies, graduations, professors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
+        res.json({ students: parsedStudents, users, academies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error fetching data' });
@@ -158,6 +178,9 @@ app.post('/api/students', async (req, res) => {
         if (data.hasOwnProperty('isCompetitor')) {
             data.isCompetitor = data.isCompetitor ? 1 : 0;
         }
+        if (data.hasOwnProperty('isInstructor')) {
+            data.isInstructor = data.isInstructor ? 1 : 0;
+        }
 
         if (data.id) { // UPDATE logic
             const { id, ...updateData } = data;
@@ -182,6 +205,7 @@ app.post('/api/students', async (req, res) => {
                 paymentStatus: 'unpaid', 
                 stripes: 0,
                 isCompetitor: 0,
+                isInstructor: 0,
                 medals: '{}',
                 ...data,
                 id, 
@@ -199,6 +223,46 @@ app.post('/api/students', async (req, res) => {
     }
 });
 app.delete('/api/students/:id', deleteHandler('students'));
+
+app.post('/api/students/promote-instructor', async (req, res) => {
+    const { studentId } = req.body;
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 1. Get Student Data
+        const [students] = await conn.query('SELECT * FROM students WHERE id = ?', [studentId]);
+        if (students.length === 0) throw new Error("Student not found");
+        const student = students[0];
+
+        // 2. Update Student as Instructor
+        await conn.query('UPDATE students SET isInstructor = 1 WHERE id = ?', [studentId]);
+
+        // 3. Insert into Professors
+        const professorId = `prof_inst_${student.id}`;
+        // Check if already exists to avoid duplication
+        const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ? OR email = ?', [student.cpf, student.email]); // Assuming email column exists or using cpf/registration
+        
+        if (existingProf.length === 0) {
+             await conn.query(`
+                INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            `, [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl]);
+        } else {
+             await conn.query('UPDATE professors SET isInstructor = 1, graduationId = ?, academyId = ? WHERE id = ?', 
+                [student.beltId, student.academyId, existingProf[0].id]);
+        }
+
+        await conn.commit();
+        res.json({ success: true });
+    } catch (error) {
+        await conn.rollback();
+        console.error("Error promoting student:", error);
+        res.status(500).json({ message: error.message });
+    } finally {
+        conn.release();
+    }
+});
 
 app.post('/api/students/payment', async (req, res) => {
     const { studentId, status, amount } = req.body;
@@ -228,6 +292,11 @@ app.post('/api/professors', async (req, res) => {
             data.blackBeltDate = data.blackBeltDate.split('T')[0];
         } else if (data.blackBeltDate === '' || data.blackBeltDate === undefined) {
             data.blackBeltDate = null;
+        }
+        if (data.hasOwnProperty('isInstructor')) {
+            data.isInstructor = data.isInstructor ? 1 : 0;
+        } else {
+            data.isInstructor = 0;
         }
         
         // Use INSERT ... ON DUPLICATE KEY UPDATE for safe updates

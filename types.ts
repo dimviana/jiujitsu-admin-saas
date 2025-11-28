@@ -23,6 +23,7 @@ export interface Professor {
     graduationId?: string;
     imageUrl?: string;
     blackBeltDate?: string;
+    isInstructor?: boolean;
 }
 
 export interface Graduation {
@@ -66,6 +67,7 @@ export interface Student {
   lastCompetition?: string;
   password?: string;
   lastSeen?: string;
+  isInstructor?: boolean;
 }
 
 export interface User {

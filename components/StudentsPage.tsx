@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText, Baby } from 'lucide-react';
+import { Award as IconAward, FileText, Baby, Briefcase } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
 
@@ -234,7 +234,7 @@ const calculateAge = (birthDate: string): number => {
 };
 
 const StudentsPage: React.FC = () => {
-    const { students, academies, saveStudent, deleteStudent, loading, graduations, attendanceRecords, schedules, themeSettings, updateStudentPayment } = useContext(AppContext);
+    const { students, academies, saveStudent, deleteStudent, loading, graduations, attendanceRecords, schedules, themeSettings, updateStudentPayment, promoteStudentToInstructor } = useContext(AppContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Partial<Student> | null>(null);
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -431,6 +431,12 @@ const StudentsPage: React.FC = () => {
         }
     };
 
+    const handleInstructorPromotion = async (studentId: string) => {
+        if (window.confirm("Deseja promover este aluno a Instrutor? Ele será adicionado à lista de professores.")) {
+            await promoteStudentToInstructor(studentId);
+        }
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
@@ -472,6 +478,11 @@ const StudentsPage: React.FC = () => {
                         const academy = academies.find(a => a.id === student.academyId);
                         const stripes = student.stripes;
                         const eligibility = eligibilityData.get(student.id);
+
+                        // Determinar se pode ser promovido a instrutor (Faixa Azul = rank aprox 101/2 no seed, mas vamos checar pelo nome ou tipo 'adult' e não ser branca)
+                        // Lógica: Faixa Azul ou superior (Rank > 1 ou específico) e type == 'adult'
+                        const blueBeltRank = graduations.find(g => g.name === 'Azul' && g.type === 'adult')?.rank || 999;
+                        const isEligibleForInstructor = belt && belt.type === 'adult' && belt.rank >= blueBeltRank && !student.isInstructor;
                         
                         return (
                             <Card key={student.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-[328px]">
@@ -528,6 +539,11 @@ const StudentsPage: React.FC = () => {
                                             <span className="text-slate-600 font-medium">Telefone:</span>
                                             <span className="text-slate-700">{student.phone}</span>
                                         </div>
+                                        {student.isInstructor && (
+                                            <div className="mt-2 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded border border-blue-100 text-center font-bold">
+                                                Instrutor
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="mt-auto">
@@ -575,7 +591,12 @@ const StudentsPage: React.FC = () => {
                                             </div>
                                         )}
 
-                                        <div className="mt-4 pt-4 border-t border-slate-200/60 flex justify-end gap-2">
+                                        <div className="mt-4 pt-4 border-t border-slate-200/60 flex flex-wrap justify-end gap-2">
+                                            {isEligibleForInstructor && (
+                                                <Button size="sm" variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleInstructorPromotion(student.id)} title="Promover a Instrutor">
+                                                    <Briefcase className="w-4 h-4" />
+                                                </Button>
+                                            )}
                                             <Button size="sm" variant="secondary" onClick={() => setDashboardStudent(student)}>Dashboard</Button>
                                             <Button size="sm" variant="secondary" onClick={() => handleOpenModal(student)}>Editar</Button>
                                             <Button 

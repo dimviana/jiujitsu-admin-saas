@@ -27,6 +27,7 @@ interface AppContextType {
     saveStudent: (student: Omit<Student, 'id' | 'paymentStatus' | 'lastSeen' | 'paymentHistory'> & { id?: string }) => Promise<void>;
     deleteStudent: (id: string) => Promise<void>;
     updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
+    promoteStudentToInstructor: (studentId: string) => Promise<void>;
     setThemeSettings: (settings: ThemeSettings) => void;
     saveSchedule: (schedule: Omit<ClassSchedule, 'id'> & { id?: string }) => Promise<void>;
     deleteSchedule: (id: string) => Promise<void>;
@@ -284,6 +285,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saveStudent = (studentData: any) => handleApiCall('/api/students', 'POST', studentData, 'Aluno salvo com sucesso.');
     const deleteStudent = (id: string) => handleApiCall(`/api/students/${id}`, 'DELETE', null, 'Aluno removido com sucesso.');
     const updateStudentPayment = (id: string, status: 'paid' | 'unpaid') => handleApiCall('/api/students/payment', 'POST', { studentId: id, status, amount: themeSettings.monthlyFeeAmount }, 'Status de pagamento atualizado.');
+    const promoteStudentToInstructor = (studentId: string) => handleApiCall('/api/students/promote-instructor', 'POST', { studentId }, 'Aluno promovido a instrutor com sucesso.');
     const setThemeSettings = (settings: ThemeSettings) => handleApiCall('/api/settings', 'POST', settings, 'Configurações salvas com sucesso.');
     const saveSchedule = (schedule: any) => handleApiCall('/api/schedules', 'POST', schedule, 'Horário salvo com sucesso.');
     const deleteSchedule = (id: string) => handleApiCall(`/api/schedules/${id}`, 'DELETE', null, 'Horário removido com sucesso.');
@@ -301,7 +303,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             graduations, 
             themeSettings, loading, notification, setNotification,
             globalAcademyFilter, setGlobalAcademyFilter,
-            saveStudent, deleteStudent, updateStudentPayment, setThemeSettings,
+            saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord, saveAcademy,
             login, loginGoogle, registerAcademy, logout,
