@@ -1,3 +1,4 @@
+
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -148,6 +149,14 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE theme_settings ADD COLUMN studentProfileEditEnabled BOOLEAN DEFAULT FALSE");
         }
 
+        // 6. settings JSON on Academies (for individual customization)
+        try {
+             await pool.query("SELECT settings FROM academies LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding settings to academies");
+             await pool.query("ALTER TABLE academies ADD COLUMN settings LONGTEXT");
+        }
+
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
             ...s, 
@@ -160,6 +169,11 @@ app.get('/api/initial-data', async (req, res) => {
 
         const [users] = await pool.query('SELECT * FROM users');
         const [academies] = await pool.query('SELECT * FROM academies');
+        const parsedAcademies = academies.map(a => ({
+            ...a,
+            settings: a.settings ? JSON.parse(a.settings) : {}
+        }));
+
         const [graduations] = await pool.query('SELECT * FROM graduations');
         
         const [professors] = await pool.query('SELECT * FROM professors');
@@ -186,7 +200,7 @@ app.get('/api/initial-data', async (req, res) => {
             studentProfileEditEnabled: Boolean(parsedSettings.studentProfileEditEnabled)
         };
 
-        res.json({ students: parsedStudents, users, academies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
+        res.json({ students: parsedStudents, users, academies: parsedAcademies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error fetching data' });
@@ -196,6 +210,7 @@ app.get('/api/initial-data', async (req, res) => {
 const createHandler = (table) => async (req, res) => {
     try {
         const data = req.body;
+        // Handle JSON columns if needed, though this generic handler is basic
         const keys = Object.keys(data).map(key => `\`${key}\``);
         const values = Object.values(data).map(v => typeof v === 'object' ? JSON.stringify(v) : v);
         await pool.query(`REPLACE INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values);
@@ -432,26 +447,54 @@ app.post('/api/graduations/reorder', async (req, res) => {
 
 app.post('/api/settings', async (req, res) => {
     const s = req.body;
+    const academyId = req.query.academyId;
+
     try {
-        await pool.query(`UPDATE theme_settings SET 
-            systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, 
-            cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?,
-            useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?,
-            publicPageEnabled=?, registrationEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?,
-            socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?
-            WHERE id = 1`,
-            [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
-             s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
-             s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount,
-             s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs,
-             s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled]
-        );
+        if (academyId) {
+            // Academy Specific Update (updates the settings JSON column)
+            // First get existing academy to merge logic if needed, or just overwrite settings JSON
+            // For simplicity, we assume `s` passed is the full object of what we want in settings
+            const settingsJson = JSON.stringify(s);
+            await pool.query('UPDATE academies SET settings = ? WHERE id = ?', [settingsJson, academyId]);
+        } else {
+            // Global Update (Super Admin)
+            await pool.query(`UPDATE theme_settings SET 
+                systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, 
+                cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?,
+                useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?,
+                publicPageEnabled=?, registrationEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?,
+                socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?
+                WHERE id = 1`,
+                [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
+                 s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
+                 s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount,
+                 s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs,
+                 s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled]
+            );
+        }
         res.json({ success: true });
     } catch(e) { console.error(e); res.status(500).send(e.message); }
 });
 
 app.post('/api/attendance', createHandler('attendance_records'));
-app.post('/api/academies', createHandler('academies')); // Enable editing academies
+app.post('/api/academies', async (req, res) => {
+    // Override default generic handler to handle JSON serialization of settings if passed
+    const data = req.body;
+    if (data.settings && typeof data.settings === 'object') {
+        data.settings = JSON.stringify(data.settings);
+    }
+    
+    const keys = Object.keys(data).map(key => `\`${key}\``);
+    const values = Object.values(data).map(v => v); // already stringified
+    
+    try {
+        await pool.query(`REPLACE INTO academies (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values);
+        res.json({ success: true });
+    } catch (e) {
+         console.error(e);
+         res.status(500).json({ message: e.message });
+    }
+});
 
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));

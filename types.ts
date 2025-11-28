@@ -1,6 +1,53 @@
+
 export type Role = 'general_admin' | 'academy_admin' | 'student';
 
 export type DayOfWeek = 'Domingo' | 'Segunda-feira' | 'Terça-feira' | 'Quarta-feira' | 'Quinta-feira' | 'Sexta-feira' | 'Sábado';
+
+export interface ThemeSettings {
+  logoUrl: string;
+  systemName: string;
+  
+  // Colors
+  primaryColor: string;
+  secondaryColor: string;
+  backgroundColor: string;
+  cardBackgroundColor: string;
+  buttonColor: string;
+  buttonTextColor: string;
+  iconColor: string;
+  chartColor1: string;
+  chartColor2: string;
+  useGradient?: boolean;
+
+  // HTML Content
+  heroHtml: string;
+  aboutHtml: string;
+  branchesHtml: string;
+  footerHtml: string;
+  contactHtml: string;
+  
+  // Custom Code
+  customCss?: string;
+  customJs?: string;
+  copyrightText?: string;
+  systemVersion?: string;
+
+  // Financial
+  pixKey: string;
+  pixHolderName: string;
+  monthlyFeeAmount: number;
+  reminderDaysBeforeDue: number;
+  overdueDaysAfterDue: number;
+  
+  // Feature Flags & Integrations
+  publicPageEnabled: boolean;
+  registrationEnabled: boolean;
+  socialLoginEnabled: boolean;
+  studentProfileEditEnabled: boolean;
+  googleClientId?: string;
+  facebookAppId?: string;
+  theme?: string;
+}
 
 export interface Academy {
   id: string;
@@ -12,6 +59,7 @@ export interface Academy {
   imageUrl?: string;
   email: string;
   password?: string; // In real app, never expose this on frontend
+  settings?: Partial<ThemeSettings>; // JSON override for specific academy settings
 }
 
 export interface Professor {
@@ -80,52 +128,6 @@ export interface User {
   token?: string;
   birthDate?: string;
   imageUrl?: string;
-}
-
-export interface ThemeSettings {
-  logoUrl: string;
-  systemName: string;
-  
-  // Colors
-  primaryColor: string;
-  secondaryColor: string;
-  backgroundColor: string;
-  cardBackgroundColor: string;
-  buttonColor: string;
-  buttonTextColor: string;
-  iconColor: string;
-  chartColor1: string;
-  chartColor2: string;
-  useGradient?: boolean;
-
-  // HTML Content
-  heroHtml: string;
-  aboutHtml: string;
-  branchesHtml: string;
-  footerHtml: string;
-  contactHtml: string;
-  
-  // Custom Code
-  customCss?: string;
-  customJs?: string;
-  copyrightText?: string;
-  systemVersion?: string;
-
-  // Financial
-  pixKey: string;
-  pixHolderName: string;
-  monthlyFeeAmount: number;
-  reminderDaysBeforeDue: number;
-  overdueDaysAfterDue: number;
-  
-  // Feature Flags & Integrations
-  publicPageEnabled: boolean;
-  registrationEnabled: boolean;
-  socialLoginEnabled: boolean;
-  studentProfileEditEnabled: boolean; // New Flag
-  googleClientId?: string;
-  facebookAppId?: string;
-  theme?: string;
 }
 
 export interface ClassSchedule {

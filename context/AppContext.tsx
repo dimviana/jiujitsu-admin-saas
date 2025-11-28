@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { 
@@ -67,7 +68,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [allActivityLogs, setAllActivityLogs] = useState<ActivityLog[]>([]);
 
     const [graduations, setGraduations] = useState<Graduation[]>([]);
-    const [themeSettings, setLocalThemeSettings] = useState<ThemeSettings>(MOCK_THEME);
+    const [globalThemeSettings, setGlobalThemeSettings] = useState<ThemeSettings>(MOCK_THEME);
     const [loading, setLoading] = useState(true);
     const [notification, setNotification] = useState<NotificationType | null>(null);
     const [globalAcademyFilter, setGlobalAcademyFilter] = useState('all');
@@ -87,7 +88,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 setAllAttendance(data.attendanceRecords);
                 setAllActivityLogs(data.activityLogs);
                 if (data.themeSettings && data.themeSettings.id) {
-                    setLocalThemeSettings(data.themeSettings);
+                    setGlobalThemeSettings(data.themeSettings);
                 }
             } else {
                 throw new Error("Failed to fetch data from server");
@@ -103,7 +104,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setAllSchedules(SCHEDULES);
             setAllAttendance(ATTENDANCE_RECORDS);
             setAllActivityLogs(ACTIVITY_LOGS);
-            setLocalThemeSettings(MOCK_THEME);
+            setGlobalThemeSettings(MOCK_THEME);
         }
         setLoading(false);
     };
@@ -111,6 +112,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     useEffect(() => {
         refreshData();
     }, []);
+
+    // Derived State: Effective Theme Settings
+    // If logged in as Academy Admin or Student, use Academy settings if available.
+    // If not, use Global Settings.
+    const effectiveThemeSettings = useMemo(() => {
+        if (user && user.role !== 'general_admin' && user.academyId) {
+            const myAcademy = allAcademies.find(a => a.id === user.academyId);
+            if (myAcademy && myAcademy.settings && Object.keys(myAcademy.settings).length > 0) {
+                return { ...globalThemeSettings, ...myAcademy.settings };
+            }
+        }
+        return globalThemeSettings;
+    }, [user, allAcademies, globalThemeSettings]);
 
     // Memoized, filtered data exposed to the app (STRICT ISOLATION)
     const filteredData = useMemo(() => {
@@ -168,13 +182,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     useEffect(() => {
         const root = document.documentElement;
-        root.style.setProperty('--theme-primary', themeSettings.primaryColor);
-        root.style.setProperty('--theme-secondary', themeSettings.secondaryColor);
-        root.style.setProperty('--theme-accent', themeSettings.primaryColor);
-        root.style.setProperty('--theme-bg', themeSettings.backgroundColor);
-        root.style.setProperty('--theme-card-bg', themeSettings.cardBackgroundColor);
-        root.style.setProperty('--theme-text-primary', themeSettings.secondaryColor);
-    }, [themeSettings]);
+        root.style.setProperty('--theme-primary', effectiveThemeSettings.primaryColor);
+        root.style.setProperty('--theme-secondary', effectiveThemeSettings.secondaryColor);
+        root.style.setProperty('--theme-accent', effectiveThemeSettings.primaryColor);
+        root.style.setProperty('--theme-bg', effectiveThemeSettings.backgroundColor);
+        root.style.setProperty('--theme-card-bg', effectiveThemeSettings.cardBackgroundColor);
+        root.style.setProperty('--theme-text-primary', effectiveThemeSettings.secondaryColor);
+    }, [effectiveThemeSettings]);
 
     const handleLoginSuccess = async (userData: User) => {
         localStorage.setItem('jiujitsu-user', JSON.stringify(userData));
@@ -284,9 +298,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const saveStudent = (studentData: any) => handleApiCall('/api/students', 'POST', studentData, 'Aluno salvo com sucesso.');
     const deleteStudent = (id: string) => handleApiCall(`/api/students/${id}`, 'DELETE', null, 'Aluno removido com sucesso.');
-    const updateStudentPayment = (id: string, status: 'paid' | 'unpaid') => handleApiCall('/api/students/payment', 'POST', { studentId: id, status, amount: themeSettings.monthlyFeeAmount }, 'Status de pagamento atualizado.');
+    const updateStudentPayment = (id: string, status: 'paid' | 'unpaid') => handleApiCall('/api/students/payment', 'POST', { studentId: id, status, amount: effectiveThemeSettings.monthlyFeeAmount }, 'Status de pagamento atualizado.');
     const promoteStudentToInstructor = (studentId: string) => handleApiCall('/api/students/promote-instructor', 'POST', { studentId }, 'Aluno promovido a instrutor com sucesso.');
-    const setThemeSettings = (settings: ThemeSettings) => handleApiCall('/api/settings', 'POST', settings, 'Configurações salvas com sucesso.');
+    
+    // Updated setThemeSettings logic
+    const setThemeSettings = (settings: ThemeSettings) => {
+        // Decide whether to update Global Settings (ID 1) or Academy-Specific Settings
+        const queryParams = (user?.role !== 'general_admin' && user?.academyId) ? `?academyId=${user.academyId}` : '';
+        handleApiCall(`/api/settings${queryParams}`, 'POST', settings, 'Configurações salvas com sucesso.');
+    };
+
     const saveSchedule = (schedule: any) => handleApiCall('/api/schedules', 'POST', schedule, 'Horário salvo com sucesso.');
     const deleteSchedule = (id: string) => handleApiCall(`/api/schedules/${id}`, 'DELETE', null, 'Horário removido com sucesso.');
     const saveProfessor = (professor: any) => handleApiCall('/api/professors', 'POST', professor, 'Professor salvo com sucesso.');
@@ -301,7 +322,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         <AppContext.Provider value={{
             user, 
             graduations, 
-            themeSettings, loading, notification, setNotification,
+            themeSettings: effectiveThemeSettings, // Expose the calculated theme
+            loading, notification, setNotification,
             globalAcademyFilter, setGlobalAcademyFilter,
             saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor,

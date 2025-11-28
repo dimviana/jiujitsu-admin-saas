@@ -1,3 +1,4 @@
+
 import React, { useContext, useState, FormEvent } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
@@ -17,9 +18,12 @@ const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { l
 );
 
 const SettingsPage: React.FC = () => {
-    const { themeSettings, setThemeSettings, activityLogs, users, user } = useContext(AppContext);
+    const { themeSettings, setThemeSettings, activityLogs, users, user, academies } = useContext(AppContext);
     const [settings, setSettings] = useState(themeSettings);
     const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos'>('system');
+
+    const isAcademyAdmin = user?.role === 'academy_admin';
+    const currentAcademyName = isAcademyAdmin ? academies.find(a => a.id === user.academyId)?.name : 'Sistema Global';
 
     // Sync local state when themeSettings from context changes
     React.useEffect(() => {
@@ -43,7 +47,14 @@ const SettingsPage: React.FC = () => {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
-            <h1 className="text-3xl font-bold text-[var(--theme-text-primary)]">Configurações</h1>
+            <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold text-[var(--theme-text-primary)]">Configurações</h1>
+                {isAcademyAdmin && (
+                    <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1 rounded-full border border-amber-200">
+                        Editando: {currentAcademyName}
+                    </span>
+                )}
+            </div>
             
             <div className="border-b border-[var(--theme-text-primary)]/10">
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
@@ -53,7 +64,7 @@ const SettingsPage: React.FC = () => {
                     >
                         Sistema
                     </button>
-                    {user?.role === 'general_admin' && (
+                    {(user?.role === 'general_admin' || user?.role === 'academy_admin') && (
                        <button
                             onClick={() => setActiveTab('pagamentos')}
                             className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'pagamentos' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
@@ -176,11 +187,11 @@ const SettingsPage: React.FC = () => {
                             </>
                         )}
                         
-                        {activeTab === 'pagamentos' && user?.role === 'general_admin' && (
+                        {activeTab === 'pagamentos' && (
                             <div className="space-y-6 animate-fade-in-down">
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração PIX</h2>
+                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração Financeira</h2>
                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
-                                  Insira os dados da chave PIX que será usada para receber os pagamentos das mensalidades.
+                                  {isAcademyAdmin ? 'Configure os dados de recebimento da sua academia.' : 'Configure os dados padrão do sistema.'}
                                 </p>
                                 <Input 
                                   label="Chave PIX" 
@@ -197,6 +208,14 @@ const SettingsPage: React.FC = () => {
                                   placeholder="Nome que aparecerá para o pagador"
                                   maxLength={25}
                                 />
+                                <Input 
+                                  label="Valor Padrão da Mensalidade (R$)"
+                                  name="monthlyFeeAmount"
+                                  type="number"
+                                  value={settings.monthlyFeeAmount} 
+                                  onChange={handleChange}
+                                  step="0.01"
+                                />
                             </div>
                         )}
 
@@ -212,11 +231,15 @@ const SettingsPage: React.FC = () => {
                                         </label>
                                     </div>
                                 </div>
-                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">Quando ativada, esta página será a primeira coisa que os visitantes verão antes da tela de login.</p>
+                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
+                                     {isAcademyAdmin 
+                                        ? "Personalize a página pública da sua academia. Ela substituirá a página padrão para seus alunos." 
+                                        : "Quando ativada, esta página será a primeira coisa que os visitantes verão antes da tela de login."}
+                                 </p>
                                  
                                  <Textarea label="Seção Hero (Banner Principal)" name="heroHtml" value={settings.heroHtml} onChange={handleChange} />
                                  <Textarea label="Seção 'Quem Somos'" name="aboutHtml" value={settings.aboutHtml} onChange={handleChange} />
-                                 <Textarea label="Seção 'Filiais'" name="branchesHtml" value={settings.branchesHtml} onChange={handleChange} />
+                                 <Textarea label="Seção 'Filiais' (Opcional)" name="branchesHtml" value={settings.branchesHtml} onChange={handleChange} />
                                  <Textarea label="Rodapé" name="footerHtml" value={settings.footerHtml} onChange={handleChange} />
                                  <Textarea label="CSS Personalizado" name="customCss" value={settings.customCss || ''} onChange={handleChange} />
                                  <Textarea label="JavaScript Personalizado" name="customJs" value={settings.customJs || ''} onChange={handleChange} />
