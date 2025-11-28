@@ -1,5 +1,3 @@
-
-
 import React, { useState, useContext, FormEvent, useEffect, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Eye as IconEye, EyeOff as IconEyeOff, Facebook } from 'lucide-react';
@@ -15,28 +13,6 @@ declare global {
 
 const formatCPF = (value: string): string => {
   return value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2').replace(/(-\d{2})\d+?$/, '$1');
-};
-
-const validateCPF = (cpf: string): boolean => {
-    if (typeof cpf !== 'string') return false;
-    cpf = cpf.replace(/[^\d]+/g, '');
-    if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
-
-    const digits = cpf.split('').map(el => +el);
-
-    const rest = (count: number): number => {
-        let sum = 0;
-        for (let i = 0; i < count; i++) {
-        sum += digits[i] * (count + 1 - i);
-        }
-        const remainder = sum % 11;
-        return remainder < 2 ? 0 : 11 - remainder;
-    };
-
-    if (rest(9) !== digits[9]) return false;
-    if (rest(10) !== digits[10]) return false;
-
-    return true;
 };
 
 interface RegisterFormProps {
@@ -80,134 +56,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSave, onClose }) => {
   );
 };
 
-interface StudentRegisterFormProps {
-    onClose: () => void;
-}
-
-const StudentRegisterForm: React.FC<StudentRegisterFormProps> = ({ onClose }) => {
-    const { academies } = useContext(AppContext);
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-        cpf: '',
-        phone: '',
-        birthDate: '',
-        academyId: ''
-    });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
-
-    const availableAcademies = academies.filter(a => a.status === 'active' && a.allowStudentRegistration);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        if (name === 'cpf') {
-            setFormData(prev => ({ ...prev, cpf: formatCPF(value) }));
-        } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
-        }
-    };
-
-    const handleSubmit = async (e: FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setSuccess('');
-
-        if (formData.password !== formData.confirmPassword) {
-            setError("As senhas não coincidem.");
-            return;
-        }
-
-        if (!validateCPF(formData.cpf)) {
-            setError("CPF inválido.");
-            return;
-        }
-
-        setLoading(true);
-        try {
-            const res = await fetch('/api/register-student', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-            const data = await res.json();
-            
-            if (res.ok) {
-                setSuccess(data.message || 'Cadastro realizado com sucesso! Aguarde aprovação.');
-                setTimeout(() => onClose(), 3000);
-            } else {
-                setError(data.message || 'Erro ao realizar cadastro.');
-            }
-        } catch (err) {
-            setError("Erro de conexão. Tente novamente.");
-        }
-        setLoading(false);
-    };
-
-    if (success) {
-        return (
-            <div className="text-center p-6 space-y-4">
-                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                </div>
-                <h3 className="text-xl font-bold text-slate-800">Sucesso!</h3>
-                <p className="text-slate-600">{success}</p>
-                <p className="text-sm text-slate-500">Você será redirecionado em instantes...</p>
-            </div>
-        );
-    }
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-             {error && <p className="text-sm text-center text-red-600 bg-red-100 p-3 rounded-md">{error}</p>}
-            
-            <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} required />
-            <Input label="Email" name="email" type="email" value={formData.email} onChange={handleChange} required />
-            
-            <div className="grid grid-cols-2 gap-4">
-                <Input label="CPF" name="cpf" value={formData.cpf} onChange={handleChange} required maxLength={14} />
-                <Input label="Nascimento" name="birthDate" type="date" value={formData.birthDate} onChange={handleChange} required />
-            </div>
-            
-            <Input label="Telefone" name="phone" value={formData.phone} onChange={handleChange} required placeholder="(00) 00000-0000" />
-
-            <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Selecione sua Academia</label>
-                <select 
-                    name="academyId" 
-                    value={formData.academyId} 
-                    onChange={handleChange} 
-                    required 
-                    className="w-full bg-white border border-slate-200 rounded-lg p-2.5 focus:ring-primary focus:border-primary outline-none"
-                >
-                    <option value="">Selecione...</option>
-                    {availableAcademies.map(ac => (
-                        <option key={ac.id} value={ac.id}>{ac.name}</option>
-                    ))}
-                </select>
-                {availableAcademies.length === 0 && (
-                    <p className="text-xs text-red-500 mt-1">Nenhuma academia aceitando registros no momento.</p>
-                )}
-            </div>
-
-            <hr className="my-2" />
-            
-            <Input label="Senha" name="password" type="password" value={formData.password} onChange={handleChange} required />
-            <Input label="Confirmar Senha" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} required />
-
-            <div className="flex justify-end gap-4 pt-4">
-                <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
-                <Button type="submit" disabled={loading || availableAcademies.length === 0}>
-                    {loading ? 'Enviando...' : 'Solicitar Cadastro'}
-                </Button>
-            </div>
-        </form>
-    );
-};
-
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -215,7 +63,6 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
-  const [isStudentRegisterModalOpen, setIsStudentRegisterModalOpen] = useState(false);
   const [isNotFoundModalOpen, setIsNotFoundModalOpen] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
   
@@ -356,25 +203,16 @@ const Login: React.FC = () => {
                         </div>
                     </div>
                 )}
-                
-                <div className="text-center mt-6 space-y-2 pt-4 border-t border-[var(--theme-text-primary)]/10">
-                    <button onClick={() => setIsStudentRegisterModalOpen(true)} className="text-sm font-medium text-[var(--theme-accent)] hover:underline block w-full">
-                        Sou Aluno e quero me cadastrar
-                    </button>
 
-                    {themeSettings.registrationEnabled && (
-                        <button onClick={() => setIsRegisterModalOpen(true)} className="text-sm font-medium text-[var(--theme-text-primary)] hover:text-[var(--theme-accent)] hover:underline block w-full">
-                            Cadastre sua academia
+                {themeSettings.registrationEnabled && (
+                    <div className="text-center mt-6 text-sm pt-4 border-t border-[var(--theme-text-primary)]/10">
+                        <button onClick={() => setIsRegisterModalOpen(true)} className="font-semibold text-[var(--theme-accent)] hover:underline">
+                            Não tem uma conta? Cadastre sua academia
                         </button>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
         </main>
-        
-        <Modal isOpen={isStudentRegisterModalOpen} onClose={() => setIsStudentRegisterModalOpen(false)} title="Cadastro de Aluno">
-            <StudentRegisterForm onClose={() => setIsStudentRegisterModalOpen(false)} />
-        </Modal>
-
         {themeSettings.registrationEnabled && (
             <>
                 <Modal isOpen={isRegisterModalOpen} onClose={() => setIsRegisterModalOpen(false)} title="Cadastrar Nova Academia">

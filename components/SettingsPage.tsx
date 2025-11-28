@@ -1,8 +1,6 @@
 
 
-
-
-import React, { useContext, useState, FormEvent, useEffect } from 'react';
+import React, { useContext, useState, FormEvent } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -21,29 +19,15 @@ const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { l
 );
 
 const SettingsPage: React.FC = () => {
-    const { themeSettings, setThemeSettings, activityLogs, users, user, academies, saveAcademy } = useContext(AppContext);
+    const { themeSettings, setThemeSettings, activityLogs, users, user, academies } = useContext(AppContext);
     const [settings, setSettings] = useState(themeSettings);
     const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos'>('system');
-    
-    // State for Academy Specific Settings (like allowStudentRegistration)
-    const [allowRegistration, setAllowRegistration] = useState(false);
 
     const isAcademyAdmin = user?.role === 'academy_admin';
     const currentAcademyName = isAcademyAdmin ? academies.find(a => a.id === user.academyId)?.name : 'Sistema Global';
-    
-    // Initialize allowRegistration state from current academy data
-    useEffect(() => {
-        if (isAcademyAdmin && user?.academyId) {
-            const myAcademy = academies.find(a => a.id === user.academyId);
-            if (myAcademy) {
-                setAllowRegistration(!!myAcademy.allowStudentRegistration);
-            }
-        }
-    }, [isAcademyAdmin, user?.academyId, academies]);
-
 
     // Sync local state when themeSettings from context changes
-    useEffect(() => {
+    React.useEffect(() => {
         setSettings(themeSettings);
     }, [themeSettings]);
 
@@ -57,22 +41,9 @@ const SettingsPage: React.FC = () => {
         }));
     };
     
-    const handleSubmit = async (e: FormEvent) => {
+    const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
-        
-        // Save Theme Settings
         setThemeSettings(settings);
-
-        // Save Academy Specific Settings (allowStudentRegistration)
-        if (isAcademyAdmin && user?.academyId) {
-            const myAcademy = academies.find(a => a.id === user.academyId);
-            if (myAcademy) {
-                await saveAcademy({
-                    ...myAcademy,
-                    allowStudentRegistration: allowRegistration
-                });
-            }
-        }
     };
 
     return (
@@ -183,19 +154,6 @@ const SettingsPage: React.FC = () => {
                                 </div>
 
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2 pt-4">Controle de Acesso</h2>
-                                {isAcademyAdmin && (
-                                     <div className="flex justify-between items-center p-3 bg-[var(--theme-bg)] rounded-lg mb-2">
-                                        <div className="pr-4">
-                                            <label htmlFor="allowRegistration" className="font-medium text-[var(--theme-text-primary)] block">Permitir auto-cadastro de alunos</label>
-                                            <p className="text-xs text-[var(--theme-text-primary)]/60">Se ativado, alunos poderão se cadastrar na tela de login selecionando sua academia. O cadastro ficará pendente até sua aprovação.</p>
-                                        </div>
-                                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                            <input type="checkbox" id="allowRegistration" checked={allowRegistration} onChange={(e) => setAllowRegistration(e.target.checked)} className="sr-only peer" />
-                                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
-                                        </label>
-                                    </div>
-                                )}
-                                
                                 {user?.role === 'general_admin' && (
                                     <div className="flex justify-between items-center p-3 bg-[var(--theme-bg)] rounded-lg mb-2">
                                         <label htmlFor="registrationEnabled" className="font-medium text-[var(--theme-text-primary)]">Permitir cadastro de novas academias</label>

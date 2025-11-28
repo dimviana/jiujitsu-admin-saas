@@ -1,5 +1,3 @@
-
-
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Student, Graduation } from '../types';
@@ -8,7 +6,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText, Baby, Briefcase, CheckCircle, XCircle } from 'lucide-react';
+import { Award as IconAward, FileText, Baby, Briefcase } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
 import { ConfirmationModal } from './ui/ConfirmationModal';
@@ -261,13 +259,13 @@ const calculateAge = (birthDate: string): number => {
 };
 
 const StudentsPage: React.FC = () => {
-    const { students, academies, saveStudent, deleteStudent, updateStudentStatus, loading, graduations, attendanceRecords, schedules, themeSettings, updateStudentPayment, promoteStudentToInstructor } = useContext(AppContext);
+    const { students, academies, saveStudent, deleteStudent, loading, graduations, attendanceRecords, schedules, themeSettings, updateStudentPayment, promoteStudentToInstructor } = useContext(AppContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Partial<Student> | null>(null);
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
     const [studentForPhoto, setStudentForPhoto] = useState<Student | null>(null);
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
-    const [activeTab, setActiveTab] = useState<'adults' | 'kids' | 'pending'>('adults');
+    const [activeTab, setActiveTab] = useState<'adults' | 'kids'>('adults');
     
     // Confirmation Modal States
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -277,8 +275,6 @@ const StudentsPage: React.FC = () => {
     const [isInstructorPromoteModalOpen, setIsInstructorPromoteModalOpen] = useState(false);
     const [studentToPromoteInstructor, setStudentToPromoteInstructor] = useState<Student | null>(null);
 
-    const pendingStudents = useMemo(() => students.filter(s => s.status === 'pending'), [students]);
-    
     const eligibilityData = useMemo(() => {
         const data = new Map<string, { eligible: boolean; nextBelt: Graduation | null; reason: string }>();
         if (!students.length || !graduations.length) return data;
@@ -286,8 +282,6 @@ const StudentsPage: React.FC = () => {
         const sortedGraduations = [...graduations].sort((a, b) => a.rank - b.rank);
 
         for (const student of students) {
-            if (student.status === 'pending') continue;
-
             const currentBelt = sortedGraduations.find(g => g.id === student.beltId);
             if (!currentBelt) {
                 data.set(student.id, { eligible: false, nextBelt: null, reason: "Faixa atual não encontrada." });
@@ -386,16 +380,11 @@ const StudentsPage: React.FC = () => {
     }, [students, graduations, attendanceRecords]);
 
     const filteredStudents = useMemo(() => {
-        if (activeTab === 'pending') {
-            return pendingStudents;
-        }
-        // Exclude pending from other tabs
-        const activeStudents = students.filter(s => s.status !== 'pending');
         if (activeTab === 'adults') {
-            return activeStudents.filter(student => calculateAge(student.birthDate || '') >= 16);
+            return students.filter(student => calculateAge(student.birthDate || '') >= 16);
         }
-        return activeStudents.filter(student => calculateAge(student.birthDate || '') < 16);
-    }, [students, activeTab, pendingStudents]);
+        return students.filter(student => calculateAge(student.birthDate || '') < 16);
+    }, [students, activeTab]);
 
 
     const handlePromoteStudent = async (studentId: string) => {
@@ -495,19 +484,6 @@ const StudentsPage: React.FC = () => {
         }
     }
 
-    // Approve/Reject Handlers
-    const handleApproveStudent = async (student: Student) => {
-        if (window.confirm(`Deseja aprovar o cadastro de ${student.name}?`)) {
-            await updateStudentStatus(student.id, 'active');
-        }
-    };
-
-    const handleRejectStudent = async (student: Student) => {
-        if (window.confirm(`Deseja REJEITAR (excluir) o cadastro de ${student.name}?`)) {
-            await deleteStudent(student.id);
-        }
-    };
-
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
@@ -525,7 +501,7 @@ const StudentsPage: React.FC = () => {
                                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                         }`}
                     >
-                        Adultos ({students.filter(s => s.status !== 'pending' && calculateAge(s.birthDate || '') >= 16).length})
+                        Adultos ({students.filter(s => calculateAge(s.birthDate || '') >= 16).length})
                     </button>
                     <button
                         onClick={() => setActiveTab('kids')}
@@ -535,21 +511,8 @@ const StudentsPage: React.FC = () => {
                                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                         }`}
                     >
-                        Infantil/Infanto Juvenil ({students.filter(s => s.status !== 'pending' && calculateAge(s.birthDate || '') < 16).length})
+                        Infantil/Infanto Juvenil ({students.filter(s => calculateAge(s.birthDate || '') < 16).length})
                     </button>
-                    {pendingStudents.length > 0 && (
-                        <button
-                            onClick={() => setActiveTab('pending')}
-                            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                                activeTab === 'pending'
-                                    ? 'border-amber-500 text-amber-600'
-                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                            }`}
-                        >
-                            Pendentes 
-                            <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingStudents.length}</span>
-                        </button>
-                    )}
                 </nav>
             </div>
             
@@ -562,13 +525,14 @@ const StudentsPage: React.FC = () => {
                         const academy = academies.find(a => a.id === student.academyId);
                         const stripes = student.stripes;
                         const eligibility = eligibilityData.get(student.id);
-                        const isPending = student.status === 'pending';
 
+                        // Determinar se pode ser promovido a instrutor (Faixa Azul = rank aprox 101/2 no seed, mas vamos checar pelo nome ou tipo 'adult' e não ser branca)
+                        // Lógica: Faixa Azul ou superior (Rank > 1 ou específico) e type == 'adult'
                         const blueBeltRank = graduations.find(g => g.name === 'Azul' && g.type === 'adult')?.rank || 999;
-                        const isEligibleForInstructor = !isPending && belt && belt.type === 'adult' && belt.rank >= blueBeltRank && !student.isInstructor;
+                        const isEligibleForInstructor = belt && belt.type === 'adult' && belt.rank >= blueBeltRank && !student.isInstructor;
                         
                         return (
-                            <Card key={student.id} className={`p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-[328px] ${isPending ? 'border-2 border-amber-300' : ''}`}>
+                            <Card key={student.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-[328px]">
                                 <div 
                                     className="h-2" 
                                     style={{ 
@@ -579,156 +543,137 @@ const StudentsPage: React.FC = () => {
                                 ></div>
                                 <div className="p-5 flex flex-col flex-grow">
                                     <div className="flex items-center mb-4">
-                                        <button onClick={() => !isPending && handleOpenPhotoModal(student)} className={`relative group flex-shrink-0 ${isPending ? 'cursor-default' : ''}`}>
+                                        <button onClick={() => handleOpenPhotoModal(student)} className="relative group flex-shrink-0">
                                             <img 
                                                 src={student.imageUrl || `https://i.pravatar.cc/150?u=${student.cpf}`} 
                                                 alt={student.name} 
                                                 className="w-16 h-16 rounded-full object-cover border-2 border-slate-200 group-hover:opacity-75 transition-opacity"
                                             />
-                                            {!isPending && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-full transition-opacity">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white opacity-0 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                                </div>
-                                            )}
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-full transition-opacity">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white opacity-0 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                            </div>
                                         </button>
                                         <div className="ml-4">
                                             <h2 className="text-xl font-bold text-slate-800">{student.name}</h2>
                                             <p className="text-sm text-slate-500">{academy?.name || 'N/A'}</p>
                                         </div>
                                     </div>
-
-                                    {isPending ? (
-                                        <div className="bg-amber-50 border border-amber-200 rounded p-3 mb-4 text-sm text-amber-800">
-                                            <p className="font-bold mb-1">Cadastro Pendente</p>
-                                            <p className="text-xs">Este aluno solicitou cadastro e aguarda sua aprovação.</p>
-                                            <div className="flex gap-2 mt-3">
-                                                <Button size="sm" variant="success" className="flex-1" onClick={() => handleApproveStudent(student)}>
-                                                    <CheckCircle className="w-4 h-4 mr-1" /> Aprovar
-                                                </Button>
-                                                <Button size="sm" variant="danger" className="flex-1" onClick={() => handleRejectStudent(student)}>
-                                                    <XCircle className="w-4 h-4 mr-1" /> Rejeitar
-                                                </Button>
-                                            </div>
+                                    
+                                    <div className="space-y-3 text-sm">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-600 font-medium">Pagamento:</span>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${student.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                {student.paymentStatus === 'paid' ? 'Em Dia' : 'Pendente'}
+                                            </span>
                                         </div>
-                                    ) : (
-                                        <div className="space-y-3 text-sm">
+                                        {belt && (
                                             <div className="flex justify-between items-center">
-                                                <span className="text-slate-600 font-medium">Pagamento:</span>
-                                                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${student.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                                    {student.paymentStatus === 'paid' ? 'Em Dia' : 'Pendente'}
-                                                </span>
-                                            </div>
-                                            {belt && (
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-slate-600 font-medium">Graduação:</span>
-                                                    <div className="flex items-center">
-                                                        <span 
-                                                            className="w-4 h-4 rounded-full mr-2 border border-slate-300" 
-                                                            style={getBeltStyle(belt)} // Use the gradient function here
-                                                        ></span>
-                                                        <span className="font-medium text-slate-700">{belt.name}</span>
-                                                        {/* Visual Indicator for Kids Belt */}
-                                                        {belt.type === 'kids' && (
-                                                            <span title="Graduação Infantil">
-                                                                <Baby className="w-4 h-4 ml-1 text-pink-400" />
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                                <span className="text-slate-600 font-medium">Graduação:</span>
+                                                <div className="flex items-center">
+                                                    <span 
+                                                        className="w-4 h-4 rounded-full mr-2 border border-slate-300" 
+                                                        style={getBeltStyle(belt)} // Use the gradient function here
+                                                    ></span>
+                                                    <span className="font-medium text-slate-700">{belt.name}</span>
+                                                    {/* Visual Indicator for Kids Belt */}
+                                                    {belt.type === 'kids' && (
+                                                        <span title="Graduação Infantil">
+                                                            <Baby className="w-4 h-4 ml-1 text-pink-400" />
+                                                        </span>
+                                                    )}
                                                 </div>
-                                            )}
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-slate-600 font-medium">Idade:</span>
-                                                <span className="font-medium text-slate-700">{calculateAge(student.birthDate || '')} anos</span>
                                             </div>
-                                             <div className="flex justify-between items-center">
-                                                <span className="text-slate-600 font-medium">CPF:</span>
-                                                <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">
-                                                    {student.cpf ? student.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : 'N/A'}
-                                                </span>
-                                            </div>
-                                             <div className="flex justify-between items-center">
-                                                <span className="text-slate-600 font-medium">Telefone:</span>
-                                                <span className="text-slate-700">{student.phone}</span>
-                                            </div>
-                                            {student.isInstructor && (
-                                                <div className="mt-2 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded border border-blue-100 text-center font-bold">
-                                                    Instrutor
-                                                </div>
-                                            )}
+                                        )}
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-600 font-medium">Idade:</span>
+                                            <span className="font-medium text-slate-700">{calculateAge(student.birthDate || '')} anos</span>
                                         </div>
-                                    )}
+                                         <div className="flex justify-between items-center">
+                                            <span className="text-slate-600 font-medium">CPF:</span>
+                                            <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">
+                                                {student.cpf ? student.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : 'N/A'}
+                                            </span>
+                                        </div>
+                                         <div className="flex justify-between items-center">
+                                            <span className="text-slate-600 font-medium">Telefone:</span>
+                                            <span className="text-slate-700">{student.phone}</span>
+                                        </div>
+                                        {student.isInstructor && (
+                                            <div className="mt-2 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded border border-blue-100 text-center font-bold">
+                                                Instrutor
+                                            </div>
+                                        )}
+                                    </div>
 
-                                    {!isPending && (
-                                        <div className="mt-auto">
-                                            <div className="pt-4 mt-4">
-                                                <div 
-                                                    className="w-full h-7 rounded-md flex items-center justify-end" 
-                                                    style={{ 
-                                                        background: belt?.color2 
-                                                            ? `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)` 
-                                                            : belt?.color || '#e2e8f0', 
-                                                        border: '1px solid rgba(0,0,0,0.1)' 
-                                                    }}
-                                                    title={`${belt?.name} - ${stripes} grau(s)`}
-                                                >
-                                                    <div className="h-full w-1/4 bg-black flex items-center justify-center space-x-1 p-1">
-                                                        {Array.from({ length: stripes }).map((_, index) => (
-                                                            <div key={index} className="h-5 w-1 bg-white"></div>
-                                                        ))}
-                                                    </div>
+                                    <div className="mt-auto">
+                                        <div className="pt-4 mt-4">
+                                            <div 
+                                                className="w-full h-7 rounded-md flex items-center justify-end" 
+                                                style={{ 
+                                                    background: belt?.color2 
+                                                        ? `linear-gradient(90deg, ${belt.color} 0%, ${belt.color2} 50%, ${belt.color3 || belt.color2} 100%)` 
+                                                        : belt?.color || '#e2e8f0', 
+                                                    border: '1px solid rgba(0,0,0,0.1)' 
+                                                }}
+                                                title={`${belt?.name} - ${stripes} grau(s)`}
+                                            >
+                                                <div className="h-full w-1/4 bg-black flex items-center justify-center space-x-1 p-1">
+                                                    {Array.from({ length: stripes }).map((_, index) => (
+                                                        <div key={index} className="h-5 w-1 bg-white"></div>
+                                                    ))}
                                                 </div>
                                             </div>
-                                            
-                                            {student.isCompetitor && student.medals && (student.medals.gold > 0 || student.medals.silver > 0 || student.medals.bronze > 0) && (
-                                                <div className="mt-4 pt-4 border-t border-slate-200/60">
-                                                    <div className="flex justify-center items-center gap-6">
-                                                        <div className="flex items-center" title={`${student.medals.gold} Ouro`}>
-                                                            <IconAward className="w-6 h-6 text-yellow-500" />
-                                                            <span className="ml-1.5 font-bold text-lg text-slate-700">{student.medals.gold}</span>
-                                                        </div>
-                                                        <div className="flex items-center" title={`${student.medals.silver} Prata`}>
-                                                            <IconAward className="w-6 h-6 text-slate-400" />
-                                                            <span className="ml-1.5 font-bold text-lg text-slate-700">{student.medals.silver}</span>
-                                                        </div>
-                                                        <div className="flex items-center" title={`${student.medals.bronze} Bronze`}>
-                                                            <IconAward className="w-6 h-6 text-orange-400" />
-                                                            <span className="ml-1.5 font-bold text-lg text-slate-700">{student.medals.bronze}</span>
-                                                        </div>
+                                        </div>
+                                        
+                                        {student.isCompetitor && student.medals && (student.medals.gold > 0 || student.medals.silver > 0 || student.medals.bronze > 0) && (
+                                            <div className="mt-4 pt-4 border-t border-slate-200/60">
+                                                <div className="flex justify-center items-center gap-6">
+                                                    <div className="flex items-center" title={`${student.medals.gold} Ouro`}>
+                                                        <IconAward className="w-6 h-6 text-yellow-500" />
+                                                        <span className="ml-1.5 font-bold text-lg text-slate-700">{student.medals.gold}</span>
                                                     </div>
-                                                    {student.lastCompetition && <p className="text-xs text-slate-500 mt-2 text-center">Última competição: {student.lastCompetition}</p>}
+                                                    <div className="flex items-center" title={`${student.medals.silver} Prata`}>
+                                                        <IconAward className="w-6 h-6 text-slate-400" />
+                                                        <span className="ml-1.5 font-bold text-lg text-slate-700">{student.medals.silver}</span>
+                                                    </div>
+                                                    <div className="flex items-center" title={`${student.medals.bronze} Bronze`}>
+                                                        <IconAward className="w-6 h-6 text-orange-400" />
+                                                        <span className="ml-1.5 font-bold text-lg text-slate-700">{student.medals.bronze}</span>
+                                                    </div>
                                                 </div>
-                                            )}
+                                                {student.lastCompetition && <p className="text-xs text-slate-500 mt-2 text-center">Última competição: {student.lastCompetition}</p>}
+                                            </div>
+                                        )}
 
-                                            {eligibility && eligibility.eligible && eligibility.nextBelt && (
-                                                <div className="mt-4 p-3 bg-green-100 rounded-lg text-center border border-green-200">
-                                                    <p className="font-bold text-green-800">Elegível para {eligibility.nextBelt.name}!</p>
-                                                    <p className="text-xs text-green-700">{eligibility.reason}</p>
-                                                    <Button size="sm" variant="success" className="w-full mt-2" onClick={() => handlePromoteStudent(student.id)}>
-                                                        Promover Aluno
-                                                    </Button>
-                                                </div>
-                                            )}
-
-                                            <div className="mt-4 pt-4 border-t border-slate-200/60 flex flex-wrap justify-end gap-2">
-                                                {isEligibleForInstructor && (
-                                                    <Button size="sm" variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleInstructorPromotionClick(student)} title="Promover a Instrutor">
-                                                        <Briefcase className="w-4 h-4" />
-                                                    </Button>
-                                                )}
-                                                <Button size="sm" variant="secondary" onClick={() => setDashboardStudent(student)}>Dashboard</Button>
-                                                <Button size="sm" variant="secondary" onClick={() => handleOpenModal(student)}>Editar</Button>
-                                                <Button 
-                                                    size="sm" 
-                                                    variant="secondary" 
-                                                    onClick={() => handleGenerateCertificate(student)} 
-                                                    title="Gerar Certificado"
-                                                >
-                                                    <FileText className="w-4 h-4" />
+                                        {eligibility && eligibility.eligible && eligibility.nextBelt && (
+                                            <div className="mt-4 p-3 bg-green-100 rounded-lg text-center border border-green-200">
+                                                <p className="font-bold text-green-800">Elegível para {eligibility.nextBelt.name}!</p>
+                                                <p className="text-xs text-green-700">{eligibility.reason}</p>
+                                                <Button size="sm" variant="success" className="w-full mt-2" onClick={() => handlePromoteStudent(student.id)}>
+                                                    Promover Aluno
                                                 </Button>
-                                                <Button size="sm" variant="danger" onClick={() => handleDeleteClick(student)}>Excluir</Button>
                                             </div>
+                                        )}
+
+                                        <div className="mt-4 pt-4 border-t border-slate-200/60 flex flex-wrap justify-end gap-2">
+                                            {isEligibleForInstructor && (
+                                                <Button size="sm" variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleInstructorPromotionClick(student)} title="Promover a Instrutor">
+                                                    <Briefcase className="w-4 h-4" />
+                                                </Button>
+                                            )}
+                                            <Button size="sm" variant="secondary" onClick={() => setDashboardStudent(student)}>Dashboard</Button>
+                                            <Button size="sm" variant="secondary" onClick={() => handleOpenModal(student)}>Editar</Button>
+                                            <Button 
+                                                size="sm" 
+                                                variant="secondary" 
+                                                onClick={() => handleGenerateCertificate(student)} 
+                                                title="Gerar Certificado"
+                                            >
+                                                <FileText className="w-4 h-4" />
+                                            </Button>
+                                            <Button size="sm" variant="danger" onClick={() => handleDeleteClick(student)}>Excluir</Button>
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
                             </Card>
                         );
@@ -738,7 +683,7 @@ const StudentsPage: React.FC = () => {
                         </div>
                     )}
                 </div>
-             )}
+            )}
 
             <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={selectedStudent?.id ? 'Editar Aluno' : 'Adicionar Aluno'}>
                 <StudentForm student={selectedStudent} onSave={handleSaveStudent} onClose={handleCloseModal} />
