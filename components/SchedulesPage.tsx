@@ -6,7 +6,8 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
-import { Heart, Shield, Users, FileText } from 'lucide-react';
+import { Heart, Shield, Users, FileText, CalendarCheck } from 'lucide-react';
+import { ConfirmationModal } from './ui/ConfirmationModal';
 
 interface ScheduleFormProps {
   schedule: Partial<ClassSchedule> | null;
@@ -137,10 +138,14 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
 
 
 const SchedulesPage: React.FC = () => {
-  const { schedules, saveSchedule, deleteSchedule, loading, professors, academies, user, graduations } = useContext(AppContext);
+  const { schedules, saveSchedule, deleteSchedule, loading, professors, academies, user, graduations, setNotification } = useContext(AppContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Partial<ClassSchedule> | null>(null);
   
+  // Booking Modal State
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [bookingSchedule, setBookingSchedule] = useState<ClassSchedule | null>(null);
+
   // Favorites State
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
@@ -198,6 +203,22 @@ const SchedulesPage: React.FC = () => {
     if (window.confirm('Tem certeza que deseja excluir este horário?')) {
       await deleteSchedule(id);
     }
+  };
+  
+  const handleBookClick = (schedule: ClassSchedule) => {
+      setBookingSchedule(schedule);
+      setIsBookingModalOpen(true);
+  };
+
+  const handleConfirmBooking = () => {
+      // In a real app, this would call an API to register the booking
+      setNotification({
+          message: 'Agendamento Confirmado',
+          details: `Você agendou sua presença na aula de ${bookingSchedule?.className}.`,
+          type: 'success'
+      });
+      setIsBookingModalOpen(false);
+      setBookingSchedule(null);
   };
   
   const isAdmin = user?.role === 'general_admin' || user?.role === 'academy_admin';
@@ -306,6 +327,15 @@ const SchedulesPage: React.FC = () => {
                                     <Button size="sm" variant="danger" onClick={() => handleDelete(schedule.id)}>Excluir</Button>
                                 </div>
                             )}
+
+                            {user?.role === 'student' && (
+                                <div className="mt-5 pt-4 border-t border-slate-200/60 flex justify-end gap-2">
+                                     <Button size="sm" onClick={() => handleBookClick(schedule)} className="w-full">
+                                        <CalendarCheck className="w-4 h-4 mr-2" />
+                                        Agendar Aula
+                                     </Button>
+                                </div>
+                            )}
                         </div>
                     </Card>
                 );
@@ -316,6 +346,16 @@ const SchedulesPage: React.FC = () => {
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={selectedSchedule?.id ? 'Editar Horário' : 'Adicionar Horário'}>
         <ScheduleForm schedule={selectedSchedule} onSave={handleSave} onClose={handleCloseModal} />
       </Modal>
+
+      <ConfirmationModal
+          isOpen={isBookingModalOpen}
+          onClose={() => setIsBookingModalOpen(false)}
+          onConfirm={handleConfirmBooking}
+          title="Agendar Aula"
+          message={`Deseja confirmar o agendamento para a aula de ${bookingSchedule?.className} (${bookingSchedule?.dayOfWeek})?`}
+          confirmText="Confirmar Presença"
+          variant="success"
+      />
     </div>
   );
 };

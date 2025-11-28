@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Student, Graduation } from '../types';
@@ -247,6 +248,10 @@ const StudentsPage: React.FC = () => {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
 
+    // Instructor Promotion Modal States
+    const [isInstructorPromoteModalOpen, setIsInstructorPromoteModalOpen] = useState(false);
+    const [studentToPromoteInstructor, setStudentToPromoteInstructor] = useState<Student | null>(null);
+
     const eligibilityData = useMemo(() => {
         const data = new Map<string, { eligible: boolean; nextBelt: Graduation | null; reason: string }>();
         if (!students.length || !graduations.length) return data;
@@ -444,9 +449,15 @@ const StudentsPage: React.FC = () => {
         }
     };
 
-    const handleInstructorPromotion = async (studentId: string) => {
-        if (window.confirm("Deseja promover este aluno a Instrutor? Ele será adicionado à lista de professores.")) {
-            await promoteStudentToInstructor(studentId);
+    const handleInstructorPromotionClick = (student: Student) => {
+        setStudentToPromoteInstructor(student);
+        setIsInstructorPromoteModalOpen(true);
+    }
+
+    const handleConfirmInstructorPromotion = async () => {
+        if (studentToPromoteInstructor) {
+            await promoteStudentToInstructor(studentToPromoteInstructor.id);
+            setStudentToPromoteInstructor(null);
         }
     }
 
@@ -606,7 +617,7 @@ const StudentsPage: React.FC = () => {
 
                                         <div className="mt-4 pt-4 border-t border-slate-200/60 flex flex-wrap justify-end gap-2">
                                             {isEligibleForInstructor && (
-                                                <Button size="sm" variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleInstructorPromotion(student.id)} title="Promover a Instrutor">
+                                                <Button size="sm" variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleInstructorPromotionClick(student)} title="Promover a Instrutor">
                                                     <Briefcase className="w-4 h-4" />
                                                 </Button>
                                             )}
@@ -675,6 +686,16 @@ const StudentsPage: React.FC = () => {
                 confirmText="Sim, excluir"
                 cancelText="Não"
                 variant="danger"
+            />
+
+            <ConfirmationModal
+                isOpen={isInstructorPromoteModalOpen}
+                onClose={() => setIsInstructorPromoteModalOpen(false)}
+                onConfirm={handleConfirmInstructorPromotion}
+                title="Promover a Instrutor"
+                message={`Deseja promover ${studentToPromoteInstructor?.name} a Instrutor? Ele será adicionado à lista de professores.`}
+                confirmText="Sim, promover"
+                variant="success"
             />
         </div>
     );
