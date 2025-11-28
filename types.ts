@@ -68,6 +68,7 @@ export interface Academy {
   password?: string; // In real app, never expose this on frontend
   settings?: Partial<ThemeSettings>; // JSON override for specific academy settings
   status?: 'pending' | 'active' | 'rejected' | 'blocked';
+  allowStudentRegistration?: boolean; // New field: Allow public student registration
 }
 
 export interface Professor {
@@ -130,7 +131,7 @@ export interface Student {
   password?: string;
   lastSeen?: string;
   isInstructor?: boolean;
-  status?: 'active' | 'blocked';
+  status?: 'active' | 'blocked' | 'pending'; // Added 'pending'
 }
 
 export interface User {

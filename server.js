@@ -1,4 +1,5 @@
 
+
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -113,9 +114,12 @@ app.post('/api/login', async (req, res) => {
         if (students.length > 0 && (students[0].password === password || !students[0].password)) {
              const student = students[0];
              
-             // Check blocked status
+             // Check blocked/pending status
              if (student.status === 'blocked') {
                  return res.status(403).json({ message: 'Seu acesso foi temporariamente bloqueado. Contate a administração.' });
+             }
+             if (student.status === 'pending') {
+                 return res.status(403).json({ message: 'Seu cadastro está pendente de aprovação pela academia.' });
              }
 
              // Check Academy Status for Student
@@ -157,7 +161,7 @@ app.post('/api/login', async (req, res) => {
         res.status(401).json({ message: 'User or password invalid' });
     } catch (error) {
         console.error(error);
-        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') || error.message.includes('bloqueado') ? 403 : 500;
+        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') || error.message.includes('bloqueado') || error.message.includes('pendente') ? 403 : 500;
         res.status(status).json({ message: error.message || 'Server error' });
     }
 });
@@ -172,8 +176,8 @@ app.post('/api/register', async (req, res) => {
         
         // Explicitly set status to 'pending'
         await conn.query(
-            'INSERT INTO academies (id, name, address, responsible, responsibleRegistration, email, password, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
-            [academyId, name, address, responsible, responsibleRegistration, email, password, 'pending']
+            'INSERT INTO academies (id, name, address, responsible, responsibleRegistration, email, password, status, allowStudentRegistration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', 
+            [academyId, name, address, responsible, responsibleRegistration, email, password, 'pending', false]
         );
         
         await conn.query('INSERT INTO users (id, name, email, role, academyId) VALUES (?, ?, ?, ?, ?)', [userId, responsible, email, 'academy_admin', academyId]);
@@ -188,6 +192,56 @@ app.post('/api/register', async (req, res) => {
         conn.release();
     }
 });
+
+// New Endpoint: Register Student
+app.post('/api/register-student', async (req, res) => {
+    const data = req.body;
+    try {
+        const id = `student_${Date.now()}`;
+        
+        // Sanitize
+        if (data.birthDate && typeof data.birthDate === 'string') {
+            data.birthDate = data.birthDate.split('T')[0];
+        }
+
+        const studentData = { 
+            name: data.name,
+            email: data.email,
+            password: data.password,
+            cpf: data.cpf,
+            birthDate: data.birthDate,
+            phone: data.phone,
+            academyId: data.academyId,
+            beltId: 'white', // Default to white belt
+            paymentStatus: 'unpaid', 
+            stripes: 0,
+            isCompetitor: 0,
+            isInstructor: 0,
+            medals: '{}',
+            status: 'pending', // IMPORTANT: Pending approval
+            paymentDueDateDay: 10,
+            id, 
+        };
+        
+        // Ensure CPF uniqueness
+        const [existing] = await pool.query('SELECT id FROM students WHERE cpf = ? OR email = ?', [data.cpf, data.email]);
+        if (existing.length > 0) {
+            return res.status(400).json({ message: 'CPF ou Email já cadastrados.' });
+        }
+
+        const keys = Object.keys(studentData).map(key => `\`${key}\``).join(',');
+        const placeholders = Object.keys(studentData).map(() => '?').join(',');
+        const values = Object.values(studentData);
+        
+        await pool.query(`INSERT INTO students (${keys}) VALUES (${placeholders})`, values);
+        res.json({ success: true, message: 'Cadastro realizado com sucesso! Aguarde a aprovação da academia.' });
+
+    } catch(e) { 
+        console.error("Error saving student:", e.message); 
+        res.status(500).json({ message: e.message || 'Erro ao realizar cadastro.' }); 
+    }
+});
+
 
 app.get('/api/initial-data', async (req, res) => {
     try {
@@ -327,6 +381,14 @@ app.get('/api/initial-data', async (req, res) => {
             console.log("Migrating: Adding cpf to professors");
             await pool.query("ALTER TABLE professors ADD COLUMN cpf VARCHAR(255)");
         }
+        
+        // 16. Allow Student Registration on Academies
+        try {
+             await pool.query("SELECT allowStudentRegistration FROM academies LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding allowStudentRegistration to academies");
+             await pool.query("ALTER TABLE academies ADD COLUMN allowStudentRegistration BOOLEAN DEFAULT FALSE");
+        }
 
 
         const [students] = await pool.query('SELECT * FROM students');
@@ -345,7 +407,8 @@ app.get('/api/initial-data', async (req, res) => {
         const parsedAcademies = academies.map(a => ({
             ...a,
             settings: a.settings ? JSON.parse(a.settings) : {},
-            status: a.status || 'active' // Default to active for legacy data in memory
+            status: a.status || 'active', // Default to active for legacy data in memory
+            allowStudentRegistration: Boolean(a.allowStudentRegistration)
         }));
 
         const [graduations] = await pool.query('SELECT * FROM graduations');
