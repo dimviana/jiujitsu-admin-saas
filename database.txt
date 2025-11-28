@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS professors (
     graduationId VARCHAR(255),
     imageUrl LONGTEXT,
     blackBeltDate DATE,
+    isInstructor BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (academyId) REFERENCES academies(id),
     FOREIGN KEY (graduationId) REFERENCES graduations(id)
 );
@@ -92,6 +93,8 @@ CREATE TABLE IF NOT EXISTS students (
     isCompetitor BOOLEAN DEFAULT FALSE,
     lastCompetition TEXT,
     medals TEXT,
+    isInstructor BOOLEAN DEFAULT FALSE,
+    lastSeen DATETIME,
     FOREIGN KEY (beltId) REFERENCES graduations(id),
     FOREIGN KEY (academyId) REFERENCES academies(id)
 );
@@ -145,7 +148,8 @@ CREATE TABLE IF NOT EXISTS users (
     academyId VARCHAR(255),
     studentId VARCHAR(255),
     birthDate DATE,
-    refreshToken TEXT
+    refreshToken TEXT,
+    imageUrl LONGTEXT
 );
 
 CREATE TABLE IF NOT EXISTS activity_logs (

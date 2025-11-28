@@ -51,6 +51,14 @@ app.post('/api/login', async (req, res) => {
         if (users.length > 0) {
             await pool.query('INSERT INTO activity_logs (id, actorId, action, timestamp, details) VALUES (?, ?, ?, ?, ?)', 
                 [`log_${Date.now()}`, users[0].id, 'Login', new Date(), 'Login successful.']);
+            
+            // Update lastSeen if it's a student user
+            if (users[0].studentId) {
+                 try {
+                     await pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [users[0].studentId]);
+                 } catch (e) { console.error("Could not update lastSeen", e); }
+            }
+
             return res.json({ user: users[0] });
         }
 
@@ -58,6 +66,12 @@ app.post('/api/login', async (req, res) => {
         if (students.length > 0 && (students[0].password === password || !students[0].password)) {
              const student = students[0];
              const userObj = { id: `user_${student.id}`, name: student.name, email: student.email, role: 'student', academyId: student.academyId, studentId: student.id, birthDate: student.birthDate };
+             
+             // Update lastSeen
+             try {
+                await pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [student.id]);
+             } catch (e) { console.error("Could not update lastSeen", e); }
+
             return res.json({ user: userObj });
         }
 
@@ -92,13 +106,38 @@ app.post('/api/register', async (req, res) => {
 
 app.get('/api/initial-data', async (req, res) => {
     try {
-        // Ensure isInstructor column exists (Migration Helper)
+        // --- Migration Helper: Add missing columns if they don't exist ---
+        
+        // 1. isInstructor on Students
         try {
             await pool.query("SELECT isInstructor FROM students LIMIT 1");
         } catch (e) {
-            console.log("Migrating: Adding isInstructor to students/professors");
+            console.log("Migrating: Adding isInstructor to students");
             await pool.query("ALTER TABLE students ADD COLUMN isInstructor BOOLEAN DEFAULT FALSE");
-            await pool.query("ALTER TABLE professors ADD COLUMN isInstructor BOOLEAN DEFAULT FALSE");
+        }
+
+        // 2. lastSeen on Students
+        try {
+            await pool.query("SELECT lastSeen FROM students LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding lastSeen to students");
+            await pool.query("ALTER TABLE students ADD COLUMN lastSeen DATETIME");
+        }
+
+        // 3. isInstructor on Professors
+        try {
+             await pool.query("SELECT isInstructor FROM professors LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding isInstructor to professors");
+             await pool.query("ALTER TABLE professors ADD COLUMN isInstructor BOOLEAN DEFAULT FALSE");
+        }
+        
+        // 4. imageUrl on Users (optional for profile sync)
+        try {
+             await pool.query("SELECT imageUrl FROM users LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding imageUrl to users");
+             await pool.query("ALTER TABLE users ADD COLUMN imageUrl LONGTEXT");
         }
 
         const [students] = await pool.query('SELECT * FROM students');
@@ -168,8 +207,8 @@ app.post('/api/students', async (req, res) => {
         if (data.medals && typeof data.medals === 'object') {
             data.medals = JSON.stringify(data.medals);
         }
-        for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate']) {
-            if (data[key] && typeof data[key] === 'string') {
+        for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate', 'lastSeen']) {
+            if (data[key] && typeof data[key] === 'string' && key !== 'lastSeen') { // Don't strip time from lastSeen if passed
                 data[key] = data[key].split('T')[0];
             } else if (data[key] === '' || data[key] === undefined) {
                 data[key] = null;
@@ -241,7 +280,7 @@ app.post('/api/students/promote-instructor', async (req, res) => {
         // 3. Insert into Professors
         const professorId = `prof_inst_${student.id}`;
         // Check if already exists to avoid duplication
-        const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ? OR email = ?', [student.cpf, student.email]); // Assuming email column exists or using cpf/registration
+        const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ?', [student.cpf]); 
         
         if (existingProf.length === 0) {
              await conn.query(`
@@ -397,6 +436,7 @@ app.post('/api/settings', async (req, res) => {
 });
 
 app.post('/api/attendance', createHandler('attendance_records'));
+app.post('/api/academies', createHandler('academies')); // Enable editing academies
 
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
