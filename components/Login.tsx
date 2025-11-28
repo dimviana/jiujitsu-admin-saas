@@ -1,6 +1,4 @@
-
-
-import React, { useState, useContext, FormEvent, useEffect } from 'react';
+import React, { useState, useContext, FormEvent, useEffect, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Eye as IconEye, EyeOff as IconEyeOff, Facebook } from 'lucide-react';
 import Modal from '../components/ui/Modal';
@@ -66,6 +64,7 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isNotFoundModalOpen, setIsNotFoundModalOpen] = useState(false);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
   
   const { themeSettings, login, loginGoogle, user, registerAcademy, loading: appLoading } = useContext(AppContext);
 
@@ -85,12 +84,38 @@ const Login: React.FC = () => {
   };
 
   useEffect(() => {
-    if (window.google && themeSettings.socialLoginEnabled && themeSettings.googleClientId) {
-        try {
-            window.google.accounts.id.initialize({ client_id: themeSettings.googleClientId, callback: handleGoogleLoginResponse });
-            window.google.accounts.id.renderButton(document.getElementById("googleBtn"), { theme: "outline", size: "large", width: "100%" });
-        } catch (e) {}
+    if (!themeSettings.socialLoginEnabled || !themeSettings.googleClientId) return;
+
+    const initializeGoogle = () => {
+        if (window.google && window.google.accounts && googleBtnRef.current) {
+            try {
+                window.google.accounts.id.initialize({ 
+                    client_id: themeSettings.googleClientId, 
+                    callback: handleGoogleLoginResponse 
+                });
+                window.google.accounts.id.renderButton(
+                    googleBtnRef.current, 
+                    { theme: "outline", size: "large", width: "100%" } // customization attributes
+                );
+            } catch (e) {
+                console.error("Erro ao inicializar botão Google:", e);
+            }
+        }
+    };
+
+    // Tentar inicializar imediatamente
+    if (window.google) {
+        initializeGoogle();
     }
+
+    // Configurar um intervalo para checar se o script carregou (caso de internet lenta)
+    const interval = setInterval(() => {
+        if (window.google && googleBtnRef.current && googleBtnRef.current.innerHTML === '') {
+            initializeGoogle();
+        }
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, [themeSettings.socialLoginEnabled, themeSettings.googleClientId]);
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,8 +185,10 @@ const Login: React.FC = () => {
                         </div>
 
                         <div className="mt-6 space-y-3">
-                            {/* Google Button Container (Rendered by script) */}
-                            <div id="googleBtn" className="w-full flex justify-center"></div>
+                            {/* Google Button Container */}
+                            {themeSettings.googleClientId && (
+                                <div ref={googleBtnRef} id="googleBtn" className="w-full flex justify-center min-h-[40px]"></div>
+                            )}
 
                             {/* Facebook Button */}
                             <button
