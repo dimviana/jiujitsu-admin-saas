@@ -51,10 +51,7 @@ app.post('/api/login', async (req, res) => {
         
         // Helper function to check academy status
         const checkAcademyStatus = async (academyId) => {
-            if (!academyId) return true; // No academy (e.g. super admin outside structure), allow
-            // Don't block 'general_admin' even if they have an academyId attached for some reason, 
-            // unless we specifically want to. Typically General Admin is system-wide.
-            // But let's check the academy status for everyone else.
+            if (!academyId) return true; 
             
             const [rows] = await pool.query('SELECT status FROM academies WHERE id = ?', [academyId]);
             if (rows.length > 0) {
@@ -75,29 +72,13 @@ app.post('/api/login', async (req, res) => {
         if (users.length > 0) {
             const user = users[0];
             
-            // If user is NOT general_admin, check academy status
             if (user.role !== 'general_admin') {
                 await checkAcademyStatus(user.academyId);
             }
 
-            if (user.password && user.password !== password) { // Assuming users table might have password for admins
-                 // For simplified login where users might not have password hash yet or sharing auth logic
-                 // If you have logic that users table password must match:
-                 // if (user.password !== password) ...
-            }
-            
-            // Note: The original code didn't strictly check user password from 'users' table 
-            // if it wasn't populated, relying on academy/student tables mostly. 
-            // But for safety, if user has password, check it.
-            // The logic below for students checks password. Academy admin usually logs in via academy email match in users table.
-            
-            // Let's stick to original logic: find user -> success. 
-            // But we must add the academy status check above.
-
             await pool.query('INSERT INTO activity_logs (id, actorId, action, timestamp, details) VALUES (?, ?, ?, ?, ?)', 
                 [`log_${Date.now()}`, users[0].id, 'Login', new Date(), 'Login successful.']);
             
-            // Update lastSeen if it's a student user
             if (users[0].studentId) {
                  try {
                      await pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [users[0].studentId]);
@@ -107,22 +88,18 @@ app.post('/api/login', async (req, res) => {
             return res.json({ user: users[0] });
         }
 
-        // Try logging in as Student directly
         const [students] = await pool.query('SELECT * FROM students WHERE email = ? OR cpf = ?', [email, email]);
         if (students.length > 0 && (students[0].password === password || !students[0].password)) {
              const student = students[0];
              
-             // Check blocked status
              if (student.status === 'blocked') {
                  return res.status(403).json({ message: 'Seu acesso foi temporariamente bloqueado. Contate a administração.' });
              }
 
-             // Check Academy Status for Student
              await checkAcademyStatus(student.academyId);
 
              const userObj = { id: `user_${student.id}`, name: student.name, email: student.email, role: 'student', academyId: student.academyId, studentId: student.id, birthDate: student.birthDate };
              
-             // Update lastSeen
              try {
                 await pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [student.id]);
              } catch (e) { console.error("Could not update lastSeen", e); }
@@ -130,7 +107,6 @@ app.post('/api/login', async (req, res) => {
             return res.json({ user: userObj });
         }
         
-        // Try logging in as Academy Admin (via Academies table email/pass)
         const [academies] = await pool.query('SELECT * FROM academies WHERE email = ? AND password = ?', [email, password]);
         if (academies.length > 0) {
              const academy = academies[0];
@@ -145,7 +121,6 @@ app.post('/api/login', async (req, res) => {
                  return res.status(403).json({ message: 'Acesso temporariamente suspenso. Contate o administrador.' });
              }
 
-             // Find the user record associated with this academy admin
              const [adminUser] = await pool.query('SELECT * FROM users WHERE academyId = ? AND role = "academy_admin"', [academy.id]);
              
              if (adminUser.length > 0) {
@@ -169,7 +144,6 @@ app.post('/api/register', async (req, res) => {
         const academyId = `academy_${Date.now()}`;
         const userId = `user_${Date.now()}`;
         
-        // Explicitly set status to 'pending'
         await conn.query(
             'INSERT INTO academies (id, name, address, responsible, responsibleRegistration, email, password, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', 
             [academyId, name, address, responsible, responsibleRegistration, email, password, 'pending']
@@ -192,7 +166,6 @@ app.get('/api/initial-data', async (req, res) => {
     try {
         // --- Migration Helper: Add missing columns if they don't exist ---
         
-        // 1. isInstructor on Students
         try {
             await pool.query("SELECT isInstructor FROM students LIMIT 1");
         } catch (e) {
@@ -200,7 +173,6 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE students ADD COLUMN isInstructor BOOLEAN DEFAULT FALSE");
         }
 
-        // 2. lastSeen on Students
         try {
             await pool.query("SELECT lastSeen FROM students LIMIT 1");
         } catch (e) {
@@ -208,7 +180,6 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE students ADD COLUMN lastSeen DATETIME");
         }
 
-        // 3. isInstructor on Professors
         try {
              await pool.query("SELECT isInstructor FROM professors LIMIT 1");
         } catch (e) {
@@ -216,7 +187,6 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE professors ADD COLUMN isInstructor BOOLEAN DEFAULT FALSE");
         }
         
-        // 3.1 birthDate on Professors
         try {
              await pool.query("SELECT birthDate FROM professors LIMIT 1");
         } catch (e) {
@@ -224,7 +194,6 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE professors ADD COLUMN birthDate DATE");
         }
         
-        // 4. imageUrl on Users
         try {
              await pool.query("SELECT imageUrl FROM users LIMIT 1");
         } catch (e) {
@@ -232,7 +201,6 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE users ADD COLUMN imageUrl LONGTEXT");
         }
 
-        // 5. studentProfileEditEnabled on ThemeSettings
         try {
              await pool.query("SELECT studentProfileEditEnabled FROM theme_settings LIMIT 1");
         } catch (e) {
@@ -240,7 +208,6 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE theme_settings ADD COLUMN studentProfileEditEnabled BOOLEAN DEFAULT FALSE");
         }
 
-        // 6. settings JSON on Academies (for individual customization)
         try {
              await pool.query("SELECT settings FROM academies LIMIT 1");
         } catch (e) {
@@ -248,17 +215,14 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE academies ADD COLUMN settings LONGTEXT");
         }
 
-        // 7. status on Academies
         try {
              await pool.query("SELECT status FROM academies LIMIT 1");
         } catch (e) {
              console.log("Migrating: Adding status to academies");
              await pool.query("ALTER TABLE academies ADD COLUMN status VARCHAR(50) DEFAULT 'pending'");
-             // Set existing academies to active so we don't lock out current users
              await pool.query("UPDATE academies SET status = 'active' WHERE status IS NULL OR status = 'pending'");
         }
         
-        // 8. observations on ClassSchedules
         try {
              await pool.query("SELECT observations FROM class_schedules LIMIT 1");
         } catch (e) {
@@ -266,7 +230,6 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE class_schedules ADD COLUMN observations TEXT");
         }
 
-        // 9. status on Students
         try {
             await pool.query("SELECT status FROM students LIMIT 1");
         } catch (e) {
@@ -274,7 +237,6 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE students ADD COLUMN status VARCHAR(50) DEFAULT 'active'");
         }
 
-        // 10. status on Professors
         try {
             await pool.query("SELECT status FROM professors LIMIT 1");
         } catch (e) {
@@ -282,7 +244,6 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE professors ADD COLUMN status VARCHAR(50) DEFAULT 'active'");
         }
 
-        // 11. Gateway Settings in theme_settings
         try {
              await pool.query("SELECT mercadoPagoAccessToken FROM theme_settings LIMIT 1");
         } catch (e) {
@@ -293,13 +254,20 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE theme_settings ADD COLUMN efiClientSecret TEXT");
         }
 
-        // 12. Gradient Colors on Graduations
         try {
              await pool.query("SELECT color2 FROM graduations LIMIT 1");
         } catch (e) {
              console.log("Migrating: Adding color2 and color3 to graduations");
              await pool.query("ALTER TABLE graduations ADD COLUMN color2 VARCHAR(255)");
              await pool.query("ALTER TABLE graduations ADD COLUMN color3 VARCHAR(255)");
+        }
+
+        try {
+             await pool.query("SELECT gradientAngle FROM graduations LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding gradientAngle and gradientHardness to graduations");
+             await pool.query("ALTER TABLE graduations ADD COLUMN gradientAngle INTEGER DEFAULT 90");
+             await pool.query("ALTER TABLE graduations ADD COLUMN gradientHardness INTEGER DEFAULT 0");
         }
 
 
@@ -319,7 +287,7 @@ app.get('/api/initial-data', async (req, res) => {
         const parsedAcademies = academies.map(a => ({
             ...a,
             settings: a.settings ? JSON.parse(a.settings) : {},
-            status: a.status || 'active' // Default to active for legacy data in memory
+            status: a.status || 'active'
         }));
 
         const [graduations] = await pool.query('SELECT * FROM graduations');
@@ -359,7 +327,6 @@ app.get('/api/initial-data', async (req, res) => {
 const createHandler = (table) => async (req, res) => {
     try {
         const data = req.body;
-        // Handle JSON columns if needed, though this generic handler is basic
         const keys = Object.keys(data).map(key => `\`${key}\``);
         const values = Object.values(data).map(v => typeof v === 'object' ? JSON.stringify(v) : v);
         await pool.query(`REPLACE INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values);
@@ -382,12 +349,11 @@ const deleteHandler = (table) => async (req, res) => {
 app.post('/api/students', async (req, res) => {
     const data = req.body;
     try {
-        // --- Data Sanitization ---
         if (data.medals && typeof data.medals === 'object') {
             data.medals = JSON.stringify(data.medals);
         }
         for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate', 'lastSeen']) {
-            if (data[key] && typeof data[key] === 'string' && key !== 'lastSeen') { // Don't strip time from lastSeen if passed
+            if (data[key] && typeof data[key] === 'string' && key !== 'lastSeen') {
                 data[key] = data[key].split('T')[0];
             } else if (data[key] === '' || data[key] === undefined) {
                 data[key] = null;
@@ -400,7 +366,7 @@ app.post('/api/students', async (req, res) => {
             data.isInstructor = data.isInstructor ? 1 : 0;
         }
 
-        if (data.id) { // UPDATE logic
+        if (data.id) {
             const { id, ...updateData } = data;
             if (updateData.password === '' || updateData.password === undefined) {
                 delete updateData.password;
@@ -417,7 +383,7 @@ app.post('/api/students', async (req, res) => {
             await pool.query(`UPDATE students SET ${updateFields} WHERE id = ?`, [...updateValues, id]);
             res.json({ success: true, id });
 
-        } else { // INSERT logic
+        } else {
             const id = `student_${Date.now()}`;
             const studentData = { 
                 paymentStatus: 'unpaid', 
@@ -458,17 +424,13 @@ app.post('/api/students/promote-instructor', async (req, res) => {
     try {
         await conn.beginTransaction();
 
-        // 1. Get Student Data
         const [students] = await conn.query('SELECT * FROM students WHERE id = ?', [studentId]);
         if (students.length === 0) throw new Error("Student not found");
         const student = students[0];
 
-        // 2. Update Student as Instructor
         await conn.query('UPDATE students SET isInstructor = 1 WHERE id = ?', [studentId]);
 
-        // 3. Insert into Professors
         const professorId = `prof_inst_${student.id}`;
-        // Check if already exists to avoid duplication
         const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ?', [student.cpf]); 
         
         if (existingProf.length === 0) {
@@ -498,25 +460,15 @@ app.post('/api/students/demote-instructor', async (req, res) => {
     try {
         await conn.beginTransaction();
 
-        // 1. Get Professor Data to find Student by CPF or ID logic
         const [professors] = await conn.query('SELECT cpf, isInstructor FROM professors WHERE id = ?', [professorId]);
         
         if (professors.length > 0) {
             const prof = professors[0];
             
-            // Only proceed if they are marked as instructor (created from student promotion)
-            // or if we decide that manual professors can also be demoted (which deletes them).
-            // For safety, let's allow it but the client UI only shows button if isInstructor=true.
-
             if (prof.cpf) {
-                // 2. Update Student table to remove isInstructor flag
                 await conn.query('UPDATE students SET isInstructor = 0 WHERE cpf = ?', [prof.cpf]);
             }
             
-            // 3. Delete from Professors table
-            // Note: If this professor is assigned to classes, this might fail due to FK constraints.
-            // Ideally, we should set them to null in class_schedules or block deletion.
-            // For now, let's assume if it fails, the error will propagate.
             await conn.query('DELETE FROM professors WHERE id = ?', [professorId]);
         }
 
@@ -554,14 +506,12 @@ app.post('/api/professors', async (req, res) => {
     try {
         const data = req.body;
         
-        // Sanitize date
         if (data.blackBeltDate && typeof data.blackBeltDate === 'string') {
             data.blackBeltDate = data.blackBeltDate.split('T')[0];
         } else if (data.blackBeltDate === '' || data.blackBeltDate === undefined) {
             data.blackBeltDate = null;
         }
 
-        // Sanitize birthDate
         if (data.birthDate && typeof data.birthDate === 'string') {
             data.birthDate = data.birthDate.split('T')[0];
         } else if (data.birthDate === '' || data.birthDate === undefined) {
@@ -574,7 +524,6 @@ app.post('/api/professors', async (req, res) => {
             data.isInstructor = 0;
         }
         
-        // Use INSERT ... ON DUPLICATE KEY UPDATE for safe updates
         if (data.id) {
             const { id, ...updateData } = data;
             const updateFields = Object.keys(updateData).map(key => `\`${key}\` = ?`).join(', ');
@@ -609,7 +558,6 @@ app.post('/api/professors/:id/status', async (req, res) => {
 app.post('/api/schedules', async (req, res) => {
     const { assistantIds, ...schedule } = req.body;
     
-    // Sanitize Foreign Keys: Convert empty strings to null
     const sanitize = (val) => (val === '' || val === undefined ? null : val);
     schedule.professorId = sanitize(schedule.professorId);
     schedule.academyId = sanitize(schedule.academyId);
@@ -724,7 +672,7 @@ app.post('/api/academies', async (req, res) => {
 
 app.post('/api/academies/:id/status', async (req, res) => {
     const { id } = req.params;
-    const { status } = req.body; // 'active', 'rejected', or 'blocked'
+    const { status } = req.body; 
     
     if (!['active', 'rejected', 'blocked'].includes(status)) {
         return res.status(400).json({ message: 'Invalid status' });

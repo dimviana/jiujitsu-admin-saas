@@ -6,7 +6,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import { Edit } from 'lucide-react';
-import { Student } from '../types';
+import { Student, Graduation } from '../types';
 
 const calculateTrainingTime = (startDateString?: string): string => {
     if (!startDateString) return "N/A";
@@ -29,7 +29,29 @@ const calculateTrainingTime = (startDateString?: string): string => {
     return `${years} anos, ${months} meses e ${days} dias`;
 };
 
-// Simplified Edit Form for Students
+const getBeltStyle = (belt: Graduation) => {
+    if (!belt) return { backgroundColor: '#e2e8f0' };
+    if (!belt.color2) return { backgroundColor: belt.color };
+    
+    const angle = belt.gradientAngle ?? 90;
+    const h = (belt.gradientHardness ?? 0) / 100;
+    const c1 = belt.color;
+    const c2 = belt.color2;
+    const c3 = belt.color3 || belt.color2;
+
+    if (c3 !== c2) {
+        const s1 = h * 33.33;
+        const s2 = 50 - (h * 16.67);
+        const s3 = 50 + (h * 16.67);
+        const s4 = 100 - (h * 33.33);
+        return { background: `linear-gradient(${angle}deg, ${c1} ${s1}%, ${c2} ${s2}%, ${c2} ${s3}%, ${c3} ${s4}%)` };
+    }
+    const s1 = h * 50;
+    const s2 = 100 - (h * 50);
+    return { background: `linear-gradient(${angle}deg, ${c1} ${s1}%, ${c2} ${s2}%)` };
+};
+
+// ... (StudentEditForm component remains unchanged) ...
 const StudentEditForm: React.FC<{ student: Student; onSave: (data: Partial<Student>) => void; onClose: () => void }> = ({ student, onSave, onClose }) => {
     const [formData, setFormData] = useState({
         name: student.name,
@@ -151,11 +173,7 @@ const ProfilePage: React.FC = () => {
                             {graduation && (
                                 <span 
                                     className="w-5 h-5 rounded-full mr-2 border border-slate-300" 
-                                    style={{ 
-                                        background: graduation.color2 
-                                            ? `linear-gradient(90deg, ${graduation.color} 0%, ${graduation.color2} 50%, ${graduation.color3 || graduation.color2} 100%)` 
-                                            : graduation.color 
-                                    }}
+                                    style={getBeltStyle(graduation)}
                                 ></span>
                             )}
                             <span className="font-semibold text-slate-700">{graduation?.name}</span>
