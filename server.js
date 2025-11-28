@@ -207,6 +207,14 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE professors ADD COLUMN isInstructor BOOLEAN DEFAULT FALSE");
         }
         
+        // 3.1 birthDate on Professors
+        try {
+             await pool.query("SELECT birthDate FROM professors LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding birthDate to professors");
+             await pool.query("ALTER TABLE professors ADD COLUMN birthDate DATE");
+        }
+        
         // 4. imageUrl on Users
         try {
              await pool.query("SELECT imageUrl FROM users LIMIT 1");
@@ -256,7 +264,7 @@ app.get('/api/initial-data', async (req, res) => {
         const parsedAcademies = academies.map(a => ({
             ...a,
             settings: a.settings ? JSON.parse(a.settings) : {},
-            status: a.status || 'active' // Default for legacy data in memory
+            status: a.status || 'active' // Default to active for legacy data in memory
         }));
 
         const [graduations] = await pool.query('SELECT * FROM graduations');
@@ -399,9 +407,9 @@ app.post('/api/students/promote-instructor', async (req, res) => {
         
         if (existingProf.length === 0) {
              await conn.query(`
-                INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-            `, [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl]);
+                INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor, birthDate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+            `, [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl, student.birthDate]);
         } else {
              await conn.query('UPDATE professors SET isInstructor = 1, graduationId = ?, academyId = ? WHERE id = ?', 
                 [student.beltId, student.academyId, existingProf[0].id]);
@@ -447,6 +455,14 @@ app.post('/api/professors', async (req, res) => {
         } else if (data.blackBeltDate === '' || data.blackBeltDate === undefined) {
             data.blackBeltDate = null;
         }
+
+        // Sanitize birthDate
+        if (data.birthDate && typeof data.birthDate === 'string') {
+            data.birthDate = data.birthDate.split('T')[0];
+        } else if (data.birthDate === '' || data.birthDate === undefined) {
+            data.birthDate = null;
+        }
+
         if (data.hasOwnProperty('isInstructor')) {
             data.isInstructor = data.isInstructor ? 1 : 0;
         } else {

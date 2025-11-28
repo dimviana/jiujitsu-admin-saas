@@ -74,6 +74,7 @@ export interface Professor {
     imageUrl?: string;
     blackBeltDate?: string;
     isInstructor?: boolean;
+    birthDate?: string;
 }
 
 export interface Graduation {

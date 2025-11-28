@@ -1,3 +1,5 @@
+
+
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Professor } from '../types';
@@ -5,6 +7,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
+import { Users, Calendar } from 'lucide-react';
 
 const validateCPF = (cpf: string): boolean => {
     if (typeof cpf !== 'string') return false;
@@ -38,6 +41,20 @@ const formatDateForInput = (dateString?: string) => {
     }
 };
 
+// Helper to calculate age
+const calculateAge = (birthDate: string): number | null => {
+    if (!birthDate) return null;
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--;
+    }
+    return age;
+};
+
+
 // Form component
 interface ProfessorFormProps {
   professor: Partial<Professor> | null;
@@ -56,6 +73,7 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({ professor, onSave, onClos
     ...professor,
     // Format the date properly for input field
     blackBeltDate: formatDateForInput(professor?.blackBeltDate),
+    birthDate: formatDateForInput(professor?.birthDate),
   });
   const [cpfError, setCpfError] = useState('');
 
@@ -90,6 +108,7 @@ const ProfessorForm: React.FC<ProfessorFormProps> = ({ professor, onSave, onClos
         <Input label="CPF" name="cpf" value={formData.cpf} onChange={handleChange} required />
         {cpfError && <p className="text-sm text-red-500 mt-1">{cpfError}</p>}
       </div>
+      <Input label="Data de Nascimento" name="birthDate" type="date" value={formData.birthDate} onChange={handleChange} />
       
       {/* Seletor de Academia (Apenas para Admin Geral) */}
       {user?.role === 'general_admin' && (
@@ -185,7 +204,7 @@ const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({ professor, onSave, 
 
 // Main page component
 const ProfessorsPage: React.FC = () => {
-  const { professors, academies, graduations, saveProfessor, deleteProfessor, loading } = useContext(AppContext);
+  const { professors, academies, graduations, saveProfessor, deleteProfessor, loading, students } = useContext(AppContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProfessor, setSelectedProfessor] = useState<Partial<Professor> | null>(null);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -255,9 +274,9 @@ const ProfessorsPage: React.FC = () => {
   };
   
   const handleSavePhoto = async (profToUpdate: Professor, newImageUrl: string) => {
-      const { id, name, fjjpe_registration, cpf, academyId, graduationId, blackBeltDate } = profToUpdate;
+      const { id, name, fjjpe_registration, cpf, academyId, graduationId, blackBeltDate, birthDate } = profToUpdate;
       await saveProfessor({
-          id, name, fjjpe_registration, cpf, academyId, graduationId, blackBeltDate,
+          id, name, fjjpe_registration, cpf, academyId, graduationId, blackBeltDate, birthDate,
           imageUrl: newImageUrl
       });
       handleClosePhotoModal();
@@ -278,6 +297,8 @@ const ProfessorsPage: React.FC = () => {
                 const academy = academies.find(a => a.id === prof.academyId);
                 const graduation = graduations.find(g => g.id === prof.graduationId);
                 const { dan } = professorDanData.get(prof.id) || { dan: 0 };
+                const age = prof.birthDate ? calculateAge(prof.birthDate) : null;
+                const studentCount = students.filter(s => s.academyId === prof.academyId).length;
                 
                 return (
                     <Card key={prof.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-full relative">
@@ -331,6 +352,18 @@ const ProfessorsPage: React.FC = () => {
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-600 font-medium">CPF:</span>
                                     <span className="text-slate-700">{prof.cpf}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-600 font-medium">Nascimento:</span>
+                                    <span className="text-slate-700">
+                                        {prof.birthDate ? `${new Date(prof.birthDate).toLocaleDateString()} (${age} anos)` : 'N/A'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-600 font-medium flex items-center">
+                                        <Users className="w-3 h-3 mr-1" /> Alunos Associados:
+                                    </span>
+                                    <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200">{studentCount}</span>
                                 </div>
                             </div>
 
