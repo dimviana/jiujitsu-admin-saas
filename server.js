@@ -117,6 +117,9 @@ app.post('/api/login', async (req, res) => {
              if (student.status === 'blocked') {
                  return res.status(403).json({ message: 'Seu acesso foi temporariamente bloqueado. Contate a administração.' });
              }
+             if (student.status === 'pending') {
+                 return res.status(403).json({ message: 'Seu cadastro está pendente de aprovação pela academia.' });
+             }
 
              // Check Academy Status for Student
              await checkAcademyStatus(student.academyId);
@@ -157,7 +160,7 @@ app.post('/api/login', async (req, res) => {
         res.status(401).json({ message: 'User or password invalid' });
     } catch (error) {
         console.error(error);
-        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') || error.message.includes('bloqueado') ? 403 : 500;
+        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') || error.message.includes('bloqueado') || error.message.includes('pendente') ? 403 : 500;
         res.status(status).json({ message: error.message || 'Server error' });
     }
 });
@@ -184,6 +187,51 @@ app.post('/api/register', async (req, res) => {
         await conn.rollback();
         console.error(error);
         res.status(500).json({ message: 'Error registering academy' });
+    } finally {
+        conn.release();
+    }
+});
+
+app.post('/api/register-student', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const data = req.body;
+        
+        // Simple validation
+        if (!data.academyId) throw new Error("Academia obrigatória");
+        
+        const id = `student_${Date.now()}`;
+        const studentData = { 
+            paymentStatus: 'unpaid', 
+            stripes: 0,
+            isCompetitor: 0,
+            isInstructor: 0,
+            medals: '{}',
+            status: 'pending', // Default to pending for self-registration
+            ...data,
+            id, 
+        };
+
+        // Ensure dates are null if empty
+        for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate', 'lastSeen']) {
+            if (studentData[key] === '' || studentData[key] === undefined) {
+                studentData[key] = null;
+            }
+        }
+
+        const keys = Object.keys(studentData).map(key => `\`${key}\``).join(',');
+        const placeholders = Object.keys(studentData).map(() => '?').join(',');
+        const values = Object.values(studentData);
+        
+        await conn.query(`INSERT INTO students (${keys}) VALUES (${placeholders})`, values);
+        
+        await conn.commit();
+        res.json({ success: true, message: 'Cadastro realizado! Aguarde a aprovação da academia.' });
+    } catch (error) {
+        await conn.rollback();
+        console.error(error);
+        res.status(500).json({ message: error.message || 'Erro ao cadastrar aluno' });
     } finally {
         conn.release();
     }
@@ -328,6 +376,22 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE professors ADD COLUMN cpf VARCHAR(255)");
         }
 
+        // 16. Ensure allowStudentRegistration column on Academies
+        try {
+            await pool.query("SELECT allowStudentRegistration FROM academies LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding allowStudentRegistration to academies");
+            await pool.query("ALTER TABLE academies ADD COLUMN allowStudentRegistration BOOLEAN DEFAULT FALSE");
+        }
+
+        // 17. Ensure documents column on Students
+        try {
+            await pool.query("SELECT documents FROM students LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding documents to students");
+            await pool.query("ALTER TABLE students ADD COLUMN documents LONGTEXT");
+        }
+
 
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
@@ -335,7 +399,8 @@ app.get('/api/initial-data', async (req, res) => {
             isCompetitor: Boolean(s.isCompetitor),
             isInstructor: Boolean(s.isInstructor),
             medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 },
-            status: s.status || 'active'
+            status: s.status || 'active',
+            documents: s.documents ? JSON.parse(s.documents) : []
         }));
         const [payments] = await pool.query('SELECT * FROM payment_history');
         parsedStudents.forEach(s => { s.paymentHistory = payments.filter(p => p.studentId === s.id); });
@@ -345,7 +410,8 @@ app.get('/api/initial-data', async (req, res) => {
         const parsedAcademies = academies.map(a => ({
             ...a,
             settings: a.settings ? JSON.parse(a.settings) : {},
-            status: a.status || 'active' // Default to active for legacy data in memory
+            status: a.status || 'active', // Default to active for legacy data in memory
+            allowStudentRegistration: Boolean(a.allowStudentRegistration)
         }));
 
         const [graduations] = await pool.query('SELECT * FROM graduations');
@@ -412,6 +478,10 @@ app.post('/api/students', async (req, res) => {
         if (data.medals && typeof data.medals === 'object') {
             data.medals = JSON.stringify(data.medals);
         }
+        if (data.documents && typeof data.documents === 'object') {
+            data.documents = JSON.stringify(data.documents);
+        }
+
         for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate', 'lastSeen']) {
             if (data[key] && typeof data[key] === 'string' && key !== 'lastSeen') { // Don't strip time from lastSeen if passed
                 data[key] = data[key].split('T')[0];
@@ -451,6 +521,7 @@ app.post('/api/students', async (req, res) => {
                 isCompetitor: 0,
                 isInstructor: 0,
                 medals: '{}',
+                documents: '[]',
                 status: 'active',
                 ...data,
                 id, 
