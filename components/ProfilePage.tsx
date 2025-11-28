@@ -1,7 +1,12 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
-import { PhotoUploadModal } from './ui/PhotoUploadModal'; // FIX: Changed from alias to relative path
+import { PhotoUploadModal } from './ui/PhotoUploadModal';
+import Button from './ui/Button';
+import Modal from './ui/Modal';
+import Input from './ui/Input';
+import { Edit } from 'lucide-react';
+import { Student } from '../types';
 
 const calculateTrainingTime = (startDateString?: string): string => {
     if (!startDateString) return "N/A";
@@ -24,10 +29,71 @@ const calculateTrainingTime = (startDateString?: string): string => {
     return `${years} anos, ${months} meses e ${days} dias`;
 };
 
+// Simplified Edit Form for Students
+const StudentEditForm: React.FC<{ student: Student; onSave: (data: Partial<Student>) => void; onClose: () => void }> = ({ student, onSave, onClose }) => {
+    const [formData, setFormData] = useState({
+        name: student.name,
+        email: student.email,
+        phone: student.phone || '',
+        address: student.address || '',
+        password: '', // Only update if typed
+        confirmPassword: ''
+    });
+    const [error, setError] = useState('');
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        
+        if (formData.password && formData.password !== formData.confirmPassword) {
+            setError('As senhas não coincidem.');
+            return;
+        }
+
+        const updateData: Partial<Student> = {
+            name: formData.name,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address,
+        };
+
+        if (formData.password) {
+            updateData.password = formData.password;
+        }
+
+        onSave(updateData);
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            {error && <p className="text-red-500 text-sm bg-red-50 p-2 rounded">{error}</p>}
+            
+            <Input label="Nome Completo" name="name" value={formData.name} onChange={handleChange} required />
+            <Input label="Email" name="email" type="email" value={formData.email} onChange={handleChange} required />
+            <Input label="Telefone" name="phone" value={formData.phone} onChange={handleChange} required />
+            <Input label="Endereço" name="address" value={formData.address} onChange={handleChange} required />
+            
+            <hr className="my-2 border-slate-100" />
+            <p className="text-xs text-slate-500">Preencha abaixo apenas se desejar alterar sua senha.</p>
+            <Input label="Nova Senha" name="password" type="password" value={formData.password} onChange={handleChange} />
+            <Input label="Confirmar Nova Senha" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} />
+
+            <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
+                <Button type="submit">Salvar Alterações</Button>
+            </div>
+        </form>
+    );
+};
 
 const ProfilePage: React.FC = () => {
-    const { user, students, academies, graduations, loading, saveStudent } = useContext(AppContext);
+    const { user, students, academies, graduations, loading, saveStudent, themeSettings } = useContext(AppContext);
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
     if (loading) {
         return <div className="text-center text-slate-800">Carregando perfil...</div>;
@@ -43,12 +109,19 @@ const ProfilePage: React.FC = () => {
     const trainingTime = calculateTrainingTime(studentData.firstGraduationDate);
 
     const handleSavePhoto = async (base64Image: string) => {
-        // When saving from profile page, we update the student immediately
         await saveStudent({
             ...studentData,
             imageUrl: base64Image
         });
         setIsPhotoModalOpen(false);
+    };
+
+    const handleUpdateProfile = async (updatedFields: Partial<Student>) => {
+        await saveStudent({
+            ...studentData,
+            ...updatedFields
+        });
+        setIsEditModalOpen(false);
     };
 
     return (
@@ -80,14 +153,23 @@ const ProfilePage: React.FC = () => {
                         </div>
                     </div>
                 </Card>
-                <Card className="lg:col-span-2">
-                    <h3 className="text-xl font-bold text-amber-600 mb-4">Informações</h3>
+                <Card className="lg:col-span-2 relative">
+                    <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-xl font-bold text-amber-600">Informações</h3>
+                        {themeSettings.studentProfileEditEnabled && (
+                            <Button size="sm" variant="secondary" onClick={() => setIsEditModalOpen(true)}>
+                                <Edit className="w-4 h-4 mr-2" /> Editar Dados
+                            </Button>
+                        )}
+                    </div>
+                    
                     <div className="space-y-3 text-slate-700">
                         <p><strong>Email:</strong> {user?.email}</p>
                         <p><strong>Data de Nascimento:</strong> {studentData.birthDate ? new Date(studentData.birthDate).toLocaleDateString() : 'N/A'}</p>
                         <p><strong>CPF:</strong> {studentData.cpf}</p>
                         <p><strong>Telefone:</strong> {studentData.phone}</p>
                         <p><strong>Endereço:</strong> {studentData.address}</p>
+                        <hr className="my-3 border-slate-100" />
                         <p><strong>Tempo de Treino:</strong> {trainingTime}</p>
                         <p><strong>Vencimento da Mensalidade:</strong> Dia {studentData.paymentDueDateDay} de cada mês</p>
                          <p><strong>Status Financeiro:</strong> 
@@ -107,6 +189,12 @@ const ProfilePage: React.FC = () => {
                     currentImage={studentData.imageUrl}
                     title="Atualizar Foto de Perfil"
                 />
+            )}
+
+            {isEditModalOpen && (
+                <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Editar Meus Dados">
+                    <StudentEditForm student={studentData} onSave={handleUpdateProfile} onClose={() => setIsEditModalOpen(false)} />
+                </Modal>
             )}
         </div>
     );

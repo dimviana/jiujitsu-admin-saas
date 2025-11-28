@@ -34,6 +34,7 @@ export const MOCK_THEME: ThemeSettings = {
   publicPageEnabled: true,
   socialLoginEnabled: false,
   registrationEnabled: true,
+  studentProfileEditEnabled: false,
   copyrightText: '© 2025 Jiu-JitsuAdmin',
   systemVersion: '1.3.0',
   theme: 'light'

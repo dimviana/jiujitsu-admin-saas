@@ -141,18 +141,23 @@ const SettingsPage: React.FC = () => {
                                     <Input label="Dias para cobrança (após venc.)" name="overdueDaysAfterDue" type="number" min="0" value={settings.overdueDaysAfterDue} onChange={handleChange} />
                                 </div>
 
+                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2 pt-4">Controle de Acesso</h2>
                                 {user?.role === 'general_admin' && (
-                                    <>
-                                        <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2 pt-4">Controle de Acesso</h2>
-                                        <div className="flex justify-between items-center p-3 bg-[var(--theme-bg)] rounded-lg">
-                                            <label htmlFor="registrationEnabled" className="font-medium text-[var(--theme-text-primary)]">Permitir cadastro de novas academias</label>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" id="registrationEnabled" name="registrationEnabled" checked={settings.registrationEnabled} onChange={handleChange} className="sr-only peer" />
-                                                <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
-                                            </label>
-                                        </div>
-                                    </>
+                                    <div className="flex justify-between items-center p-3 bg-[var(--theme-bg)] rounded-lg mb-2">
+                                        <label htmlFor="registrationEnabled" className="font-medium text-[var(--theme-text-primary)]">Permitir cadastro de novas academias</label>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" id="registrationEnabled" name="registrationEnabled" checked={settings.registrationEnabled} onChange={handleChange} className="sr-only peer" />
+                                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
+                                        </label>
+                                    </div>
                                 )}
+                                <div className="flex justify-between items-center p-3 bg-[var(--theme-bg)] rounded-lg">
+                                    <label htmlFor="studentProfileEditEnabled" className="font-medium text-[var(--theme-text-primary)]">Permitir edição de perfil pelo aluno</label>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="studentProfileEditEnabled" name="studentProfileEditEnabled" checked={settings.studentProfileEditEnabled} onChange={handleChange} className="sr-only peer" />
+                                        <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
+                                    </label>
+                                </div>
 
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2 pt-4">Login Social</h2>
                                 <div className="flex justify-between items-center p-3 bg-[var(--theme-bg)] rounded-lg">

@@ -132,12 +132,20 @@ app.get('/api/initial-data', async (req, res) => {
              await pool.query("ALTER TABLE professors ADD COLUMN isInstructor BOOLEAN DEFAULT FALSE");
         }
         
-        // 4. imageUrl on Users (optional for profile sync)
+        // 4. imageUrl on Users
         try {
              await pool.query("SELECT imageUrl FROM users LIMIT 1");
         } catch (e) {
              console.log("Migrating: Adding imageUrl to users");
              await pool.query("ALTER TABLE users ADD COLUMN imageUrl LONGTEXT");
+        }
+
+        // 5. studentProfileEditEnabled on ThemeSettings
+        try {
+             await pool.query("SELECT studentProfileEditEnabled FROM theme_settings LIMIT 1");
+        } catch (e) {
+             console.log("Migrating: Adding studentProfileEditEnabled to theme_settings");
+             await pool.query("ALTER TABLE theme_settings ADD COLUMN studentProfileEditEnabled BOOLEAN DEFAULT FALSE");
         }
 
         const [students] = await pool.query('SELECT * FROM students');
@@ -169,7 +177,14 @@ app.get('/api/initial-data', async (req, res) => {
         const [settings] = await pool.query('SELECT * FROM theme_settings LIMIT 1');
         
         let parsedSettings = settings[0] || {};
-        parsedSettings = { ...parsedSettings, useGradient: Boolean(parsedSettings.useGradient), publicPageEnabled: Boolean(parsedSettings.publicPageEnabled), registrationEnabled: Boolean(parsedSettings.registrationEnabled), socialLoginEnabled: Boolean(parsedSettings.socialLoginEnabled) };
+        parsedSettings = { 
+            ...parsedSettings, 
+            useGradient: Boolean(parsedSettings.useGradient), 
+            publicPageEnabled: Boolean(parsedSettings.publicPageEnabled), 
+            registrationEnabled: Boolean(parsedSettings.registrationEnabled), 
+            socialLoginEnabled: Boolean(parsedSettings.socialLoginEnabled),
+            studentProfileEditEnabled: Boolean(parsedSettings.studentProfileEditEnabled)
+        };
 
         res.json({ students: parsedStudents, users, academies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
     } catch (error) {
@@ -423,13 +438,13 @@ app.post('/api/settings', async (req, res) => {
             cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?,
             useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?,
             publicPageEnabled=?, registrationEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?,
-            socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?
+            socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?
             WHERE id = 1`,
             [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
              s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
              s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount,
              s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs,
-             s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion]
+             s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled]
         );
         res.json({ success: true });
     } catch(e) { console.error(e); res.status(500).send(e.message); }

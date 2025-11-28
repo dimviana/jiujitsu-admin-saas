@@ -122,6 +122,7 @@ export interface ThemeSettings {
   publicPageEnabled: boolean;
   registrationEnabled: boolean;
   socialLoginEnabled: boolean;
+  studentProfileEditEnabled: boolean; // New Flag
   googleClientId?: string;
   facebookAppId?: string;
   theme?: string;
