@@ -5,6 +5,7 @@
 
 
 
+
 import React, { useEffect, useState, useMemo } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { 
@@ -13,6 +14,7 @@ import {
 } from '../constants';
 
 type NotificationType = { message: string; details: string; type: 'error' | 'success' };
+type ThemeMode = 'light' | 'dark' | 'system';
 
 interface AppContextType {
     user: User | null;
@@ -30,6 +32,10 @@ interface AppContextType {
     setNotification: (notification: NotificationType | null) => void;
     globalAcademyFilter: string;
     setGlobalAcademyFilter: (filter: string) => void;
+    
+    // Theme
+    themeMode: ThemeMode;
+    setThemeMode: (mode: ThemeMode) => void;
     
     saveStudent: (student: Omit<Student, 'id' | 'paymentStatus' | 'lastSeen' | 'paymentHistory'> & { id?: string }) => Promise<void>;
     deleteStudent: (id: string) => Promise<void>;
@@ -65,6 +71,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (error) {
             return null;
         }
+    });
+
+    // Theme Mode State
+    const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
+        return (localStorage.getItem('themeMode') as ThemeMode) || 'system';
     });
 
     // Raw, unfiltered data from the API
@@ -174,16 +185,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     }, [user, globalAcademyFilter, allStudents, allProfessors, allSchedules, allAttendance, allUsers, allAcademies, allActivityLogs]);
 
+    const setThemeMode = (mode: ThemeMode) => {
+        setThemeModeState(mode);
+        localStorage.setItem('themeMode', mode);
+    };
 
+    // Apply Theme (CSS Variables)
     useEffect(() => {
         const root = document.documentElement;
-        root.style.setProperty('--theme-primary', effectiveThemeSettings.primaryColor);
-        root.style.setProperty('--theme-secondary', effectiveThemeSettings.secondaryColor);
-        root.style.setProperty('--theme-accent', effectiveThemeSettings.primaryColor);
-        root.style.setProperty('--theme-bg', effectiveThemeSettings.backgroundColor);
-        root.style.setProperty('--theme-card-bg', effectiveThemeSettings.cardBackgroundColor);
-        root.style.setProperty('--theme-text-primary', effectiveThemeSettings.secondaryColor);
-    }, [effectiveThemeSettings]);
+        
+        const applyTheme = () => {
+            const isDark = themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            
+            if (isDark) {
+                // Dark Mode Palette override
+                root.style.setProperty('--theme-primary', effectiveThemeSettings.primaryColor);
+                root.style.setProperty('--theme-secondary', '#f8fafc'); // Light text for secondary elements in dark mode
+                root.style.setProperty('--theme-accent', effectiveThemeSettings.primaryColor);
+                
+                // Dark Backgrounds
+                root.style.setProperty('--theme-bg', '#0f172a'); // Slate 900
+                root.style.setProperty('--theme-card-bg', '#1e293b'); // Slate 800
+                root.style.setProperty('--theme-text-primary', '#f1f5f9'); // Slate 100
+                
+                root.classList.add('dark');
+            } else {
+                // Light Mode (Default from Settings)
+                root.style.setProperty('--theme-primary', effectiveThemeSettings.primaryColor);
+                root.style.setProperty('--theme-secondary', effectiveThemeSettings.secondaryColor);
+                root.style.setProperty('--theme-accent', effectiveThemeSettings.primaryColor);
+                root.style.setProperty('--theme-bg', effectiveThemeSettings.backgroundColor);
+                root.style.setProperty('--theme-card-bg', effectiveThemeSettings.cardBackgroundColor);
+                root.style.setProperty('--theme-text-primary', effectiveThemeSettings.secondaryColor);
+                
+                root.classList.remove('dark');
+            }
+        };
+
+        applyTheme();
+
+        // Listener for system changes if in system mode
+        if (themeMode === 'system') {
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            mediaQuery.addEventListener('change', applyTheme);
+            return () => mediaQuery.removeEventListener('change', applyTheme);
+        }
+
+    }, [effectiveThemeSettings, themeMode]);
 
     const handleLoginSuccess = async (userData: User) => {
         localStorage.setItem('jiujitsu-user', JSON.stringify(userData));
@@ -325,6 +373,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             themeSettings: effectiveThemeSettings, 
             loading, notification, setNotification,
             globalAcademyFilter, setGlobalAcademyFilter,
+            themeMode, setThemeMode,
             saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, updateStudentStatus, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor, updateProfessorStatus,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord, saveAcademy, updateAcademyStatus,

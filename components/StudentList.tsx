@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Student, Graduation } from '../types';
-import { Search, MoreVertical, MessageCircle, Award, Phone } from 'lucide-react';
+import { Search, MoreVertical, MessageCircle, Award } from 'lucide-react';
 
 interface StudentListProps {
   students: Student[];
