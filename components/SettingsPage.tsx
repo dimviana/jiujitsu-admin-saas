@@ -1,6 +1,4 @@
-
-
-import React, { useContext, useState, FormEvent } from 'react';
+import React, { useContext, useState, FormEvent, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -21,24 +19,46 @@ const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { l
 const SettingsPage: React.FC = () => {
     const { themeSettings, setThemeSettings, activityLogs, users, user, academies } = useContext(AppContext);
     const [settings, setSettings] = useState(themeSettings);
+    const [monthlyFeeInput, setMonthlyFeeInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
     const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos'>('system');
 
     const isAcademyAdmin = user?.role === 'academy_admin';
     const currentAcademyName = isAcademyAdmin ? academies.find(a => a.id === user.academyId)?.name : 'Sistema Global';
 
     // Sync local state when themeSettings from context changes
-    React.useEffect(() => {
+    useEffect(() => {
         setSettings(themeSettings);
+        setMonthlyFeeInput(themeSettings.monthlyFeeAmount.toFixed(2));
     }, [themeSettings]);
 
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
         const checked = (e.target as HTMLInputElement).checked;
-        setSettings(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) || 0 : value)
-        }));
+        
+        if (name === 'monthlyFeeAmount') {
+            setMonthlyFeeInput(value); // Keep typing fluid
+            const numValue = parseFloat(value);
+            if (!isNaN(numValue)) {
+                setSettings(prev => ({ ...prev, [name]: numValue }));
+            }
+        } else {
+            setSettings(prev => ({
+                ...prev,
+                [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) || 0 : value)
+            }));
+        }
+    };
+    
+    const handleFeeBlur = () => {
+        const val = parseFloat(monthlyFeeInput);
+        if (!isNaN(val)) {
+            setMonthlyFeeInput(val.toFixed(2));
+            setSettings(prev => ({ ...prev, monthlyFeeAmount: val }));
+        } else {
+            setMonthlyFeeInput('0.00');
+            setSettings(prev => ({ ...prev, monthlyFeeAmount: 0 }));
+        }
     };
     
     const handleSubmit = (e: FormEvent) => {
@@ -201,8 +221,9 @@ const SettingsPage: React.FC = () => {
                                         label="Valor Padrão da Mensalidade (R$)"
                                         name="monthlyFeeAmount"
                                         type="number"
-                                        value={settings.monthlyFeeAmount} 
+                                        value={monthlyFeeInput} 
                                         onChange={handleChange}
+                                        onBlur={handleFeeBlur}
                                         step="0.01"
                                     />
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

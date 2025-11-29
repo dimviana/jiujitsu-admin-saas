@@ -205,6 +205,7 @@ export const Financial: React.FC = () => {
     const [isValuesModalOpen, setIsValuesModalOpen] = useState(false);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [feeAmount, setFeeAmount] = useState(themeSettings.monthlyFeeAmount);
+    const [feeAmountInput, setFeeAmountInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
     const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
 
     const { paidStudents, unpaidStudents, totalRevenue } = useMemo(() => {
@@ -263,10 +264,34 @@ export const Financial: React.FC = () => {
             sessionStorage.setItem('reminderModalShown', 'true');
         }
     }, [remindersToSend]);
+    
+    useEffect(() => {
+        setFeeAmount(themeSettings.monthlyFeeAmount);
+        setFeeAmountInput(themeSettings.monthlyFeeAmount.toFixed(2));
+    }, [themeSettings]);
 
     const handleSaveFeeAmount = () => {
         setThemeSettings({ ...themeSettings, monthlyFeeAmount: feeAmount });
         setIsValuesModalOpen(false);
+    };
+    
+    const handleFeeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setFeeAmountInput(e.target.value);
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val)) {
+            setFeeAmount(val);
+        }
+    };
+    
+    const handleFeeInputBlur = () => {
+        const val = parseFloat(feeAmountInput);
+        if (!isNaN(val)) {
+            setFeeAmountInput(val.toFixed(2));
+            setFeeAmount(val);
+        } else {
+            setFeeAmountInput('0.00');
+            setFeeAmount(0);
+        }
     };
 
     const handleSendReminder = (phone: string, name: string) => {
@@ -518,8 +543,9 @@ export const Financial: React.FC = () => {
                     <Input 
                         label="Valor Padrão da Mensalidade (R$)"
                         type="number"
-                        value={feeAmount}
-                        onChange={(e) => setFeeAmount(parseFloat(e.target.value) || 0)}
+                        value={feeAmountInput}
+                        onChange={handleFeeInputChange}
+                        onBlur={handleFeeInputBlur}
                         step="0.01"
                         min="0"
                     />
