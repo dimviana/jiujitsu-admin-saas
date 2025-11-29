@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, MessageCircle } from 'lucide-react';
+import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, MessageCircle, HeartHandshake } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
 import { ConfirmationModal } from './ui/ConfirmationModal';
@@ -106,6 +106,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
         isCompetitor: false,
         responsibleName: '',
         responsiblePhone: '',
+        isSocialProject: false,
+        socialProjectName: '',
         ...student,
         // Ensure dates are correctly formatted for input fields
         birthDate: formatDateForInput(student?.birthDate),
@@ -166,6 +168,13 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
             safeData.responsiblePhone = null;
         }
 
+        // Logic for Social Project
+        if (safeData.isSocialProject) {
+            safeData.paymentStatus = 'scholarship'; // Force scholarship/exempt status
+        } else {
+            safeData.socialProjectName = null; // Clear name if unchecked
+        }
+
         // Include the preview image in the saved data
         onSave({ ...safeData, imageUrl: preview || undefined } as any);
     };
@@ -211,6 +220,40 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
                     <Input label="Telefone do Responsável" name="responsiblePhone" value={formData.responsiblePhone} onChange={handleChange} required={currentAge < 16} />
                 </div>
             )}
+
+            {/* Social Project Section */}
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
+                <div className="flex items-center gap-2">
+                    <input 
+                        id="isSocialProject" 
+                        name="isSocialProject" 
+                        type="checkbox" 
+                        checked={!!formData.isSocialProject} 
+                        onChange={handleChange} 
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" 
+                    />
+                    <label htmlFor="isSocialProject" className="text-sm font-bold text-blue-800 flex items-center">
+                        <HeartHandshake className="w-4 h-4 mr-2" />
+                        Participante de Projeto Social?
+                    </label>
+                </div>
+                
+                {formData.isSocialProject && (
+                    <div className="animate-fade-in-down">
+                        <Input 
+                            label="Nome do Projeto Social" 
+                            name="socialProjectName" 
+                            value={formData.socialProjectName} 
+                            onChange={handleChange} 
+                            required={formData.isSocialProject} 
+                            placeholder="Digite o nome do projeto"
+                        />
+                        <p className="text-xs text-blue-600 mt-2">
+                            * Alunos de projeto social são automaticamente isentos de mensalidade.
+                        </p>
+                    </div>
+                )}
+            </div>
 
             <div>
               <Input label="CPF" name="cpf" value={formData.cpf} onChange={handleChange} required />
@@ -310,7 +353,7 @@ const StudentsPage: React.FC = () => {
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
     const [studentForPhoto, setStudentForPhoto] = useState<Student | null>(null);
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
-    const [activeTab, setActiveTab] = useState<'adults' | 'kids' | 'pending'>('adults');
+    const [activeTab, setActiveTab] = useState<'adults' | 'kids' | 'social_project' | 'approvals'>('adults');
     
     // Confirmation Modal States
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -429,16 +472,24 @@ const StudentsPage: React.FC = () => {
     }, [students, graduations, attendanceRecords]);
 
     const filteredStudents = useMemo(() => {
-        if (activeTab === 'pending') {
+        // Pending Approval (Separate from Social Project)
+        if (activeTab === 'approvals') {
             return students.filter(student => student.status === 'pending');
         }
-        // Exclude pending from other tabs
+
+        // Active Students Logic
         const activeStudents = students.filter(s => s.status !== 'pending');
         
-        if (activeTab === 'adults') {
-            return activeStudents.filter(student => calculateAge(student.birthDate || '') >= 16);
+        if (activeTab === 'social_project') {
+            return activeStudents.filter(s => s.isSocialProject);
         }
-        return activeStudents.filter(student => calculateAge(student.birthDate || '') < 16);
+
+        if (activeTab === 'adults') {
+            return activeStudents.filter(s => !s.isSocialProject && calculateAge(s.birthDate || '') >= 16);
+        }
+        
+        // Kids
+        return activeStudents.filter(s => !s.isSocialProject && calculateAge(s.birthDate || '') < 16);
     }, [students, activeTab]);
 
 
@@ -584,6 +635,8 @@ const StudentsPage: React.FC = () => {
         window.open(`https://wa.me/55${cleanPhone}?text=${encodedMessage}`, '_blank');
     };
 
+    const pendingCount = students.filter(s => s.status === 'pending').length;
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
@@ -591,7 +644,7 @@ const StudentsPage: React.FC = () => {
                 <Button onClick={() => handleOpenModal({})}>Adicionar Aluno</Button>
             </div>
 
-            <div className="border-b border-slate-200">
+            <div className="border-b border-slate-200 overflow-x-auto">
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                     <button
                         onClick={() => setActiveTab('adults')}
@@ -614,20 +667,32 @@ const StudentsPage: React.FC = () => {
                         Infantil/Infanto Juvenil
                     </button>
                     <button
-                        onClick={() => setActiveTab('pending')}
+                        onClick={() => setActiveTab('social_project')}
                         className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
-                            activeTab === 'pending'
-                                ? 'border-amber-500 text-amber-600'
+                            activeTab === 'social_project'
+                                ? 'border-blue-500 text-blue-600'
                                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                         }`}
                     >
-                        Pendentes
-                        {students.filter(s => s.status === 'pending').length > 0 && (
-                            <span className="ml-2 bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full">
-                                {students.filter(s => s.status === 'pending').length}
-                            </span>
-                        )}
+                        <HeartHandshake className="w-4 h-4 mr-2" />
+                        Projetos Sociais
                     </button>
+                    {/* Kept Approval logic but separated from "Pendentes" visual concept which is now Social Project */}
+                    {pendingCount > 0 && (
+                        <button
+                            onClick={() => setActiveTab('approvals')}
+                            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                                activeTab === 'approvals'
+                                    ? 'border-red-500 text-red-600'
+                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                            }`}
+                        >
+                            Aprovações Pendentes
+                            <span className="ml-2 bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full">
+                                {pendingCount}
+                            </span>
+                        </button>
+                    )}
                 </nav>
             </div>
             
@@ -646,7 +711,9 @@ const StudentsPage: React.FC = () => {
                         
                         // Status Badge Logic
                         let statusBadge = null;
-                        if (student.paymentStatus === 'paid') {
+                        if (student.isSocialProject) {
+                             statusBadge = <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">Projeto Social</span>;
+                        } else if (student.paymentStatus === 'paid') {
                             statusBadge = <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Em Dia</span>;
                         } else if (student.paymentStatus === 'scholarship') {
                             statusBadge = <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">Bolsista</span>;
@@ -691,11 +758,23 @@ const StudentsPage: React.FC = () => {
                                     </div>
                                     
                                     <div className="space-y-3 text-sm">
-                                        {activeTab !== 'pending' && (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-slate-600 font-medium">Pagamento:</span>
-                                                {statusBadge}
-                                            </div>
+                                        {activeTab !== 'approvals' && (
+                                            <>
+                                                {student.isSocialProject ? (
+                                                    <div className="flex justify-between items-center bg-blue-50 p-1.5 rounded text-blue-800 border border-blue-100">
+                                                        <span className="font-semibold text-xs truncate max-w-[200px]" title={student.socialProjectName}>
+                                                            <HeartHandshake className="w-3 h-3 inline mr-1"/>
+                                                            {student.socialProjectName}
+                                                        </span>
+                                                        <span className="text-[10px] bg-white px-1.5 rounded border border-blue-200">Isento</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-slate-600 font-medium">Pagamento:</span>
+                                                        {statusBadge}
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                         {belt && (
                                             <div className="flex justify-between items-center">
@@ -785,7 +864,7 @@ const StudentsPage: React.FC = () => {
                                             </div>
                                         )}
 
-                                        {eligibility && eligibility.eligible && eligibility.nextBelt && activeTab !== 'pending' && (
+                                        {eligibility && eligibility.eligible && eligibility.nextBelt && activeTab !== 'approvals' && (
                                             <div className="mt-4 p-3 bg-green-100 rounded-lg text-center border border-green-200">
                                                 <p className="font-bold text-green-800">Elegível para {eligibility.nextBelt.name}!</p>
                                                 <p className="text-xs text-green-700">{eligibility.reason}</p>
@@ -796,7 +875,7 @@ const StudentsPage: React.FC = () => {
                                         )}
 
                                         <div className="mt-4 pt-4 border-t border-slate-200/60 flex flex-wrap justify-end gap-2">
-                                            {activeTab === 'pending' ? (
+                                            {activeTab === 'approvals' ? (
                                                 <>
                                                     <Button size="sm" variant="success" onClick={() => handleApproveStudent(student.id)}>Aprovar</Button>
                                                     <Button size="sm" variant="danger" onClick={() => handleRejectStudent(student.id)}>Rejeitar</Button>

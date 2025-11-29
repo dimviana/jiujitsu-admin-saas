@@ -249,11 +249,20 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE theme_settings ADD COLUMN whatsappMessageTemplate TEXT");
         }
 
+        // 21. Add isSocialProject and socialProjectName to Students
+        try {
+            await pool.query("SELECT isSocialProject FROM students LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding social project fields to students");
+            await pool.query("ALTER TABLE students ADD COLUMN isSocialProject BOOLEAN DEFAULT FALSE, ADD COLUMN socialProjectName VARCHAR(255)");
+        }
+
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
             ...s, 
             isCompetitor: Boolean(s.isCompetitor),
             isInstructor: Boolean(s.isInstructor),
+            isSocialProject: Boolean(s.isSocialProject),
             medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 },
             documents: s.documents ? JSON.parse(s.documents) : [],
             status: s.status || 'active'
@@ -335,7 +344,8 @@ app.post('/api/students', async (req, res) => {
             'phone', 'address', 'beltId', 'academyId', 'firstGraduationDate', 
             'lastPromotionDate', 'paymentStatus', 'paymentDueDateDay', 'imageUrl', 
             'stripes', 'isCompetitor', 'lastCompetition', 'medals', 'isInstructor', 
-            'lastSeen', 'status', 'documents', 'responsibleName', 'responsiblePhone'
+            'lastSeen', 'status', 'documents', 'responsibleName', 'responsiblePhone',
+            'isSocialProject', 'socialProjectName'
         ];
 
         // Filter incoming data
@@ -362,6 +372,7 @@ app.post('/api/students', async (req, res) => {
         // Boolean fields as integers
         if (payload.isCompetitor !== undefined) payload.isCompetitor = payload.isCompetitor ? 1 : 0;
         if (payload.isInstructor !== undefined) payload.isInstructor = payload.isInstructor ? 1 : 0;
+        if (payload.isSocialProject !== undefined) payload.isSocialProject = payload.isSocialProject ? 1 : 0;
 
         // Remove password if empty
         if (payload.password === '' || payload.password === undefined) {

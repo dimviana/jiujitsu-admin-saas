@@ -142,6 +142,8 @@ export interface Student {
   documents?: StudentDocument[];
   responsibleName?: string;
   responsiblePhone?: string;
+  isSocialProject?: boolean;
+  socialProjectName?: string;
 }
 
 export interface User {
