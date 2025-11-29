@@ -233,6 +233,14 @@ app.get('/api/initial-data', async (req, res) => {
              console.log("Error migrating paymentStatus:", e.message);
         }
 
+        // 19. Add Responsible Fields to Students (For minors)
+        try {
+            await pool.query("SELECT responsibleName FROM students LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding responsible fields to students");
+            await pool.query("ALTER TABLE students ADD COLUMN responsibleName VARCHAR(255), ADD COLUMN responsiblePhone VARCHAR(255)");
+        }
+
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
             ...s, 
@@ -319,7 +327,7 @@ app.post('/api/students', async (req, res) => {
             'phone', 'address', 'beltId', 'academyId', 'firstGraduationDate', 
             'lastPromotionDate', 'paymentStatus', 'paymentDueDateDay', 'imageUrl', 
             'stripes', 'isCompetitor', 'lastCompetition', 'medals', 'isInstructor', 
-            'lastSeen', 'status', 'documents'
+            'lastSeen', 'status', 'documents', 'responsibleName', 'responsiblePhone'
         ];
 
         // Filter incoming data

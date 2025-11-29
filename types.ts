@@ -1,5 +1,3 @@
-
-
 export type Role = 'general_admin' | 'academy_admin' | 'student';
 
 export type DayOfWeek = 'Domingo' | 'Segunda-feira' | 'Terça-feira' | 'Quarta-feira' | 'Quinta-feira' | 'Sexta-feira' | 'Sábado';
@@ -141,6 +139,8 @@ export interface Student {
   isInstructor?: boolean;
   status?: 'active' | 'blocked' | 'pending';
   documents?: StudentDocument[];
+  responsibleName?: string;
+  responsiblePhone?: string;
 }
 
 export interface User {

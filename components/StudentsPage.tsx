@@ -34,8 +34,6 @@ const validateCPF = (cpf: string): boolean => {
     return true;
 };
 
-// ... (Rest of the file remains largely the same, just removing Trash2 import)
-
 // Helper to format date string from API/DB (often includes time or is ISO) to YYYY-MM-DD for input type="date"
 const formatDateForInput = (dateString?: string) => {
     if (!dateString) return '';
@@ -70,6 +68,18 @@ const getBeltStyle = (grad: Graduation) => {
     };
 };
 
+const calculateAge = (birthDate: string): number => {
+    if (!birthDate) return 0;
+    const today = new Date();
+    const birthDateObj = new Date(birthDate);
+    let age = today.getFullYear() - birthDateObj.getFullYear();
+    const m = today.getMonth() - birthDateObj.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDateObj.getDate())) {
+        age--;
+    }
+    return age;
+};
+
 interface StudentFormProps {
     student: Partial<Student> | null;
     onSave: (student: Omit<Student, 'id' | 'paymentStatus' | 'lastSeen' | 'paymentHistory'> & { id?: string }) => void;
@@ -94,6 +104,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
         paymentDueDateDay: 10,
         stripes: 0,
         isCompetitor: false,
+        responsibleName: '',
+        responsiblePhone: '',
         ...student,
         // Ensure dates are correctly formatted for input fields
         birthDate: formatDateForInput(student?.birthDate),
@@ -104,6 +116,11 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
     });
     const [cpfError, setCpfError] = useState('');
     
+    // Calculate Age dynamically
+    const currentAge = useMemo(() => {
+        return calculateAge(formData.birthDate);
+    }, [formData.birthDate]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
         const { checked } = e.target as HTMLInputElement;
@@ -143,6 +160,12 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
         // FIX: Remove properties that are not columns in the students table or should not be overwritten this way
         const { paymentHistory, paymentStatus, lastSeen, documents, ...safeData } = formData as any;
 
+        // Clear responsible data if age >= 16 to keep DB clean
+        if (currentAge >= 16) {
+            safeData.responsibleName = null;
+            safeData.responsiblePhone = null;
+        }
+
         // Include the preview image in the saved data
         onSave({ ...safeData, imageUrl: preview || undefined } as any);
     };
@@ -176,6 +199,19 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
             />
             <Input label="Registro FJJPE" name="fjjpe_registration" value={formData.fjjpe_registration} onChange={handleChange} required />
             <Input label="Data de Nascimento" name="birthDate" type="date" value={formData.birthDate} onChange={handleChange} required />
+            
+            {/* Conditional Responsible Fields */}
+            {currentAge < 16 && (
+                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 space-y-4 animate-fade-in-down">
+                    <h4 className="text-sm font-bold text-amber-800 flex items-center">
+                        <Baby className="w-4 h-4 mr-2" />
+                        Dados do Responsável (Menor de 16 anos)
+                    </h4>
+                    <Input label="Nome do Responsável" name="responsibleName" value={formData.responsibleName} onChange={handleChange} required={currentAge < 16} />
+                    <Input label="Telefone do Responsável" name="responsiblePhone" value={formData.responsiblePhone} onChange={handleChange} required={currentAge < 16} />
+                </div>
+            )}
+
             <div>
               <Input label="CPF" name="cpf" value={formData.cpf} onChange={handleChange} required />
               {cpfError && <p className="text-sm text-red-500 mt-1">{cpfError}</p>}
@@ -251,18 +287,6 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
         )}
         </>
     );
-};
-
-const calculateAge = (birthDate: string): number => {
-    if (!birthDate) return 0;
-    const today = new Date();
-    const birthDateObj = new Date(birthDate);
-    let age = today.getFullYear() - birthDateObj.getFullYear();
-    const m = today.getMonth() - birthDateObj.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDateObj.getDate())) {
-        age--;
-    }
-    return age;
 };
 
 const StudentsPage: React.FC = () => {
