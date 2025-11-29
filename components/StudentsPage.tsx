@@ -1,4 +1,3 @@
-
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Student, Graduation } from '../types';
@@ -7,10 +6,11 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText, Baby, Briefcase } from 'lucide-react';
+import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, Trash2 } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
 import { ConfirmationModal } from './ui/ConfirmationModal';
+import { DocumentModal } from './ui/DocumentModal';
 
 const validateCPF = (cpf: string): boolean => {
     if (typeof cpf !== 'string') return false;
@@ -138,8 +138,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ student, onSave, onClose }) =
             return;
         }
         
-        // FIX: Remove properties that are not columns in the students table (like paymentHistory)
-        const { paymentHistory, ...safeData } = formData as any;
+        // FIX: Remove properties that are not columns in the students table or should not be overwritten this way
+        const { paymentHistory, paymentStatus, lastSeen, documents, ...safeData } = formData as any;
 
         // Include the preview image in the saved data
         onSave({ ...safeData, imageUrl: preview || undefined } as any);
@@ -264,13 +264,27 @@ const calculateAge = (birthDate: string): number => {
 };
 
 const StudentsPage: React.FC = () => {
-    const { students, academies, saveStudent, deleteStudent, loading, graduations, attendanceRecords, schedules, themeSettings, updateStudentPayment, promoteStudentToInstructor } = useContext(AppContext);
+    const { 
+        students, 
+        academies, 
+        saveStudent, 
+        deleteStudent, 
+        loading, 
+        graduations, 
+        attendanceRecords, 
+        updateStudentStatus, 
+        promoteStudentToInstructor,
+        schedules, 
+        themeSettings, 
+        updateStudentPayment 
+    } = useContext(AppContext);
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Partial<Student> | null>(null);
     const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
     const [studentForPhoto, setStudentForPhoto] = useState<Student | null>(null);
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
-    const [activeTab, setActiveTab] = useState<'adults' | 'kids'>('adults');
+    const [activeTab, setActiveTab] = useState<'adults' | 'kids' | 'pending'>('adults');
     
     // Confirmation Modal States
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -279,6 +293,10 @@ const StudentsPage: React.FC = () => {
     // Instructor Promotion Modal States
     const [isInstructorPromoteModalOpen, setIsInstructorPromoteModalOpen] = useState(false);
     const [studentToPromoteInstructor, setStudentToPromoteInstructor] = useState<Student | null>(null);
+
+    // Document Modal State
+    const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+    const [studentForDocuments, setStudentForDocuments] = useState<Student | null>(null);
 
     const eligibilityData = useMemo(() => {
         const data = new Map<string, { eligible: boolean; nextBelt: Graduation | null; reason: string }>();
@@ -385,10 +403,16 @@ const StudentsPage: React.FC = () => {
     }, [students, graduations, attendanceRecords]);
 
     const filteredStudents = useMemo(() => {
-        if (activeTab === 'adults') {
-            return students.filter(student => calculateAge(student.birthDate || '') >= 16);
+        if (activeTab === 'pending') {
+            return students.filter(student => student.status === 'pending');
         }
-        return students.filter(student => calculateAge(student.birthDate || '') < 16);
+        // Exclude pending from other tabs
+        const activeStudents = students.filter(s => s.status !== 'pending');
+        
+        if (activeTab === 'adults') {
+            return activeStudents.filter(student => calculateAge(student.birthDate || '') >= 16);
+        }
+        return activeStudents.filter(student => calculateAge(student.birthDate || '') < 16);
     }, [students, activeTab]);
 
 
@@ -403,7 +427,7 @@ const StudentsPage: React.FC = () => {
 
         if (window.confirm(`Promover ${student.name} para a faixa ${eligibility.nextBelt.name}?`)) {
             // Destructure to remove fields that should not be passed to saveStudent and to keep the existing password
-            const { paymentStatus, lastSeen, paymentHistory, password, ...studentToSave } = student;
+            const { paymentStatus, lastSeen, paymentHistory, password, documents, ...studentToSave } = student;
             
             const promotedStudentData = {
                 ...studentToSave,
@@ -442,13 +466,11 @@ const StudentsPage: React.FC = () => {
         handleCloseModal();
     };
     
-    // NEW: Open Delete Confirmation Modal
     const handleDeleteClick = (student: Student) => {
         setStudentToDelete(student);
         setIsDeleteModalOpen(true);
     };
 
-    // NEW: Confirm Delete Action
     const handleConfirmDelete = async () => {
         if (studentToDelete) {
             await deleteStudent(studentToDelete.id);
@@ -489,6 +511,23 @@ const StudentsPage: React.FC = () => {
         }
     }
 
+    const handleApproveStudent = async (id: string) => {
+        if(window.confirm('Aprovar cadastro do aluno?')) {
+            await updateStudentStatus(id, 'active');
+        }
+    };
+
+    const handleRejectStudent = async (id: string) => {
+        if(window.confirm('Rejeitar cadastro do aluno? O registro será excluído.')) {
+            await deleteStudent(id);
+        }
+    };
+
+    const handleOpenDocumentModal = (student: Student) => {
+        setStudentForDocuments(student);
+        setIsDocumentModalOpen(true);
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
@@ -506,7 +545,7 @@ const StudentsPage: React.FC = () => {
                                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                         }`}
                     >
-                        Adultos ({students.filter(s => calculateAge(s.birthDate || '') >= 16).length})
+                        Adultos
                     </button>
                     <button
                         onClick={() => setActiveTab('kids')}
@@ -516,7 +555,22 @@ const StudentsPage: React.FC = () => {
                                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                         }`}
                     >
-                        Infantil/Infanto Juvenil ({students.filter(s => calculateAge(s.birthDate || '') < 16).length})
+                        Infantil/Infanto Juvenil
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('pending')}
+                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                            activeTab === 'pending'
+                                ? 'border-amber-500 text-amber-600'
+                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                        }`}
+                    >
+                        Pendentes
+                        {students.filter(s => s.status === 'pending').length > 0 && (
+                            <span className="ml-2 bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full">
+                                {students.filter(s => s.status === 'pending').length}
+                            </span>
+                        )}
                     </button>
                 </nav>
             </div>
@@ -531,11 +585,19 @@ const StudentsPage: React.FC = () => {
                         const stripes = student.stripes;
                         const eligibility = eligibilityData.get(student.id);
 
-                        // Determinar se pode ser promovido a instrutor (Faixa Azul = rank aprox 101/2 no seed, mas vamos checar pelo nome ou tipo 'adult' e não ser branca)
-                        // Lógica: Faixa Azul ou superior (Rank > 1 ou específico) e type == 'adult'
                         const blueBeltRank = graduations.find(g => g.name === 'Azul' && g.type === 'adult')?.rank || 999;
                         const isEligibleForInstructor = belt && belt.type === 'adult' && belt.rank >= blueBeltRank && !student.isInstructor;
                         
+                        // Status Badge Logic
+                        let statusBadge = null;
+                        if (student.paymentStatus === 'paid') {
+                            statusBadge = <span className="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Em Dia</span>;
+                        } else if (student.paymentStatus === 'scholarship') {
+                            statusBadge = <span className="px-2 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">Bolsista</span>;
+                        } else {
+                            statusBadge = <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">Pendente</span>;
+                        }
+
                         return (
                             <Card key={student.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 w-[328px]">
                                 <div 
@@ -547,7 +609,7 @@ const StudentsPage: React.FC = () => {
                                     }}
                                 ></div>
                                 <div className="p-5 flex flex-col flex-grow">
-                                    <div className="flex items-center mb-4">
+                                    <div className="flex items-center mb-4 relative">
                                         <button onClick={() => handleOpenPhotoModal(student)} className="relative group flex-shrink-0">
                                             <img 
                                                 src={student.imageUrl || `https://i.pravatar.cc/150?u=${student.cpf}`} 
@@ -562,15 +624,23 @@ const StudentsPage: React.FC = () => {
                                             <h2 className="text-xl font-bold text-slate-800">{student.name}</h2>
                                             <p className="text-sm text-slate-500">{academy?.name || 'N/A'}</p>
                                         </div>
+                                        {/* Document Icon Button */}
+                                        <button 
+                                            className="absolute top-0 right-0 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full"
+                                            title="Documentos"
+                                            onClick={() => handleOpenDocumentModal(student)}
+                                        >
+                                            <Paperclip className="w-5 h-5" />
+                                        </button>
                                     </div>
                                     
                                     <div className="space-y-3 text-sm">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-slate-600 font-medium">Pagamento:</span>
-                                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${student.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                                {student.paymentStatus === 'paid' ? 'Em Dia' : 'Pendente'}
-                                            </span>
-                                        </div>
+                                        {activeTab !== 'pending' && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-slate-600 font-medium">Pagamento:</span>
+                                                {statusBadge}
+                                            </div>
+                                        )}
                                         {belt && (
                                             <div className="flex justify-between items-center">
                                                 <span className="text-slate-600 font-medium">Graduação:</span>
@@ -650,7 +720,7 @@ const StudentsPage: React.FC = () => {
                                             </div>
                                         )}
 
-                                        {eligibility && eligibility.eligible && eligibility.nextBelt && (
+                                        {eligibility && eligibility.eligible && eligibility.nextBelt && activeTab !== 'pending' && (
                                             <div className="mt-4 p-3 bg-green-100 rounded-lg text-center border border-green-200">
                                                 <p className="font-bold text-green-800">Elegível para {eligibility.nextBelt.name}!</p>
                                                 <p className="text-xs text-green-700">{eligibility.reason}</p>
@@ -661,22 +731,31 @@ const StudentsPage: React.FC = () => {
                                         )}
 
                                         <div className="mt-4 pt-4 border-t border-slate-200/60 flex flex-wrap justify-end gap-2">
-                                            {isEligibleForInstructor && (
-                                                <Button size="sm" variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleInstructorPromotionClick(student)} title="Promover a Instrutor">
-                                                    <Briefcase className="w-4 h-4" />
-                                                </Button>
+                                            {activeTab === 'pending' ? (
+                                                <>
+                                                    <Button size="sm" variant="success" onClick={() => handleApproveStudent(student.id)}>Aprovar</Button>
+                                                    <Button size="sm" variant="danger" onClick={() => handleRejectStudent(student.id)}>Rejeitar</Button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {isEligibleForInstructor && (
+                                                        <Button size="sm" variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleInstructorPromotionClick(student)} title="Promover a Instrutor">
+                                                            <Briefcase className="w-4 h-4" />
+                                                        </Button>
+                                                    )}
+                                                    <Button size="sm" variant="secondary" onClick={() => setDashboardStudent(student)}>Dashboard</Button>
+                                                    <Button size="sm" variant="secondary" onClick={() => handleOpenModal(student)}>Editar</Button>
+                                                    <Button 
+                                                        size="sm" 
+                                                        variant="secondary" 
+                                                        onClick={() => handleGenerateCertificate(student)} 
+                                                        title="Gerar Certificado"
+                                                    >
+                                                        <FileText className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button size="sm" variant="danger" onClick={() => handleDeleteClick(student)}>Excluir</Button>
+                                                </>
                                             )}
-                                            <Button size="sm" variant="secondary" onClick={() => setDashboardStudent(student)}>Dashboard</Button>
-                                            <Button size="sm" variant="secondary" onClick={() => handleOpenModal(student)}>Editar</Button>
-                                            <Button 
-                                                size="sm" 
-                                                variant="secondary" 
-                                                onClick={() => handleGenerateCertificate(student)} 
-                                                title="Gerar Certificado"
-                                            >
-                                                <FileText className="w-4 h-4" />
-                                            </Button>
-                                            <Button size="sm" variant="danger" onClick={() => handleDeleteClick(student)}>Excluir</Button>
                                         </div>
                                     </div>
                                 </div>
@@ -688,7 +767,7 @@ const StudentsPage: React.FC = () => {
                         </div>
                     )}
                 </div>
-            )}
+             )}
 
             <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={selectedStudent?.id ? 'Editar Aluno' : 'Adicionar Aluno'}>
                 <StudentForm student={selectedStudent} onSave={handleSaveStudent} onClose={handleCloseModal} />
@@ -742,6 +821,14 @@ const StudentsPage: React.FC = () => {
                 confirmText="Sim, promover"
                 variant="success"
             />
+
+            {studentForDocuments && (
+                <DocumentModal
+                    isOpen={isDocumentModalOpen}
+                    onClose={() => setIsDocumentModalOpen(false)}
+                    student={studentForDocuments}
+                />
+            )}
         </div>
     );
 };

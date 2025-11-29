@@ -1,5 +1,6 @@
 
 
+
 import React, { useState } from 'react';
 import { Student, Graduation } from '../types';
 import { Search, MoreVertical, MessageCircle, Award } from 'lucide-react';
@@ -95,83 +96,86 @@ export const StudentList: React.FC<StudentListProps> = ({ students, graduations 
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {filteredStudents.map((student) => (
-              <tr key={student.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center">
-                    <img 
-                      src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
-                      alt={student.name} 
-                      className="w-10 h-10 rounded-full object-cover mr-4 border-2 border-white shadow-sm"
-                    />
-                    <div>
-                      <p className="font-medium text-slate-800">{student.name}</p>
-                      <p className="text-xs text-slate-500">{student.email}</p>
+            {filteredStudents.map((student) => {
+              let statusBadge;
+              if (student.paymentStatus === 'paid') {
+                  statusBadge = <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Em Dia</span>;
+              } else if (student.paymentStatus === 'scholarship') {
+                  statusBadge = <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Bolsista</span>;
+              } else {
+                  statusBadge = <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Pendente</span>;
+              }
+
+              return (
+                <tr key={student.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center">
+                      <img 
+                        src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
+                        alt={student.name} 
+                        className="w-10 h-10 rounded-full object-cover mr-4 border-2 border-white shadow-sm"
+                      />
+                      <div>
+                        <p className="font-medium text-slate-800">{student.name}</p>
+                        <p className="text-xs text-slate-500">{student.email}</p>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center space-x-2">
-                     <div 
-                        className="w-24 h-6 rounded flex items-center justify-end px-1 shadow-sm border border-slate-200"
-                        style={getBeltStyle(student.beltId)}
-                     >
-                        {student.beltId !== 'black' && student.beltId !== 'white' && (
-                             <div className="w-6 h-full bg-black ml-auto relative">
-                                  {/* Stripes */}
-                                  <div className="absolute flex space-x-[2px] right-1 top-0 bottom-0 items-center">
-                                     {Array.from({ length: student.stripes }).map((_, i) => (
-                                         <div key={i} className="w-1 h-3 bg-white"></div>
-                                     ))}
-                                  </div>
-                             </div>
-                        )}
-                         {student.beltId === 'black' && (
-                             <div className="w-8 h-full bg-red-600 ml-auto flex items-center justify-center">
-                                 {/* Example Professor bar */}
-                             </div>
-                        )}
-                     </div>
-                     <span className="text-sm text-slate-600">{graduations.find(g => g.id === student.beltId)?.name}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm text-slate-600 font-medium">{student.phone || 'N/A'}</span>
-                        {student.phone && (
-                            <button 
-                                onClick={() => handleWhatsAppClick(student.phone)}
-                                className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors shadow-sm"
-                                title="Abrir WhatsApp"
-                            >
-                                <MessageCircle className="w-4 h-4" />
-                            </button>
-                        )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center space-x-2">
+                      <div 
+                          className="w-24 h-6 rounded flex items-center justify-end px-1 shadow-sm border border-slate-200"
+                          style={getBeltStyle(student.beltId)}
+                      >
+                          {student.beltId !== 'black' && student.beltId !== 'white' && (
+                              <div className="w-6 h-full bg-black ml-auto relative">
+                                    {/* Stripes */}
+                                    <div className="absolute flex space-x-[2px] right-1 top-0 bottom-0 items-center">
+                                      {Array.from({ length: student.stripes }).map((_, i) => (
+                                          <div key={i} className="w-1 h-3 bg-white"></div>
+                                      ))}
+                                    </div>
+                              </div>
+                          )}
+                          {student.beltId === 'black' && (
+                              <div className="w-8 h-full bg-red-600 ml-auto flex items-center justify-center">
+                                  {/* Example Professor bar */}
+                              </div>
+                          )}
+                      </div>
+                      <span className="text-sm text-slate-600">{graduations.find(g => g.id === student.beltId)?.name}</span>
                     </div>
-                </td>
-                <td className="px-6 py-4">
-                  {student.paymentStatus === 'paid' ? (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      Em Dia
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                      Pendente
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center space-x-2">
-                    <button className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-full transition-colors" title="Graduar">
-                       <Award className="w-5 h-5" />
-                    </button>
-                    <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors" title="Mais Opções">
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-600 font-medium">{student.phone || 'N/A'}</span>
+                          {student.phone && (
+                              <button 
+                                  onClick={() => handleWhatsAppClick(student.phone)}
+                                  className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors shadow-sm"
+                                  title="Abrir WhatsApp"
+                              >
+                                  <MessageCircle className="w-4 h-4" />
+                              </button>
+                          )}
+                      </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {statusBadge}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center space-x-2">
+                      <button className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-full transition-colors" title="Graduar">
+                        <Award className="w-5 h-5" />
+                      </button>
+                      <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors" title="Mais Opções">
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

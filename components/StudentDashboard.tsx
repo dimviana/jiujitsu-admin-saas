@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Student, User, Graduation, ClassSchedule, ThemeSettings } from '../types';
 import Card from './ui/Card';
@@ -6,7 +7,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import StudentAttendanceChart from './charts/StudentAttendanceChart';
-import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle } from 'lucide-react';
+import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap } from 'lucide-react';
 
 // --- Helper Functions & Components ---
 
@@ -463,9 +464,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }, [schedules, studentData]);
 
     const shouldShowPaymentButton = useMemo(() => {
-        if (!studentData || studentData.paymentStatus !== 'unpaid') {
-            return false;
-        }
+        if (!studentData) return false;
+        
+        // Scholarship students don't need to pay
+        if (studentData.paymentStatus === 'scholarship') return false;
+        
+        // Only show if unpaid
+        if (studentData.paymentStatus !== 'unpaid') return false;
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -516,7 +521,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 ${grad.color2} ${c2End}%,
                 ${color3} ${c3Start}%,
                 ${color3} 100%
-            )`
+        )`
         };
     };
 
@@ -525,6 +530,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
 
     const stripes = studentData.stripes;
+
+    // Helper to get status visual data
+    const getStatusInfo = () => {
+        if (studentData.paymentStatus === 'scholarship') {
+            return { color: '#8B5CF6', text: 'Isento (Bolsa)', icon: <GraduationCap className="w-4 h-4 mr-1"/> };
+        } else if (studentData.paymentStatus === 'paid') {
+            return { color: '#10B981', text: 'Em Dia', icon: null };
+        } else {
+            return { color: '#EF4444', text: 'Pendente', icon: null };
+        }
+    };
+    
+    const statusInfo = getStatusInfo();
 
     return (
         <div className="space-y-6">
@@ -563,15 +581,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <Card className="p-5">
                     <div className="flex items-start justify-between">
                         <div className="flex items-center">
-                            <div className={`p-3 rounded-lg mr-4`} style={{ backgroundColor: `${studentData.paymentStatus === 'paid' ? '#10B981' : '#EF4444'}1A`}}>
-                                <div style={{ color: studentData.paymentStatus === 'paid' ? '#10B981' : '#EF4444' }}><DollarSign/></div>
+                            <div className={`p-3 rounded-lg mr-4`} style={{ backgroundColor: `${statusInfo.color}1A`}}>
+                                <div style={{ color: statusInfo.color }}><DollarSign/></div>
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-slate-500">Mensalidade</p>
                                 {paymentSuccess ? (
                                     <p className="text-xl font-bold text-green-600 flex items-center"><CheckCircle className="w-4 h-4 mr-1"/> Pago</p>
                                 ) : (
-                                    <p className="text-xl font-bold text-slate-800">{studentData.paymentStatus === 'paid' ? 'Em Dia' : 'Pendente'}</p>
+                                    <p className="text-xl font-bold flex items-center" style={{color: statusInfo.color}}>
+                                        {statusInfo.icon} {statusInfo.text}
+                                    </p>
                                 )}
                             </div>
                         </div>

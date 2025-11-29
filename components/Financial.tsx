@@ -1,6 +1,8 @@
+
+
 import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { Student } from '../types';
-import { Users, DollarSign, Upload, MessageSquareWarning, FileText } from 'lucide-react';
+import { Users, DollarSign, Upload, MessageSquareWarning, FileText, GraduationCap } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -10,13 +12,14 @@ import { AppContext } from '../context/AppContext';
 import jsPDF from 'jspdf';
 
 // --- Charts ---
-const FinancialStatusChart: React.FC<{ paidCount: number; unpaidCount: number }> = ({ paidCount, unpaidCount }) => {
+const FinancialStatusChart: React.FC<{ paidCount: number; unpaidCount: number; scholarshipCount: number }> = ({ paidCount, unpaidCount, scholarshipCount }) => {
     const data = [
         { name: 'Em Dia', value: paidCount, color: '#10B981' },
-        { name: 'Inadimplente', value: unpaidCount, color: '#EF4444' }
-    ];
+        { name: 'Inadimplente', value: unpaidCount, color: '#EF4444' },
+        { name: 'Bolsista', value: scholarshipCount, color: '#8B5CF6' }
+    ].filter(d => d.value > 0);
 
-    if (paidCount === 0 && unpaidCount === 0) {
+    if (paidCount === 0 && unpaidCount === 0 && scholarshipCount === 0) {
          return <div className="h-64 flex items-center justify-center text-slate-400">Sem dados financeiros.</div>;
     }
 
@@ -44,11 +47,11 @@ const FinancialStatusChart: React.FC<{ paidCount: number; unpaidCount: number }>
                     </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none flex-col">
-                    <span className="text-3xl font-bold text-slate-700">{paidCount + unpaidCount}</span>
+                    <span className="text-3xl font-bold text-slate-700">{paidCount + unpaidCount + scholarshipCount}</span>
                     <span className="text-xs text-slate-500 uppercase tracking-wide">Total</span>
                 </div>
             </div>
-            <div className="flex justify-center gap-6 mt-4">
+            <div className="flex justify-center gap-6 mt-4 flex-wrap">
                 {data.map(d => (
                     <div key={d.name} className="flex items-center">
                         <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: d.color }}></div>
@@ -86,7 +89,9 @@ const PaymentHistoryModal: React.FC<{ student: Student; onClose: () => void, onR
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                     <Button type="button" variant="secondary" onClick={onClose}>Fechar</Button>
-                    <Button type="button" onClick={onRegisterPayment}>Registrar Novo Pagamento</Button>
+                    {student.paymentStatus !== 'scholarship' && (
+                        <Button type="button" onClick={onRegisterPayment}>Registrar Novo Pagamento</Button>
+                    )}
                 </div>
             </div>
         </Modal>
@@ -208,13 +213,15 @@ export const Financial: React.FC = () => {
     const [feeAmountInput, setFeeAmountInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
     const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
 
-    const { paidStudents, unpaidStudents, totalRevenue } = useMemo(() => {
+    const { paidStudents, unpaidStudents, scholarshipStudents, totalRevenue } = useMemo(() => {
         const paid = students.filter(s => s.paymentStatus === 'paid');
         const unpaid = students.filter(s => s.paymentStatus === 'unpaid');
+        const scholarship = students.filter(s => s.paymentStatus === 'scholarship');
         const revenue = paid.length * themeSettings.monthlyFeeAmount;
         return {
             paidStudents: paid.length,
             unpaidStudents: unpaid.length,
+            scholarshipStudents: scholarship.length,
             totalRevenue: revenue,
         };
     }, [students, themeSettings.monthlyFeeAmount]);
@@ -227,7 +234,8 @@ export const Financial: React.FC = () => {
         const overdue: Student[] = [];
 
         students.forEach(student => {
-            if (!student.paymentDueDateDay) return;
+            // Skip scholarship students for reminders and overdue logic
+            if (!student.paymentDueDateDay || student.paymentStatus === 'scholarship') return;
 
             const dueDateThisMonth = new Date(today.getFullYear(), today.getMonth(), student.paymentDueDateDay);
             
@@ -344,7 +352,7 @@ export const Financial: React.FC = () => {
         }
     };
 
-    const handleStatusUpdate = async (student: Student, status: 'paid' | 'unpaid') => {
+    const handleStatusUpdate = async (student: Student, status: 'paid' | 'unpaid' | 'scholarship') => {
         if (status === 'paid') {
             setSelectedStudent(student);
             setIsUploadModalOpen(true);
@@ -376,13 +384,14 @@ export const Financial: React.FC = () => {
         doc.setFontSize(12);
         doc.text(`Total de Alunos em Dia: ${paidStudents}`, 20, 60);
         doc.text(`Total de Alunos Pendentes: ${unpaidStudents}`, 20, 70);
-        doc.text(`Receita Estimada (Mês): ${totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 20, 80);
+        doc.text(`Total de Bolsistas: ${scholarshipStudents}`, 20, 80);
+        doc.text(`Receita Estimada (Mês): ${totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 20, 90);
 
         doc.setFontSize(16);
-        doc.text("Alunos Pendentes (Ação Necessária)", 20, 100);
+        doc.text("Alunos Pendentes (Ação Necessária)", 20, 110);
 
         const unpaidList = students.filter(s => s.paymentStatus === 'unpaid');
-        let yPos = 110;
+        let yPos = 120;
 
         if (unpaidList.length > 0) {
              doc.setFontSize(10);
@@ -397,7 +406,7 @@ export const Financial: React.FC = () => {
         } else {
             doc.setFontSize(12);
             doc.setTextColor(0, 150, 0);
-            doc.text("Parabéns! Não há pendências.", 20, 110);
+            doc.text("Parabéns! Não há pendências.", 20, 120);
         }
 
         doc.save(`relatorio_financeiro_${today.replace(/\//g, '-')}.pdf`);
@@ -416,29 +425,36 @@ export const Financial: React.FC = () => {
                 </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard 
+                    title="Alunos em Dia" 
+                    value={paidStudents} 
+                    icon={<Users className="w-6 h-6"/>} 
+                    color="#10B981" 
+                />
+                <StatCard 
+                    title="Alunos Pendentes" 
+                    value={unpaidStudents} 
+                    icon={<Users className="w-6 h-6"/>} 
+                    color="#EF4444" 
+                />
+                <StatCard 
+                    title="Bolsistas" 
+                    value={scholarshipStudents} 
+                    icon={<GraduationCap className="w-6 h-6"/>} 
+                    color="#8B5CF6" 
+                />
+                <StatCard 
+                    title="Receita Estimada" 
+                    value={totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} 
+                    icon={<DollarSign className="w-6 h-6"/>} 
+                    color="#3B82F6" 
+                />
+            </div>
+            
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 space-y-6">
-                    <StatCard 
-                        title="Alunos em Dia" 
-                        value={paidStudents} 
-                        icon={<Users className="w-6 h-6"/>} 
-                        color="#10B981" 
-                    />
-                    <StatCard 
-                        title="Alunos Pendentes" 
-                        value={unpaidStudents} 
-                        icon={<Users className="w-6 h-6"/>} 
-                        color="#EF4444" 
-                    />
-                    <StatCard 
-                        title="Receita Estimada" 
-                        value={totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} 
-                        icon={<DollarSign className="w-6 h-6"/>} 
-                        color="#3B82F6" 
-                    />
-                </div>
-                <div className="lg:col-span-2">
-                    <FinancialStatusChart paidCount={paidStudents} unpaidCount={unpaidStudents} />
+                <div className="lg:col-span-3">
+                    <FinancialStatusChart paidCount={paidStudents} unpaidCount={unpaidStudents} scholarshipCount={scholarshipStudents} />
                 </div>
             </div>
             
@@ -482,17 +498,27 @@ export const Financial: React.FC = () => {
                 {students.map(student => {
                     const belt = graduations.find(g => g.id === student.beltId);
                     const isUpdated = updatedCard === student.id;
-                    const cardClass = isUpdated
-                        ? student.paymentStatus === 'paid'
-                            ? 'ring-2 ring-green-500 transform scale-105'
-                            : 'ring-2 ring-red-500 transform scale-105'
-                        : 'hover:shadow-md';
+                    let statusColor = 'bg-red-500';
+                    let statusTitle = 'Pendente';
+                    let ringColor = 'ring-red-500';
+
+                    if (student.paymentStatus === 'paid') {
+                        statusColor = 'bg-green-500';
+                        statusTitle = 'Em Dia';
+                        ringColor = 'ring-green-500';
+                    } else if (student.paymentStatus === 'scholarship') {
+                        statusColor = 'bg-purple-500';
+                        statusTitle = 'Bolsista';
+                        ringColor = 'ring-purple-500';
+                    }
+
+                    const cardClass = isUpdated ? `ring-2 ${ringColor} transform scale-105` : 'hover:shadow-md';
 
                     return (
                         <Card key={student.id} className={`text-center flex flex-col items-center transition-all duration-300 ${cardClass}`}>
                             <div className="relative">
                                 <img src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} alt={student.name} className="w-20 h-20 rounded-full mb-3 border-4 border-slate-50 object-cover shadow-sm" />
-                                <span className={`absolute bottom-2 right-0 w-5 h-5 rounded-full border-2 border-white ${student.paymentStatus === 'paid' ? 'bg-green-500' : 'bg-red-500'}`} title={student.paymentStatus === 'paid' ? 'Em Dia' : 'Pendente'}></span>
+                                <span className={`absolute bottom-2 right-0 w-5 h-5 rounded-full border-2 border-white ${statusColor}`} title={statusTitle}></span>
                             </div>
                             
                             <h2 className="text-lg font-bold text-slate-800 line-clamp-1">{student.name}</h2>
@@ -507,11 +533,19 @@ export const Financial: React.FC = () => {
                             
                             <div className="mt-auto pt-4 w-full flex flex-col gap-2 border-t border-slate-50">
                                 <Button size="sm" variant="secondary" onClick={() => handleOpenHistoryModal(student)}>Histórico</Button>
-                                {student.paymentStatus === 'unpaid' && (
-                                    <Button size="sm" variant="success" onClick={() => handleStatusUpdate(student, 'paid')}>Registrar Pagamento</Button>
-                                )}
-                                {student.paymentStatus === 'paid' && (
-                                        <Button variant="danger" size="sm" onClick={() => handleStatusUpdate(student, 'unpaid')}>Marcar Pendente</Button>
+                                
+                                {student.paymentStatus === 'scholarship' ? (
+                                    <Button size="sm" variant="danger" onClick={() => handleStatusUpdate(student, 'unpaid')}>Remover Bolsa</Button>
+                                ) : (
+                                    <>
+                                        {student.paymentStatus === 'unpaid' && (
+                                            <Button size="sm" variant="success" onClick={() => handleStatusUpdate(student, 'paid')}>Registrar Pagamento</Button>
+                                        )}
+                                        {student.paymentStatus === 'paid' && (
+                                            <Button variant="danger" size="sm" onClick={() => handleStatusUpdate(student, 'unpaid')}>Marcar Pendente</Button>
+                                        )}
+                                        <Button size="sm" variant="secondary" className="text-purple-600 bg-purple-50 hover:bg-purple-100" onClick={() => handleStatusUpdate(student, 'scholarship')}>Definir Bolsa</Button>
+                                    </>
                                 )}
                             </div>
                         </Card>
