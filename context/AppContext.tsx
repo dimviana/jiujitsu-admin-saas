@@ -89,6 +89,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const refreshData = async () => {
         setLoading(true);
         try {
+            // First load data
             const res = await fetch('/api/initial-data');
             if (res.ok) {
                 const data = await res.json();
@@ -103,6 +104,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 if (data.themeSettings && data.themeSettings.id) {
                     setGlobalThemeSettings(data.themeSettings);
                 }
+
+                // Trigger auto promotion check in background
+                if (user && user.role !== 'student') {
+                    fetch('/api/students/auto-promote-stripes', { method: 'POST' })
+                        .then(res => res.json())
+                        .then(res => {
+                            if (res.success && res.message && !res.message.startsWith('0')) {
+                                setNotification({ message: 'Graduações Automáticas', details: res.message, type: 'success' });
+                                // Refresh to show new stripes
+                                fetch('/api/initial-data').then(r => r.json()).then(d => {
+                                    setAllStudents(d.students);
+                                    setAllActivityLogs(d.activityLogs);
+                                });
+                            }
+                        })
+                        .catch(err => console.error("Auto promote error", err));
+                }
+
             } else {
                 throw new Error("Failed to fetch data from server");
             }
