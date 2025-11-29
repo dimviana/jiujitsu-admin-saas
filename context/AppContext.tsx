@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo } from 'react';
 import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
 import { 
@@ -32,7 +31,7 @@ interface AppContextType {
     
     saveStudent: (student: Omit<Student, 'id' | 'paymentStatus' | 'lastSeen' | 'paymentHistory'> & { id?: string }) => Promise<void>;
     deleteStudent: (id: string) => Promise<void>;
-    updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
+    updateStudentPayment: (id: string, status: 'paid' | 'unpaid' | 'scholarship') => Promise<void>;
     promoteStudentToInstructor: (studentId: string) => Promise<void>;
     demoteInstructor: (professorId: string) => Promise<void>; // New function
     updateStudentStatus: (id: string, status: 'active' | 'blocked') => Promise<void>;
@@ -329,7 +328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const saveStudent = (studentData: any) => handleApiCall('/api/students', 'POST', studentData, 'Aluno salvo com sucesso.');
     const deleteStudent = (id: string) => handleApiCall(`/api/students/${id}`, 'DELETE', null, 'Aluno removido com sucesso.');
-    const updateStudentPayment = (id: string, status: 'paid' | 'unpaid') => handleApiCall('/api/students/payment', 'POST', { studentId: id, status, amount: effectiveThemeSettings.monthlyFeeAmount }, 'Status de pagamento atualizado.');
+    const updateStudentPayment = (id: string, status: 'paid' | 'unpaid' | 'scholarship') => handleApiCall('/api/students/payment', 'POST', { studentId: id, status, amount: effectiveThemeSettings.monthlyFeeAmount }, 'Status de pagamento atualizado.');
     const promoteStudentToInstructor = (studentId: string) => handleApiCall('/api/students/promote-instructor', 'POST', { studentId }, 'Aluno promovido a instrutor com sucesso.');
     const demoteInstructor = (professorId: string) => handleApiCall('/api/students/demote-instructor', 'POST', { professorId }, 'Promoção de instrutor removida. O aluno retornou ao status normal.');
     const updateStudentStatus = (id: string, status: 'active' | 'blocked') => handleApiCall(`/api/students/${id}/status`, 'POST', { status }, `Status do aluno atualizado para ${status === 'active' ? 'Ativo' : 'Bloqueado'}.`);
