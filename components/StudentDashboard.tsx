@@ -10,71 +10,97 @@ import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCa
 
 // --- Helper Functions & Components ---
 
-const generateBRCode = (
-    key: string, name: string, amount: number, txid: string
-): string => {
-    // Helper to format fields: ID + Length + Value
-    const format = (id: string, value: string) => {
-        const len = value.length.toString().padStart(2, '0');
-        return `${id}${len}${value}`;
-    };
-
-    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-
-    // 1. Prepare Data
-    const safeKey = key.trim();
-    // Name limited to 25 chars
-    const safeName = normalize(name).substring(0, 25);
-    const safeCity = "BRASILIA"; // Fixed city default (Standard for static QRs often defaults to BRASILIA if generic)
-    // TxID limited to 25 alphanumeric chars
-    const safeTxid = normalize(txid).replace(/[^A-Z0-9]/g, '').substring(0, 25) || '***';
-    const safeAmount = amount.toFixed(2);
-
-    // 2. Build Payload
-    
-    // 00 - Payload Format Indicator
-    // 26 - Merchant Account Information (GUI + Key)
-    const merchantAccountInfo = format('00', 'BR.GOV.BCB.PIX') + format('01', safeKey);
-    
-    // 52 - Merchant Category Code
-    // 53 - Transaction Currency (986 = BRL)
-    // 54 - Transaction Amount
-    // 58 - Country Code
-    // 59 - Merchant Name
-    // 60 - Merchant City
-    // 62 - Additional Data Field Template (TxID)
-    const additionalData = format('05', safeTxid);
-
-    const payload = [
-        format('00', '01'),
-        format('26', merchantAccountInfo),
-        format('52', '0000'),
-        format('53', '986'),
-        format('54', safeAmount),
-        format('58', 'BR'),
-        format('59', safeName),
-        format('60', safeCity),
-        format('62', additionalData),
-    ].join('');
-
-    // 3. CRC Calculation (ID 63)
-    const payloadWithCrcInfo = payload + '6304';
-
-    // Polynomial 0x1021 (CRC16-CCITT)
+/**
+ * Calcula o CRC16 (CCITT-FALSE) conforme especificação do BACEN/EMV
+ */
+const crc16ccitt = (payload: string): string => {
     let crc = 0xFFFF;
-    for (let i = 0; i < payloadWithCrcInfo.length; i++) {
-        crc ^= payloadWithCrcInfo.charCodeAt(i) << 8;
+    const polynomial = 0x1021;
+
+    for (let i = 0; i < payload.length; i++) {
+        crc ^= payload.charCodeAt(i) << 8;
         for (let j = 0; j < 8; j++) {
             if ((crc & 0x8000) !== 0) {
-                crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+                crc = ((crc << 1) ^ polynomial) & 0xFFFF;
             } else {
                 crc = (crc << 1) & 0xFFFF;
             }
         }
     }
-    const crcHex = crc.toString(16).toUpperCase().padStart(4, '0');
+    return crc.toString(16).toUpperCase().padStart(4, '0');
+};
 
-    return payloadWithCrcInfo + crcHex;
+/**
+ * Gera o Payload do Pix Copia e Cola
+ */
+const generatePixPayload = (
+    key: string, 
+    name: string, 
+    city: string, 
+    amount: number, 
+    txid: string
+): string => {
+    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    const formatField = (id: string, value: string) => {
+        const len = value.length.toString().padStart(2, '0');
+        return `${id}${len}${value}`;
+    };
+
+    // 1. Tratamento de Dados
+    const safeKey = key.trim();
+    const safeName = normalize(name).substring(0, 25); // Max 25 chars
+    const safeCity = normalize(city).substring(0, 15) || 'BRASILIA'; // Max 15 chars
+    const safeAmount = amount.toFixed(2);
+    // TxID deve ser alfanumérico, sem espaços, max 25 chars.
+    const safeTxid = txid.replace(/[^a-zA-Z0-9]/g, '').substring(0, 25) || '***';
+
+    // 2. Montagem dos Campos
+    // 26 - Merchant Account Information
+    const gui = formatField('00', 'BR.GOV.BCB.PIX');
+    const chave = formatField('01', safeKey);
+    const merchantAccount = formatField('26', gui + chave);
+
+    // 52 - Category Code (0000 = Geral)
+    const categoryCode = formatField('52', '0000');
+
+    // 53 - Currency (986 = BRL)
+    const currency = formatField('53', '986');
+
+    // 54 - Amount
+    const amountField = formatField('54', safeAmount);
+
+    // 58 - Country
+    const country = formatField('58', 'BR');
+
+    // 59 - Merchant Name
+    const merchantName = formatField('59', safeName);
+
+    // 60 - Merchant City
+    const merchantCity = formatField('60', safeCity);
+
+    // 62 - Additional Data (TxID)
+    const referenceLabel = formatField('05', safeTxid);
+    const additionalData = formatField('62', referenceLabel);
+
+    // 3. Concatenação Inicial (IDs 00 a 62)
+    const payloadFormatIndicator = formatField('00', '01');
+    
+    const rawPayload = 
+        payloadFormatIndicator +
+        merchantAccount +
+        categoryCode +
+        currency +
+        amountField +
+        country +
+        merchantName +
+        merchantCity +
+        additionalData +
+        '6304'; // Adiciona ID do CRC e tamanho 04
+
+    // 4. Cálculo e Adição do CRC
+    const crc = crc16ccitt(rawPayload);
+    
+    return rawPayload + crc;
 };
 
 
@@ -102,16 +128,16 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
             return null;
         }
         
-        // Generate a valid txid (Max 25 chars, alphanumeric)
-        // We use 'JJ' prefix + cleaned Student ID + part of Timestamp
-        // This ensures uniqueness while respecting the 25 char limit.
-        const cleanId = student.id.replace(/[^a-zA-Z0-9]/g, '').slice(-12); 
-        const timestamp = Date.now().toString().slice(-8); 
-        const rawTxid = `JJ${cleanId}${timestamp}`.slice(0, 25);
+        // Identificador da transação único e seguro
+        // Formato: JJ + ultimos 8 digitos do ID + timestamp curto
+        const cleanId = student.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8); 
+        const timestamp = Date.now().toString().slice(-6); 
+        const rawTxid = `JJ${cleanId}${timestamp}`;
 
-        return generateBRCode(
+        return generatePixPayload(
             themeSettings.pixKey,
             themeSettings.pixHolderName,
+            "SAAS", // Cidade padrão ou fixa, pois muitas vezes não vem na config
             themeSettings.monthlyFeeAmount,
             rawTxid
         );
@@ -140,6 +166,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
         );
     }
     
+    // Gerar QR Code Visual
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(brCode)}`;
 
     return (
@@ -160,8 +187,12 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
                             Este código expira em: {minutes}:{seconds}
                         </div>
                         <p className="text-slate-600">Pague a mensalidade no valor de <span className="font-bold">{themeSettings.monthlyFeeAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> usando o QR Code ou o código abaixo.</p>
-                        <img src={qrCodeUrl} alt="PIX QR Code" className="mx-auto my-4 border-4 border-slate-200 rounded-lg"/>
-                        <div className="space-y-1">
+                        
+                        <div className="flex justify-center my-4">
+                            <img src={qrCodeUrl} alt="PIX QR Code" className="border-4 border-slate-200 rounded-lg"/>
+                        </div>
+
+                        <div className="space-y-1 text-left">
                             <label className="text-sm font-medium text-slate-700">PIX Copia e Cola</label>
                             <div className="flex gap-2">
                                 <Input readOnly value={brCode} ref={pixCodeRef} />
@@ -577,7 +608,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                     ...getBeltStyle(graduation),
                                     border: '1px solid rgba(0,0,0,0.1)' 
                                 }}
-                             >
+                            >
                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/5 pointer-events-none"></div>
                                 <div className="h-full w-1/4 bg-black flex items-center justify-center space-x-1 p-1 z-10 shadow-xl">
                                     {Array.from({ length: stripes }).map((_, index) => (
