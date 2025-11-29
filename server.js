@@ -359,22 +359,40 @@ app.post('/api/students/auto-promote-stripes', async (req, res) => {
         await conn.beginTransaction();
         const [students] = await conn.query("SELECT * FROM students WHERE status = 'active'");
         const [attendance] = await conn.query("SELECT * FROM attendance_records");
+        const [graduations] = await conn.query("SELECT * FROM graduations");
+        
         let promotedCount = 0;
 
         for (const student of students) {
-            // Max 4 stripes per belt usually
-            if (student.stripes >= 4) continue; 
+            // Find current belt info
+            const belt = graduations.find(g => g.id === student.beltId);
+            if (!belt) continue;
 
-            // Calculate date threshold (6 months ago)
+            const isBlackBelt = belt.name.toLowerCase().includes('preta') || belt.name.toLowerCase().includes('black');
+            
+            // Determine Thresholds based on Belt Level
+            let monthsThreshold = 6;
+            let maxStripes = 4;
+            
+            // Black Belt Logic (Degree Promotion)
+            if (isBlackBelt) {
+                monthsThreshold = 36; // 3 years
+                maxStripes = 6;       // Up to 6th degree automatically
+            }
+
+            // Check if max stripes reached
+            if (student.stripes >= maxStripes) continue;
+
+            // Calculate date threshold
             const lastDateStr = student.lastPromotionDate || student.firstGraduationDate;
             if (!lastDateStr) continue;
 
             const lastDate = new Date(lastDateStr);
             const today = new Date();
-            const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 6, today.getDate());
+            const thresholdDate = new Date(today.getFullYear(), today.getMonth() - monthsThreshold, today.getDate());
 
-            // Check if 6 months have passed
-            if (lastDate <= sixMonthsAgo) {
+            // Check if time threshold has passed
+            if (lastDate <= thresholdDate) {
                 // Calculate Attendance since last promotion
                 const relevantRecords = attendance.filter(r => 
                     r.studentId === student.id && 
@@ -382,6 +400,8 @@ app.post('/api/students/auto-promote-stripes', async (req, res) => {
                 );
 
                 const totalRecords = relevantRecords.length;
+                // If there are no records, attendance rate is 0. If it's a black belt (prof), maybe they don't log attendance?
+                // Assuming they MUST log attendance as 'present' to get promoted automatically.
                 if (totalRecords === 0) continue;
 
                 const presentCount = relevantRecords.filter(r => r.status === 'present').length;
@@ -389,16 +409,18 @@ app.post('/api/students/auto-promote-stripes', async (req, res) => {
 
                 // Check frequency >= 70%
                 if (attendanceRate >= 0.70) {
-                    // Promote Student
+                    // Promote Student (Add stripe/degree)
                     await conn.query(
                         'UPDATE students SET stripes = stripes + 1, lastPromotionDate = ? WHERE id = ?', 
                         [today.toISOString().split('T')[0], student.id]
                     );
                     
+                    const term = isBlackBelt ? 'grau na Faixa Preta' : 'grau';
+                    
                     // Log Activity
                     await conn.query(
                         'INSERT INTO activity_logs (id, actorId, action, timestamp, details) VALUES (?, ?, ?, ?, ?)',
-                        [`log_${Date.now()}_${student.id}`, 'system', 'Auto Promotion', new Date(), `Aluno ${student.name} recebeu um grau automaticamente (Frequência: ${(attendanceRate * 100).toFixed(0)}%).`]
+                        [`log_${Date.now()}_${student.id}`, 'system', 'Auto Promotion', new Date(), `Aluno ${student.name} recebeu um ${term} automaticamente (Frequência: ${(attendanceRate * 100).toFixed(0)}%).`]
                     );
                     
                     promotedCount++;
@@ -407,7 +429,7 @@ app.post('/api/students/auto-promote-stripes', async (req, res) => {
         }
 
         await conn.commit();
-        res.json({ success: true, message: `${promotedCount} alunos graduados automaticamente.` });
+        res.json({ success: true, message: `${promotedCount} alunos/professores graduados automaticamente.` });
     } catch (error) {
         await conn.rollback();
         console.error("Auto promotion error:", error);

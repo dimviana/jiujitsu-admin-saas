@@ -5,7 +5,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
-import { ChevronDown, ChevronRight, UserCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, UserCheck, AlertCircle } from 'lucide-react';
 
 interface GraduationFormProps {
   graduation: Partial<Graduation> | null;
@@ -15,6 +15,7 @@ interface GraduationFormProps {
 
 const GraduationForm: React.FC<GraduationFormProps> = ({ graduation, onSave, onClose }) => {
   const [useGradient, setUseGradient] = useState(!!graduation?.color2);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     color: '#FFFFFF',
@@ -33,10 +34,21 @@ const GraduationForm: React.FC<GraduationFormProps> = ({ graduation, onSave, onC
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     setFormData(prev => ({ ...prev, [name]: type === 'number' || type === 'range' ? parseInt(value) || 0 : value }));
+    // Clear error on change
+    if (error) setError(null);
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    
+    // Validation for Kids belts
+    if (formData.type === 'kids') {
+        if (formData.minAge >= formData.maxAge) {
+            setError('A idade mínima deve ser menor que a idade máxima.');
+            return;
+        }
+    }
+
     const dataToSave = { ...formData };
     if (!useGradient) {
         dataToSave.color2 = '';
@@ -153,9 +165,17 @@ const GraduationForm: React.FC<GraduationFormProps> = ({ graduation, onSave, onC
         {formData.type === 'adult' ? (
             <Input label="Tempo Mínimo (meses)" name="minTimeInMonths" type="number" value={formData.minTimeInMonths} onChange={handleChange} required />
         ) : (
-            <div className="grid grid-cols-2 gap-4">
-                <Input label="Idade Mínima" name="minAge" type="number" value={formData.minAge} onChange={handleChange} />
-                <Input label="Idade Máxima" name="maxAge" type="number" value={formData.maxAge} onChange={handleChange} />
+            <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-4">
+                    <Input label="Idade Mínima" name="minAge" type="number" value={formData.minAge} onChange={handleChange} />
+                    <Input label="Idade Máxima" name="maxAge" type="number" value={formData.maxAge} onChange={handleChange} />
+                </div>
+                {error && (
+                    <div className="flex items-center text-red-600 text-sm bg-red-50 p-2 rounded border border-red-200">
+                        <AlertCircle className="w-4 h-4 mr-2" />
+                        {error}
+                    </div>
+                )}
             </div>
         )}
       <div className="flex justify-end gap-4 pt-4">
