@@ -68,7 +68,6 @@ export interface Academy {
   password?: string; // In real app, never expose this on frontend
   settings?: Partial<ThemeSettings>; // JSON override for specific academy settings
   status?: 'pending' | 'active' | 'rejected' | 'blocked';
-  allowStudentRegistration?: boolean;
 }
 
 export interface Professor {
@@ -107,14 +106,6 @@ export interface PaymentHistory {
     amount: number;
 }
 
-export interface StudentDocument {
-  id: string;
-  name: string;
-  url: string; // Base64
-  type: 'pdf' | 'image';
-  date: string;
-}
-
 export interface Student {
   id: string;
   name: string;
@@ -139,8 +130,7 @@ export interface Student {
   password?: string;
   lastSeen?: string;
   isInstructor?: boolean;
-  status?: 'active' | 'blocked' | 'pending';
-  documents?: StudentDocument[];
+  status?: 'active' | 'blocked';
 }
 
 export interface User {

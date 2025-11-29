@@ -117,9 +117,6 @@ app.post('/api/login', async (req, res) => {
              if (student.status === 'blocked') {
                  return res.status(403).json({ message: 'Seu acesso foi temporariamente bloqueado. Contate a administração.' });
              }
-             if (student.status === 'pending') {
-                 return res.status(403).json({ message: 'Seu cadastro está pendente de aprovação pela academia.' });
-             }
 
              // Check Academy Status for Student
              await checkAcademyStatus(student.academyId);
@@ -160,7 +157,7 @@ app.post('/api/login', async (req, res) => {
         res.status(401).json({ message: 'User or password invalid' });
     } catch (error) {
         console.error(error);
-        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') || error.message.includes('bloqueado') || error.message.includes('pendente') ? 403 : 500;
+        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') || error.message.includes('bloqueado') ? 403 : 500;
         res.status(status).json({ message: error.message || 'Server error' });
     }
 });
@@ -187,51 +184,6 @@ app.post('/api/register', async (req, res) => {
         await conn.rollback();
         console.error(error);
         res.status(500).json({ message: 'Error registering academy' });
-    } finally {
-        conn.release();
-    }
-});
-
-app.post('/api/register-student', async (req, res) => {
-    const conn = await pool.getConnection();
-    try {
-        await conn.beginTransaction();
-        const data = req.body;
-        
-        // Simple validation
-        if (!data.academyId) throw new Error("Academia obrigatória");
-        
-        const id = `student_${Date.now()}`;
-        const studentData = { 
-            paymentStatus: 'unpaid', 
-            stripes: 0,
-            isCompetitor: 0,
-            isInstructor: 0,
-            medals: '{}',
-            status: 'pending', // Default to pending for self-registration
-            ...data,
-            id, 
-        };
-
-        // Ensure dates are null if empty
-        for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate', 'lastSeen']) {
-            if (studentData[key] === '' || studentData[key] === undefined) {
-                studentData[key] = null;
-            }
-        }
-
-        const keys = Object.keys(studentData).map(key => `\`${key}\``).join(',');
-        const placeholders = Object.keys(studentData).map(() => '?').join(',');
-        const values = Object.values(studentData);
-        
-        await conn.query(`INSERT INTO students (${keys}) VALUES (${placeholders})`, values);
-        
-        await conn.commit();
-        res.json({ success: true, message: 'Cadastro realizado! Aguarde a aprovação da academia.' });
-    } catch (error) {
-        await conn.rollback();
-        console.error(error);
-        res.status(500).json({ message: error.message || 'Erro ao cadastrar aluno' });
     } finally {
         conn.release();
     }
@@ -376,15 +328,7 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE professors ADD COLUMN cpf VARCHAR(255)");
         }
 
-        // 16. Ensure allowStudentRegistration column on Academies
-        try {
-            await pool.query("SELECT allowStudentRegistration FROM academies LIMIT 1");
-        } catch (e) {
-            console.log("Migrating: Adding allowStudentRegistration to academies");
-            await pool.query("ALTER TABLE academies ADD COLUMN allowStudentRegistration BOOLEAN DEFAULT FALSE");
-        }
-
-        // 17. Ensure documents column on Students
+        // 16. Documents column on Students (JSON)
         try {
             await pool.query("SELECT documents FROM students LIMIT 1");
         } catch (e) {
@@ -399,8 +343,8 @@ app.get('/api/initial-data', async (req, res) => {
             isCompetitor: Boolean(s.isCompetitor),
             isInstructor: Boolean(s.isInstructor),
             medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 },
-            status: s.status || 'active',
-            documents: s.documents ? JSON.parse(s.documents) : []
+            documents: s.documents ? JSON.parse(s.documents) : [],
+            status: s.status || 'active'
         }));
         const [payments] = await pool.query('SELECT * FROM payment_history');
         parsedStudents.forEach(s => { s.paymentHistory = payments.filter(p => p.studentId === s.id); });
@@ -410,8 +354,7 @@ app.get('/api/initial-data', async (req, res) => {
         const parsedAcademies = academies.map(a => ({
             ...a,
             settings: a.settings ? JSON.parse(a.settings) : {},
-            status: a.status || 'active', // Default to active for legacy data in memory
-            allowStudentRegistration: Boolean(a.allowStudentRegistration)
+            status: a.status || 'active' // Default to active for legacy data in memory
         }));
 
         const [graduations] = await pool.query('SELECT * FROM graduations');
@@ -474,61 +417,69 @@ const deleteHandler = (table) => async (req, res) => {
 app.post('/api/students', async (req, res) => {
     const data = req.body;
     try {
-        // --- Data Sanitization ---
-        if (data.medals && typeof data.medals === 'object') {
-            data.medals = JSON.stringify(data.medals);
-        }
-        if (data.documents && typeof data.documents === 'object') {
-            data.documents = JSON.stringify(data.documents);
-        }
+        const ALLOWED_COLUMNS = [
+            'name', 'email', 'password', 'birthDate', 'cpf', 'fjjpe_registration', 
+            'phone', 'address', 'beltId', 'academyId', 'firstGraduationDate', 
+            'lastPromotionDate', 'paymentStatus', 'paymentDueDateDay', 'imageUrl', 
+            'stripes', 'isCompetitor', 'lastCompetition', 'medals', 'isInstructor', 
+            'lastSeen', 'status', 'documents'
+        ];
 
-        for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate', 'lastSeen']) {
-            if (data[key] && typeof data[key] === 'string' && key !== 'lastSeen') { // Don't strip time from lastSeen if passed
-                data[key] = data[key].split('T')[0];
-            } else if (data[key] === '' || data[key] === undefined) {
-                data[key] = null;
+        // Sanitization and Filtering
+        const payload = {};
+        for (const key of ALLOWED_COLUMNS) {
+            if (data[key] !== undefined) {
+                payload[key] = data[key];
             }
         }
-        if (data.hasOwnProperty('isCompetitor')) {
-            data.isCompetitor = data.isCompetitor ? 1 : 0;
+        
+        // Handle JSON fields
+        if (payload.medals && typeof payload.medals === 'object') payload.medals = JSON.stringify(payload.medals);
+        if (payload.documents && typeof payload.documents === 'object') payload.documents = JSON.stringify(payload.documents);
+
+        // Date fields cleanup
+        for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate', 'lastSeen']) {
+            if (payload[key] && typeof payload[key] === 'string' && key !== 'lastSeen') { 
+                payload[key] = payload[key].split('T')[0];
+            } else if (payload[key] === '') {
+                payload[key] = null;
+            }
         }
-        if (data.hasOwnProperty('isInstructor')) {
-            data.isInstructor = data.isInstructor ? 1 : 0;
+        
+        // Boolean fields as integers
+        if (payload.isCompetitor !== undefined) payload.isCompetitor = payload.isCompetitor ? 1 : 0;
+        if (payload.isInstructor !== undefined) payload.isInstructor = payload.isInstructor ? 1 : 0;
+
+        // Remove password if empty
+        if (payload.password === '' || payload.password === undefined) {
+            delete payload.password;
         }
 
         if (data.id) { // UPDATE logic
-            const { id, ...updateData } = data;
-            if (updateData.password === '' || updateData.password === undefined) {
-                delete updateData.password;
-            }
-            const updateKeys = Object.keys(updateData);
+            const updateKeys = Object.keys(payload);
             
             if (updateKeys.length === 0) {
-                return res.json({ success: true, id, message: "No fields to update." });
+                return res.json({ success: true, id: data.id, message: "No fields to update." });
             }
 
             const updateFields = updateKeys.map(key => `\`${key}\` = ?`).join(', ');
-            const updateValues = Object.values(updateData);
+            const updateValues = Object.values(payload);
 
-            await pool.query(`UPDATE students SET ${updateFields} WHERE id = ?`, [...updateValues, id]);
-            res.json({ success: true, id });
+            await pool.query(`UPDATE students SET ${updateFields} WHERE id = ?`, [...updateValues, data.id]);
+            res.json({ success: true, id: data.id });
 
         } else { // INSERT logic
             const id = `student_${Date.now()}`;
-            const studentData = { 
-                paymentStatus: 'unpaid', 
-                stripes: 0,
-                isCompetitor: 0,
-                isInstructor: 0,
-                medals: '{}',
-                documents: '[]',
-                status: 'active',
-                ...data,
-                id, 
-            };
-            const keys = Object.keys(studentData).map(key => `\`${key}\``).join(',');
-            const placeholders = Object.keys(studentData).map(() => '?').join(',');
-            const values = Object.values(studentData);
+            payload.id = id;
+            
+            // Set defaults if missing
+            if (payload.paymentStatus === undefined) payload.paymentStatus = 'unpaid';
+            if (payload.stripes === undefined) payload.stripes = 0;
+            if (payload.status === undefined) payload.status = 'active';
+            
+            const keys = Object.keys(payload).map(key => `\`${key}\``).join(',');
+            const placeholders = Object.keys(payload).map(() => '?').join(',');
+            const values = Object.values(payload);
             
             await pool.query(`INSERT INTO students (${keys}) VALUES (${placeholders})`, values);
             res.json({ success: true, id });
