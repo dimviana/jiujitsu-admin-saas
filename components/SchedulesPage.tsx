@@ -1,11 +1,11 @@
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ClassSchedule, DayOfWeek, Graduation, Student } from '../types';
+import { ClassSchedule, DayOfWeek, Graduation } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
-import { Heart, Shield, Users, FileText, CalendarCheck, Search, X } from 'lucide-react';
+import { Heart, Shield, Users, FileText, CalendarCheck, Search } from 'lucide-react';
 import { ConfirmationModal } from './ui/ConfirmationModal';
 
 interface ScheduleFormProps {
@@ -298,10 +298,14 @@ const SchedulesPage: React.FC = () => {
     let studentSchedules: ClassSchedule[] = [];
     if (user?.role === 'student') {
         // Students see schedules from their academy that match their graduation level
-        const studentGrad = graduations.find(g => g.id === user?.studentId);
+        const currentStudent = students.find(s => s.id === user?.studentId);
+        const studentGrad = graduations.find(g => g.id === currentStudent?.beltId);
+        
         studentSchedules = schedules.filter(s => {
             const requiredGrad = graduations.find(g => g.id === s.requiredGraduationId);
-            return s.academyId === user.academyId && (studentGrad?.rank ?? 0) >= (requiredGrad?.rank ?? 0);
+            const reqRank = requiredGrad?.rank ?? 0;
+            const studRank = studentGrad?.rank ?? 0;
+            return s.academyId === user.academyId && studRank >= reqRank;
         });
         return studentSchedules;
     }
@@ -309,7 +313,7 @@ const SchedulesPage: React.FC = () => {
         return schedules.filter(s => s.academyId === user.academyId);
     }
     return schedules;
-  }, [schedules, user, graduations]);
+  }, [schedules, user, graduations, students]);
 
 
   const handleOpenModal = (schedule: Partial<ClassSchedule> | null = null) => {
