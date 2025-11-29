@@ -1,5 +1,3 @@
-
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Student, User, Graduation, ClassSchedule, ThemeSettings } from '../types';
 import Card from './ui/Card';
@@ -9,11 +7,8 @@ import Input from './ui/Input';
 import StudentAttendanceChart from './charts/StudentAttendanceChart';
 import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap } from 'lucide-react';
 
-// --- Helper Functions & Components ---
+// ... (Helper functions remain the same) ...
 
-/**
- * Calcula o CRC16 (CCITT-FALSE) conforme especificação do BACEN/EMV
- */
 const crc16ccitt = (payload: string): string => {
     let crc = 0xFFFF;
     const polynomial = 0x1021;
@@ -31,9 +26,6 @@ const crc16ccitt = (payload: string): string => {
     return crc.toString(16).toUpperCase().padStart(4, '0');
 };
 
-/**
- * Gera o Payload do Pix Copia e Cola
- */
 const generatePixPayload = (
     key: string, 
     name: string, 
@@ -104,6 +96,7 @@ const generatePixPayload = (
     return rawPayload + crc;
 };
 
+// ... (Sub-components: PixPaymentModal, CreditCardModal, UploadProofModal, StatCard) ...
 
 const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProceedToUpload: () => void; themeSettings: ThemeSettings }> = ({ student, onClose, onProceedToUpload, themeSettings }) => {
     const pixCodeRef = useRef<HTMLInputElement>(null);
@@ -403,7 +396,7 @@ interface StudentDashboardProps {
   graduations: Graduation[];
   schedules: ClassSchedule[];
   themeSettings: ThemeSettings;
-  updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
+  updateStudentPayment: (id: string, status: 'paid' | 'unpaid' | 'scholarship') => Promise<void>;
   users?: User[];
 }
 
@@ -416,6 +409,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     themeSettings, 
     updateStudentPayment 
 }) => {
+    // ... (Component implementation) ...
     const [paymentModalState, setPaymentModalState] = useState<'closed' | 'pix' | 'card' | 'upload'>('closed');
     const [paymentSuccess, setPaymentSuccess] = useState(false);
 

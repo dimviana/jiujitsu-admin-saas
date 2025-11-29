@@ -1,5 +1,3 @@
-
-
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -224,14 +222,15 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE academies ADD COLUMN allowStudentRegistration BOOLEAN DEFAULT TRUE");
         }
 
-        // 18. Update paymentStatus column to accept 'scholarship' by modifying column to basic VARCHAR if needed, 
-        // or just rely on VARCHAR without check if that's what we have. 
-        // Safe approach: Modify to VARCHAR(255) to ensure it accepts the string.
+        // 18. Update paymentStatus column to accept 'scholarship'
         try {
-             console.log("Migrating: Updating paymentStatus definition");
+             // Try to drop constraint if it exists (common default name for first check on table)
+             await pool.query("ALTER TABLE students DROP CHECK students_chk_1").catch(() => {});
+             
+             // Modify column to simple VARCHAR to remove inline constraints if possible
              await pool.query("ALTER TABLE students MODIFY COLUMN paymentStatus VARCHAR(255)");
         } catch (e) {
-             console.log("Error updating paymentStatus column (might already be correct):", e.message);
+             console.log("Error migrating paymentStatus:", e.message);
         }
 
         const [students] = await pool.query('SELECT * FROM students');
@@ -474,7 +473,8 @@ app.post('/api/students/payment', async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         await conn.rollback();
-        res.status(500).send(error.message);
+        console.error("Error processing payment:", error);
+        res.status(500).json({ message: error.message || 'Erro ao processar pagamento.' });
     } finally {
         conn.release();
     }

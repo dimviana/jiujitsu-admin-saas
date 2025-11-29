@@ -34,6 +34,8 @@ const validateCPF = (cpf: string): boolean => {
     return true;
 };
 
+// ... (Rest of the file remains largely the same, just removing Trash2 import)
+
 // Helper to format date string from API/DB (often includes time or is ISO) to YYYY-MM-DD for input type="date"
 const formatDateForInput = (dateString?: string) => {
     if (!dateString) return '';

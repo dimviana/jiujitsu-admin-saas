@@ -15,7 +15,7 @@ interface DashboardProps {
   schedules: ClassSchedule[];
   graduations: Graduation[];
   themeSettings: ThemeSettings;
-  updateStudentPayment: (id: string, status: 'paid' | 'unpaid') => Promise<void>;
+  updateStudentPayment: (id: string, status: 'paid' | 'unpaid' | 'scholarship') => Promise<void>;
   attendanceRecords: AttendanceRecord[];
 }
 
