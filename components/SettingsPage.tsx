@@ -20,7 +20,7 @@ const SettingsPage: React.FC = () => {
     const { themeSettings, setThemeSettings, activityLogs, users, user, academies } = useContext(AppContext);
     const [settings, setSettings] = useState(themeSettings);
     const [monthlyFeeInput, setMonthlyFeeInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
-    const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos'>('system');
+    const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos' | 'mensagens'>('system');
 
     const isAcademyAdmin = user?.role === 'academy_admin';
     const currentAcademyName = isAcademyAdmin ? academies.find(a => a.id === user.academyId)?.name : 'Sistema Global';
@@ -77,7 +77,7 @@ const SettingsPage: React.FC = () => {
                 )}
             </div>
             
-            <div className="border-b border-[var(--theme-text-primary)]/10">
+            <div className="border-b border-[var(--theme-text-primary)]/10 overflow-x-auto">
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                     <button
                         onClick={() => setActiveTab('system')}
@@ -86,12 +86,20 @@ const SettingsPage: React.FC = () => {
                         Sistema
                     </button>
                     {(user?.role === 'general_admin' || user?.role === 'academy_admin') && (
-                       <button
-                            onClick={() => setActiveTab('pagamentos')}
-                            className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'pagamentos' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
-                        >
-                            Pagamentos
-                        </button>
+                       <>
+                           <button
+                                onClick={() => setActiveTab('pagamentos')}
+                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'pagamentos' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
+                            >
+                                Pagamentos
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('mensagens')}
+                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'mensagens' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
+                            >
+                                Mensagens
+                            </button>
+                       </>
                     )}
                     <button
                         onClick={() => setActiveTab('webpage')}
@@ -289,6 +297,32 @@ const SettingsPage: React.FC = () => {
                                         type="password"
                                         placeholder="Client_Secret_..."
                                     />
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'mensagens' && (
+                            <div className="space-y-6 animate-fade-in-down">
+                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração de Mensagens</h2>
+                                <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
+                                  Personalize as mensagens automáticas enviadas via WhatsApp.
+                                </p>
+                                
+                                <div className="space-y-4">
+                                    <Textarea 
+                                        label="Template de Mensagem WhatsApp" 
+                                        name="whatsappMessageTemplate" 
+                                        value={settings.whatsappMessageTemplate || ''} 
+                                        onChange={handleChange} 
+                                        placeholder="Olá {nome}, tudo bem?"
+                                    />
+                                    <div className="bg-[var(--theme-bg)] p-3 rounded text-xs text-[var(--theme-text-primary)]/70 border border-[var(--theme-text-primary)]/10">
+                                        <strong>Variáveis disponíveis:</strong>
+                                        <ul className="list-disc list-inside mt-1 space-y-1">
+                                            <li><code>{'{nome}'}</code>: Nome da pessoa com quem você está falando (Responsável se menor de idade, ou o próprio aluno).</li>
+                                            <li><code>{'{aluno}'}</code>: Nome do aluno (Útil quando falando com o responsável).</li>
+                                        </ul>
+                                    </div>
                                 </div>
                             </div>
                         )}

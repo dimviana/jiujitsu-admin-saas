@@ -51,6 +51,7 @@ export interface ThemeSettings {
   studentProfileEditEnabled: boolean;
   googleClientId?: string;
   facebookAppId?: string;
+  whatsappMessageTemplate?: string; // New field for custom message
   theme?: string;
 }
 

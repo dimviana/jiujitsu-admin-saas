@@ -241,6 +241,14 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE students ADD COLUMN responsibleName VARCHAR(255), ADD COLUMN responsiblePhone VARCHAR(255)");
         }
 
+        // 20. Add whatsappMessageTemplate to Theme Settings
+        try {
+            await pool.query("SELECT whatsappMessageTemplate FROM theme_settings LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding whatsappMessageTemplate to theme_settings");
+            await pool.query("ALTER TABLE theme_settings ADD COLUMN whatsappMessageTemplate TEXT");
+        }
+
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
             ...s, 
@@ -623,14 +631,14 @@ app.post('/api/settings', async (req, res) => {
                 useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?,
                 publicPageEnabled=?, registrationEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?,
                 socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?,
-                mercadoPagoAccessToken=?, mercadoPagoPublicKey=?, efiClientId=?, efiClientSecret=?
+                mercadoPagoAccessToken=?, mercadoPagoPublicKey=?, efiClientId=?, efiClientSecret=?, whatsappMessageTemplate=?
                 WHERE id = 1`,
                 [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
                  s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
                  s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount,
                  s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs,
                  s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled,
-                 s.mercadoPagoAccessToken, s.mercadoPagoPublicKey, s.efiClientId, s.efiClientSecret]
+                 s.mercadoPagoAccessToken, s.mercadoPagoPublicKey, s.efiClientId, s.efiClientSecret, s.whatsappMessageTemplate]
             );
         }
         res.json({ success: true });

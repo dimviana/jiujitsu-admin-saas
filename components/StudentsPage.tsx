@@ -6,7 +6,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText, Baby, Briefcase, Paperclip } from 'lucide-react';
+import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, MessageCircle } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
 import { ConfirmationModal } from './ui/ConfirmationModal';
@@ -554,6 +554,36 @@ const StudentsPage: React.FC = () => {
         setIsDocumentModalOpen(true);
     }
 
+    const handleWhatsAppClick = (student: Student) => {
+        const age = calculateAge(student.birthDate || '');
+        const isMinor = age < 16;
+        
+        let targetPhone = student.phone;
+        let targetName = student.name;
+        
+        // Se for menor de idade e tiver dados do responsável, usa eles
+        if (isMinor && student.responsiblePhone && student.responsibleName) {
+            targetPhone = student.responsiblePhone;
+            targetName = student.responsibleName; // O nome da pessoa com quem vou falar
+        }
+
+        if (!targetPhone) {
+            alert('Telefone não disponível.');
+            return;
+        }
+
+        let message = themeSettings.whatsappMessageTemplate || "Olá {nome}, tudo bem?";
+        
+        // Substituir variáveis
+        message = message.replace(/{nome}/g, targetName);
+        message = message.replace(/{aluno}/g, student.name);
+
+        const cleanPhone = targetPhone.replace(/\D/g, '');
+        const encodedMessage = encodeURIComponent(message);
+        
+        window.open(`https://wa.me/55${cleanPhone}?text=${encodedMessage}`, '_blank');
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
@@ -697,7 +727,16 @@ const StudentsPage: React.FC = () => {
                                         </div>
                                          <div className="flex justify-between items-center">
                                             <span className="text-slate-600 font-medium">Telefone:</span>
-                                            <span className="text-slate-700">{student.phone}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-slate-700">{student.phone}</span>
+                                                <button 
+                                                    className="p-1 bg-green-100 hover:bg-green-200 text-green-700 rounded-full transition-colors"
+                                                    onClick={() => handleWhatsAppClick(student)}
+                                                    title="Enviar mensagem no WhatsApp"
+                                                >
+                                                    <MessageCircle className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
                                         {student.isInstructor && (
                                             <div className="mt-2 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded border border-blue-100 text-center font-bold">
