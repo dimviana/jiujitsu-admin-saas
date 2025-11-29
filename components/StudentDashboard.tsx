@@ -13,51 +13,66 @@ import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCa
 const generateBRCode = (
     key: string, name: string, amount: number, txid: string
 ): string => {
-    // 1. Sanitização
-    const safeName = name.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const safeKey = key.trim(); 
-    const city = "BRASILIA"; // Cidade do comerciante (pode ser fixa ou dinâmica)
-
+    // Helper to format fields: ID + Length + Value
     const format = (id: string, value: string) => {
         const len = value.length.toString().padStart(2, '0');
         return `${id}${len}${value}`;
     };
 
-    // 2. Montagem da Estrutura de Dados
+    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
+    // 1. Prepare Data
+    const safeKey = key.trim();
+    // Name limited to 25 chars
+    const safeName = normalize(name).substring(0, 25);
+    const safeCity = "BRASILIA"; // Fixed city default (Standard for static QRs often defaults to BRASILIA if generic)
+    // TxID limited to 25 alphanumeric chars
+    const safeTxid = normalize(txid).replace(/[^A-Z0-9]/g, '').substring(0, 25) || '***';
+    const safeAmount = amount.toFixed(2);
+
+    // 2. Build Payload
+    
+    // 00 - Payload Format Indicator
+    // 26 - Merchant Account Information (GUI + Key)
     const merchantAccountInfo = format('00', 'BR.GOV.BCB.PIX') + format('01', safeKey);
-    const additionalData = format('05', txid);
+    
+    // 52 - Merchant Category Code
+    // 53 - Transaction Currency (986 = BRL)
+    // 54 - Transaction Amount
+    // 58 - Country Code
+    // 59 - Merchant Name
+    // 60 - Merchant City
+    // 62 - Additional Data Field Template (TxID)
+    const additionalData = format('05', safeTxid);
 
     const payload = [
-        format('00', '01'), // Payload Format Indicator
-        format('26', merchantAccountInfo), // Merchant Account Information
-        format('52', '0000'), // Merchant Category Code (0000 = Geral)
-        format('53', '986'), // Transaction Currency (BRL)
-        format('54', amount.toFixed(2)), // Transaction Amount
-        format('58', 'BR'), // Country Code
-        format('59', safeName), // Merchant Name
-        format('60', city), // Merchant City
-        format('62', additionalData), // Additional Data Field Template
+        format('00', '01'),
+        format('26', merchantAccountInfo),
+        format('52', '0000'),
+        format('53', '986'),
+        format('54', safeAmount),
+        format('58', 'BR'),
+        format('59', safeName),
+        format('60', safeCity),
+        format('62', additionalData),
     ].join('');
 
-    // 3. Adiciona o ID do CRC (63) e o tamanho (04)
+    // 3. CRC Calculation (ID 63)
     const payloadWithCrcInfo = payload + '6304';
 
-    // 4. Cálculo do CRC16-CCITT (0xFFFF)
-    // Polinômio: 0x1021
+    // Polynomial 0x1021 (CRC16-CCITT)
     let crc = 0xFFFF;
     for (let i = 0; i < payloadWithCrcInfo.length; i++) {
         crc ^= payloadWithCrcInfo.charCodeAt(i) << 8;
-        for (let j = 0; j < 8; j++) { // FIXED: j++ (era j+=2)
+        for (let j = 0; j < 8; j++) {
             if ((crc & 0x8000) !== 0) {
-                crc = (crc << 1) ^ 0x1021;
+                crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
             } else {
-                crc = crc << 1;
+                crc = (crc << 1) & 0xFFFF;
             }
         }
     }
-    
-    // Formata o CRC em Hexadecimal (4 digitos, maiúsculo)
-    const crcHex = (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+    const crcHex = crc.toString(16).toUpperCase().padStart(4, '0');
 
     return payloadWithCrcInfo + crcHex;
 };
@@ -86,16 +101,19 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
         if (!themeSettings.pixKey || !themeSettings.pixHolderName) {
             return null;
         }
-        // O txid deve ser alfanumérico e ter no máximo 25 caracteres para o payload do QR Code.
-        // Removemos caracteres especiais para garantir compatibilidade.
-        const rawTxid = `JJHUB${student.id}${Date.now()}`;
-        const txid = rawTxid.replace(/[^a-zA-Z0-9]/g, '').slice(0, 25);
+        
+        // Generate a valid txid (Max 25 chars, alphanumeric)
+        // We use 'JJ' prefix + cleaned Student ID + part of Timestamp
+        // This ensures uniqueness while respecting the 25 char limit.
+        const cleanId = student.id.replace(/[^a-zA-Z0-9]/g, '').slice(-12); 
+        const timestamp = Date.now().toString().slice(-8); 
+        const rawTxid = `JJ${cleanId}${timestamp}`.slice(0, 25);
 
         return generateBRCode(
             themeSettings.pixKey,
             themeSettings.pixHolderName,
             themeSettings.monthlyFeeAmount,
-            txid
+            rawTxid
         );
     }, [themeSettings, student]);
 
