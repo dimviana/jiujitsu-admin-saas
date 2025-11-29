@@ -257,6 +257,17 @@ app.get('/api/initial-data', async (req, res) => {
             await pool.query("ALTER TABLE students ADD COLUMN isSocialProject BOOLEAN DEFAULT FALSE, ADD COLUMN socialProjectName VARCHAR(255)");
         }
 
+        // 22. Add schedule_students table
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS schedule_students (
+                scheduleId VARCHAR(255),
+                studentId VARCHAR(255),
+                PRIMARY KEY (scheduleId, studentId),
+                FOREIGN KEY (scheduleId) REFERENCES class_schedules(id),
+                FOREIGN KEY (studentId) REFERENCES students(id)
+            )
+        `);
+
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
             ...s, 
@@ -290,7 +301,13 @@ app.get('/api/initial-data', async (req, res) => {
 
         const [schedules] = await pool.query('SELECT * FROM class_schedules');
         const [assistants] = await pool.query('SELECT * FROM schedule_assistants');
-        const parsedSchedules = schedules.map(s => ({ ...s, assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId) }));
+        const [enrolledStudents] = await pool.query('SELECT * FROM schedule_students');
+        
+        const parsedSchedules = schedules.map(s => ({ 
+            ...s, 
+            assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId),
+            studentIds: enrolledStudents.filter(es => es.scheduleId === s.id).map(es => es.studentId)
+        }));
 
         const [attendance] = await pool.query('SELECT * FROM attendance_records');
         const [logs] = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100');
@@ -561,7 +578,7 @@ app.post('/api/professors/:id/status', async (req, res) => {
 });
 
 app.post('/api/schedules', async (req, res) => {
-    const { assistantIds, ...schedule } = req.body;
+    const { assistantIds, studentIds, ...schedule } = req.body;
     
     const sanitize = (val) => (val === '' || val === undefined ? null : val);
     schedule.professorId = sanitize(schedule.professorId);
@@ -594,6 +611,15 @@ app.post('/api/schedules', async (req, res) => {
                 await conn.query('INSERT INTO schedule_assistants (scheduleId, assistantId) VALUES (?, ?)', [id, assistId]);
             }
         }
+
+        // Handle Students
+        await conn.query('DELETE FROM schedule_students WHERE scheduleId = ?', [id]);
+        if (studentIds && studentIds.length > 0) {
+            for (const studId of studentIds) {
+                await conn.query('INSERT INTO schedule_students (scheduleId, studentId) VALUES (?, ?)', [id, studId]);
+            }
+        }
+
         await conn.commit();
         res.json({ success: true });
     } catch (error) {
@@ -607,6 +633,7 @@ app.post('/api/schedules', async (req, res) => {
 app.delete('/api/schedules/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [req.params.id]);
+        await pool.query('DELETE FROM schedule_students WHERE scheduleId = ?', [req.params.id]); // Clean up students
         await pool.query('DELETE FROM class_schedules WHERE id = ?', [req.params.id]);
         res.json({ success: true });
     } catch(e) { res.status(500).send(e.message); }

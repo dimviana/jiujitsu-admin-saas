@@ -168,6 +168,7 @@ export interface ClassSchedule {
     academyId: string;
     requiredGraduationId?: string;
     assistantIds: string[];
+    studentIds?: string[]; // Added field
     observations?: string;
 }
 

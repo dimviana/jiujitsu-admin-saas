@@ -1,11 +1,11 @@
 import React, { useState, useContext, FormEvent, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ClassSchedule, DayOfWeek, Graduation } from '../types';
+import { ClassSchedule, DayOfWeek, Graduation, Student } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
-import { Heart, Shield, Users, FileText, CalendarCheck } from 'lucide-react';
+import { Heart, Shield, Users, FileText, CalendarCheck, Search, X } from 'lucide-react';
 import { ConfirmationModal } from './ui/ConfirmationModal';
 
 interface ScheduleFormProps {
@@ -52,6 +52,8 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
     academyId: user?.role === 'academy_admin' ? user.academyId || '' : (schedule?.academyId || ''),
     requiredGraduationId: '',
     observations: '',
+    // Preserve existing studentIds if editing
+    studentIds: schedule?.studentIds || [],
     ...schedule
   });
 
@@ -159,15 +161,118 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ schedule, onSave, onClose }
   );
 };
 
+interface ManageStudentsModalProps {
+    schedule: ClassSchedule;
+    onClose: () => void;
+    onSave: (updatedSchedule: ClassSchedule) => void;
+}
+
+const ManageStudentsModal: React.FC<ManageStudentsModalProps> = ({ schedule, onClose, onSave }) => {
+    const { students, graduations } = useContext(AppContext);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [enrolledIds, setEnrolledIds] = useState<string[]>(schedule.studentIds || []);
+
+    const filteredStudents = useMemo(() => {
+        // Filter by academy and search term
+        return students.filter(s => 
+            s.academyId === schedule.academyId && 
+            s.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [students, schedule.academyId, searchTerm]);
+
+    const toggleStudent = (studentId: string) => {
+        setEnrolledIds(prev => 
+            prev.includes(studentId) 
+                ? prev.filter(id => id !== studentId) 
+                : [...prev, studentId]
+        );
+    };
+
+    const handleSave = () => {
+        onSave({ ...schedule, studentIds: enrolledIds });
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title={`Gerenciar Alunos - ${schedule.className}`}>
+            <div className="space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <input
+                        type="text"
+                        placeholder="Buscar aluno..."
+                        className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+
+                <div className="max-h-[300px] overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                    {filteredStudents.length > 0 ? filteredStudents.map(student => {
+                        const isEnrolled = enrolledIds.includes(student.id);
+                        const belt = graduations.find(g => g.id === student.beltId);
+                        
+                        return (
+                            <div 
+                                key={student.id} 
+                                onClick={() => toggleStudent(student.id)}
+                                className={`flex items-center justify-between p-3 cursor-pointer transition-colors ${isEnrolled ? 'bg-amber-50' : 'hover:bg-slate-50'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isEnrolled ? 'bg-amber-500 border-amber-600' : 'border-slate-300 bg-white'}`}>
+                                        {isEnrolled && <span className="text-white text-xs font-bold">✓</span>}
+                                    </div>
+                                    <img 
+                                        src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
+                                        alt={student.name} 
+                                        className="w-8 h-8 rounded-full object-cover"
+                                    />
+                                    <div>
+                                        <p className="text-sm font-medium text-slate-800">{student.name}</p>
+                                        <div className="flex items-center text-xs text-slate-500">
+                                            {belt && (
+                                                <div className="flex items-center mr-2">
+                                                    <div className="w-2 h-2 rounded-full mr-1" style={getBeltStyle(belt)}></div>
+                                                    {belt.name}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }) : (
+                        <div className="p-4 text-center text-slate-500 text-sm">Nenhum aluno encontrado.</div>
+                    )}
+                </div>
+                
+                <div className="flex justify-between items-center pt-2">
+                    <span className="text-sm text-slate-600">
+                        <strong>{enrolledIds.length}</strong> alunos selecionados
+                    </span>
+                    <div className="flex gap-2">
+                        <Button variant="secondary" onClick={onClose} size="sm">Cancelar</Button>
+                        <Button onClick={handleSave} size="sm">Salvar Alunos</Button>
+                    </div>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
 
 const SchedulesPage: React.FC = () => {
-  const { schedules, saveSchedule, deleteSchedule, loading, professors, academies, user, graduations, setNotification } = useContext(AppContext);
+  const { schedules, saveSchedule, deleteSchedule, loading, professors, academies, user, graduations, setNotification, students } = useContext(AppContext);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Partial<ClassSchedule> | null>(null);
   
   // Booking Modal State
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [bookingSchedule, setBookingSchedule] = useState<ClassSchedule | null>(null);
+
+  // Manage Students Modal State
+  const [isManageStudentsOpen, setIsManageStudentsOpen] = useState(false);
+  const [managingSchedule, setManagingSchedule] = useState<ClassSchedule | null>(null);
 
   // Favorites State
   const [favorites, setFavorites] = useState<string[]>(() => {
@@ -243,6 +348,17 @@ const SchedulesPage: React.FC = () => {
       setIsBookingModalOpen(false);
       setBookingSchedule(null);
   };
+
+  const handleManageStudents = (schedule: ClassSchedule) => {
+      setManagingSchedule(schedule);
+      setIsManageStudentsOpen(true);
+  };
+
+  const handleSaveStudents = async (updatedSchedule: ClassSchedule) => {
+      await saveSchedule(updatedSchedule);
+      setIsManageStudentsOpen(false);
+      setManagingSchedule(null);
+  };
   
   const isAdmin = user?.role === 'general_admin' || user?.role === 'academy_admin';
 
@@ -268,6 +384,7 @@ const SchedulesPage: React.FC = () => {
                 const requiredGrad = graduations.find(g => g.id === schedule.requiredGraduationId);
                 const assistants = professors.filter(p => schedule.assistantIds.includes(p.id));
                 const isFavorite = favorites.includes(schedule.id);
+                const enrolledCount = schedule.studentIds?.length || 0;
 
                 return (
                     <Card key={schedule.id} className="p-0 flex flex-col overflow-hidden transition-transform duration-200 hover:-translate-y-1 relative h-full">
@@ -320,6 +437,14 @@ const SchedulesPage: React.FC = () => {
                                         </div>
                                     )}
 
+                                    {/* Students Count Badge */}
+                                    <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100">
+                                        <span className="text-xs text-slate-500 font-bold uppercase flex items-center">
+                                            <Users className="w-3 h-3 mr-1" /> Matriculados
+                                        </span>
+                                        <span className="text-sm font-bold text-slate-700">{enrolledCount} alunos</span>
+                                    </div>
+
                                     {assistants.length > 0 && (
                                         <div>
                                             <span className="text-xs text-slate-500 font-bold uppercase flex items-center mb-1">
@@ -345,7 +470,10 @@ const SchedulesPage: React.FC = () => {
                             </div>
                             
                             {isAdmin && (
-                                <div className="mt-5 pt-4 border-t border-slate-200/60 flex justify-end gap-2">
+                                <div className="mt-5 pt-4 border-t border-slate-200/60 flex flex-wrap justify-end gap-2">
+                                    <Button size="sm" variant="secondary" onClick={() => handleManageStudents(schedule)} className="bg-blue-50 text-blue-600 hover:bg-blue-100">
+                                        <Users className="w-4 h-4 mr-1" /> Alunos
+                                    </Button>
                                     <Button size="sm" variant="secondary" onClick={() => handleOpenModal(schedule)}>Editar</Button>
                                     <Button size="sm" variant="danger" onClick={() => handleDelete(schedule.id)}>Excluir</Button>
                                 </div>
@@ -369,6 +497,14 @@ const SchedulesPage: React.FC = () => {
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={selectedSchedule?.id ? 'Editar Horário' : 'Adicionar Horário'}>
         <ScheduleForm schedule={selectedSchedule} onSave={handleSave} onClose={handleCloseModal} />
       </Modal>
+
+      {managingSchedule && isManageStudentsOpen && (
+          <ManageStudentsModal 
+              schedule={managingSchedule}
+              onClose={() => setIsManageStudentsOpen(false)}
+              onSave={handleSaveStudents}
+          />
+      )}
 
       <ConfirmationModal
           isOpen={isBookingModalOpen}
