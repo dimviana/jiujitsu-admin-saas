@@ -59,10 +59,12 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
     const todaysSchedules = useMemo(() => schedules.filter(s => s.dayOfWeek === dayOfWeek).sort((a,b) => a.startTime.localeCompare(b.startTime)), [schedules, dayOfWeek]);
     const dateStr = toYYYYMMDD(date);
 
+    // Initialize state from existing records to ensure persistence visualization (Fixed Choice)
     const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent'>>(() => {
         const initialState: Record<string, 'present' | 'absent'> = {};
-        // Initialize state from existing records to ensure persistence visualization
-        attendanceRecords.filter(ar => ar.date === dateStr).forEach(ar => {
+        // Filter records for this specific date
+        const existingRecords = attendanceRecords.filter(ar => ar.date === dateStr);
+        existingRecords.forEach(ar => {
             initialState[`${ar.studentId}-${ar.scheduleId}`] = ar.status;
         });
         return initialState;
@@ -104,25 +106,29 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
         <Modal isOpen={true} onClose={onClose} title={`Aulas de ${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}`} size="lg">
             <div className="space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
                 {todaysSchedules.length > 0 ? todaysSchedules.map(schedule => {
+                     const requiredGrad = graduations.find(g => g.id === schedule.requiredGraduationId);
+                     const isKidsClass = requiredGrad?.type === 'kids';
+
                      const eligibleStudents = students.filter(student => {
                         if (student.academyId !== schedule.academyId) return false;
                         
                         const studentGrad = graduations.find(g => g.id === student.beltId);
-                        const requiredGrad = graduations.find(g => g.id === schedule.requiredGraduationId);
                         const reqRank = requiredGrad?.rank ?? 1; 
                         
                         // Check Rank
                         if ((studentGrad?.rank ?? 0) < reqRank) return false;
 
                         // Check Age & Class Type Logic
-                        // Rule: Children < 16 only in kids classes. > 16 show in both.
                         const age = calculateAge(student.birthDate || '');
-                        const isKidsClass = requiredGrad?.type === 'kids';
 
+                        // Logic:
+                        // < 16 years: Only allow in Kids classes.
+                        // >= 16 years: Allow in both (Kids and Adult).
                         if (age < 16) {
-                            return isKidsClass; // Must be a kids class
+                            return isKidsClass; 
                         } else {
-                            return true; // Adults (>=16) show in both types
+                            // Age >= 16, usually adults, but allowed in both based on requirement
+                            return true;
                         }
                     });
 
@@ -154,7 +160,7 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
                             <div className="divide-y divide-slate-50">
                                 {eligibleStudents.map(student => {
                                     const key = `${student.id}-${schedule.id}`;
-                                    // Use local state if changed, otherwise fallback to existing record (persisted)
+                                    // Use local state if set, otherwise fallback to existing record
                                     const currentStatus = attendance[key]; 
                                     const belt = graduations.find(g => g.id === student.beltId);
 
