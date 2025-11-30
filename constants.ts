@@ -37,7 +37,21 @@ export const MOCK_THEME: ThemeSettings = {
   studentProfileEditEnabled: false,
   copyrightText: '© 2025 Jiu-JitsuAdmin',
   systemVersion: '1.3.0',
-  theme: 'light'
+  theme: 'light',
+
+  // Mobile Interface Defaults
+  mobileNavShowDashboard: true,
+  mobileNavShowSchedule: true,
+  mobileNavShowStudents: true,
+  mobileNavShowProfile: true,
+  mobileNavBgColor: '#ffffff',
+  mobileNavActiveColor: '#f59e0b',
+  mobileNavInactiveColor: '#94a3b8',
+  mobileNavHeight: 60,
+  mobileNavIconSize: 24,
+  mobileNavBorderRadius: 0,
+  mobileNavBottomMargin: 0,
+  mobileNavFloating: false
 };
 
 export const GRADUATIONS: Graduation[] = [

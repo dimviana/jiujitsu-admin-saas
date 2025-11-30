@@ -3,6 +3,7 @@ import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
+import { Smartphone } from 'lucide-react';
 
 const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }> = ({ label, id, ...props }) => (
     <div>
@@ -20,7 +21,7 @@ const SettingsPage: React.FC = () => {
     const { themeSettings, setThemeSettings, activityLogs, users, user, academies } = useContext(AppContext);
     const [settings, setSettings] = useState(themeSettings);
     const [monthlyFeeInput, setMonthlyFeeInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
-    const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos' | 'mensagens'>('system');
+    const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos' | 'mensagens' | 'mobile'>('system');
 
     const isAcademyAdmin = user?.role === 'academy_admin';
     const currentAcademyName = isAcademyAdmin ? academies.find(a => a.id === user.academyId)?.name : 'Sistema Global';
@@ -98,6 +99,13 @@ const SettingsPage: React.FC = () => {
                                 className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'mensagens' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
                             >
                                 Mensagens
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('mobile')}
+                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center ${activeTab === 'mobile' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
+                            >
+                                <Smartphone className="w-4 h-4 mr-2" />
+                                Interface Mobile
                             </button>
                        </>
                     )}
@@ -322,6 +330,63 @@ const SettingsPage: React.FC = () => {
                                             <li><code>{'{nome}'}</code>: Nome da pessoa com quem você está falando (Responsável se menor de idade, ou o próprio aluno).</li>
                                             <li><code>{'{aluno}'}</code>: Nome do aluno (Útil quando falando com o responsável).</li>
                                         </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'mobile' && (
+                            <div className="space-y-6 animate-fade-in-down">
+                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Interface Mobile (Barra Inferior)</h2>
+                                <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
+                                  Ajuste a aparência e os botões da barra de navegação no celular.
+                                </p>
+
+                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Itens do Menu</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="flex items-center">
+                                            <input type="checkbox" id="mobileNavShowDashboard" name="mobileNavShowDashboard" checked={settings.mobileNavShowDashboard} onChange={handleChange} className="w-4 h-4 text-[var(--theme-accent)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--theme-accent)]" />
+                                            <label htmlFor="mobileNavShowDashboard" className="ml-2 text-sm font-medium text-[var(--theme-text-primary)]">Início (Dashboard)</label>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <input type="checkbox" id="mobileNavShowSchedule" name="mobileNavShowSchedule" checked={settings.mobileNavShowSchedule} onChange={handleChange} className="w-4 h-4 text-[var(--theme-accent)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--theme-accent)]" />
+                                            <label htmlFor="mobileNavShowSchedule" className="ml-2 text-sm font-medium text-[var(--theme-text-primary)]">Horários</label>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <input type="checkbox" id="mobileNavShowStudents" name="mobileNavShowStudents" checked={settings.mobileNavShowStudents} onChange={handleChange} className="w-4 h-4 text-[var(--theme-accent)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--theme-accent)]" />
+                                            <label htmlFor="mobileNavShowStudents" className="ml-2 text-sm font-medium text-[var(--theme-text-primary)]">Alunos</label>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <input type="checkbox" id="mobileNavShowProfile" name="mobileNavShowProfile" checked={settings.mobileNavShowProfile} onChange={handleChange} className="w-4 h-4 text-[var(--theme-accent)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--theme-accent)]" />
+                                            <label htmlFor="mobileNavShowProfile" className="ml-2 text-sm font-medium text-[var(--theme-text-primary)]">Perfil (Meus Dados)</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Cores</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <Input label="Cor de Fundo da Barra" name="mobileNavBgColor" type="color" value={settings.mobileNavBgColor} onChange={handleChange} />
+                                        <Input label="Cor Ícone Ativo" name="mobileNavActiveColor" type="color" value={settings.mobileNavActiveColor} onChange={handleChange} />
+                                        <Input label="Cor Ícone Inativo" name="mobileNavInactiveColor" type="color" value={settings.mobileNavInactiveColor} onChange={handleChange} />
+                                    </div>
+                                </div>
+
+                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Dimensões e Estilo</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input label="Altura da Barra (px)" name="mobileNavHeight" type="number" value={settings.mobileNavHeight} onChange={handleChange} />
+                                        <Input label="Tamanho do Ícone (px)" name="mobileNavIconSize" type="number" value={settings.mobileNavIconSize} onChange={handleChange} />
+                                        <Input label="Arredondamento dos Cantos (px)" name="mobileNavBorderRadius" type="number" value={settings.mobileNavBorderRadius} onChange={handleChange} />
+                                        <Input label="Distância do Fim da Tela (px)" name="mobileNavBottomMargin" type="number" value={settings.mobileNavBottomMargin} onChange={handleChange} />
+                                    </div>
+                                    <div className="flex justify-between items-center p-3 bg-white rounded-lg mt-2 border border-slate-200">
+                                        <label htmlFor="mobileNavFloating" className="font-medium text-[var(--theme-text-primary)]">Modo Flutuante (Floating)</label>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" id="mobileNavFloating" name="mobileNavFloating" checked={settings.mobileNavFloating} onChange={handleChange} className="sr-only peer" />
+                                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
+                                        </label>
                                     </div>
                                 </div>
                             </div>

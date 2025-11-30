@@ -51,8 +51,22 @@ export interface ThemeSettings {
   studentProfileEditEnabled: boolean;
   googleClientId?: string;
   facebookAppId?: string;
-  whatsappMessageTemplate?: string; // New field for custom message
+  whatsappMessageTemplate?: string;
   theme?: string;
+
+  // Mobile Interface Settings
+  mobileNavShowDashboard?: boolean;
+  mobileNavShowSchedule?: boolean;
+  mobileNavShowStudents?: boolean;
+  mobileNavShowProfile?: boolean;
+  mobileNavBgColor?: string;
+  mobileNavActiveColor?: string;
+  mobileNavInactiveColor?: string;
+  mobileNavHeight?: number;
+  mobileNavIconSize?: number;
+  mobileNavBorderRadius?: number;
+  mobileNavBottomMargin?: number;
+  mobileNavFloating?: boolean;
 }
 
 export interface Academy {
