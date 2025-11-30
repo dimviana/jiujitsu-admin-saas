@@ -127,12 +127,13 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
                         if (age < 16) {
                             return isKidsClass; 
                         } else {
-                            // Age >= 16, usually adults, but allowed in both based on requirement
+                            // Age >= 16, allowed in both provided they meet rank reqs
                             return true;
                         }
                     });
 
                     const professor = users.find(u => u.id === schedule.professorId);
+                    const assistants = users.filter(u => schedule.assistantIds.includes(u.id));
 
                     return (
                         <div key={schedule.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -140,11 +141,18 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
                             <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center flex-wrap gap-2">
                                 <div>
                                     <h3 className="font-bold text-slate-800 text-lg">{schedule.className}</h3>
-                                    <p className="text-sm text-slate-500 flex items-center">
-                                        <span className="font-medium mr-2">{schedule.startTime} - {schedule.endTime}</span>
-                                        <span className="w-1 h-1 bg-slate-300 rounded-full mx-2"></span>
-                                        Prof. {professor?.name || 'N/A'}
-                                    </p>
+                                    <div className="text-sm text-slate-500">
+                                        <p className="flex items-center">
+                                            <span className="font-medium mr-2">{schedule.startTime} - {schedule.endTime}</span>
+                                            <span className="w-1 h-1 bg-slate-300 rounded-full mx-2"></span>
+                                            Prof. {professor?.name || 'N/A'}
+                                        </p>
+                                        {assistants.length > 0 && (
+                                            <p className="mt-1 text-xs text-slate-400">
+                                                Assistentes: {assistants.map(a => a.name.split(' ')[0]).join(', ')}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="bg-white border border-slate-200 text-slate-600 text-xs px-2.5 py-1 rounded-full font-medium shadow-sm">
@@ -241,7 +249,7 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
 
 
 const CalendarView: React.FC = () => {
-    const { schedules } = useContext(AppContext);
+    const { schedules, attendanceRecords } = useContext(AppContext);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
@@ -289,6 +297,19 @@ const CalendarView: React.FC = () => {
     const getDaySchedules = (date: Date) => {
         const dayName = DAYS_OF_WEEK_MAP[date.getDay()];
         return schedules.filter(s => s.dayOfWeek === dayName).sort((a,b) => a.startTime.localeCompare(b.startTime));
+    };
+
+    const getAttendanceStatus = (date: Date) => {
+        const dateStr = toYYYYMMDD(date);
+        const records = attendanceRecords.filter(r => r.date === dateStr);
+        if (records.length === 0) return null;
+        
+        const hasPresent = records.some(r => r.status === 'present');
+        const hasAbsent = records.some(r => r.status === 'absent');
+        
+        if (hasPresent && !hasAbsent) return 'all-present';
+        if (!hasPresent && hasAbsent) return 'all-absent';
+        return 'mixed';
     };
 
     const handleDayClick = (date: Date) => {
@@ -340,6 +361,7 @@ const CalendarView: React.FC = () => {
                     const daySchedules = cell.isCurrentMonth ? getDaySchedules(cell.date) : [];
                     const hasSchedule = daySchedules.length > 0;
                     const isToday = toYYYYMMDD(cell.date) === toYYYYMMDD(new Date());
+                    const attendanceStatus = cell.isCurrentMonth ? getAttendanceStatus(cell.date) : null;
                     
                     let cellClasses = "min-h-[120px] p-2 border-b border-r border-slate-200 text-left align-top transition-all relative group flex flex-col";
                     
@@ -361,6 +383,18 @@ const CalendarView: React.FC = () => {
                                 `}>
                                     {cell.day}
                                 </span>
+                                {attendanceStatus && (
+                                    <div className="flex gap-0.5">
+                                        {attendanceStatus === 'all-present' && <div className="w-2 h-2 rounded-full bg-green-500"></div>}
+                                        {attendanceStatus === 'all-absent' && <div className="w-2 h-2 rounded-full bg-red-500"></div>}
+                                        {attendanceStatus === 'mixed' && (
+                                            <>
+                                                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             
                             {hasSchedule && cell.isCurrentMonth && (
@@ -465,7 +499,7 @@ const StudentView: React.FC = () => {
                 <input 
                     type="text" 
                     placeholder="Buscar aluno..." 
-                    className="border border-slate-200 rounded-lg px-4 py-2 text-sm focus:ring-amber-500 outline-none"
+                    className="border border-slate-200 rounded-lg px-4 py-2 text-sm focus:ring-amber-500 outline-none w-full max-w-xs"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -481,7 +515,7 @@ const StudentView: React.FC = () => {
                             className={`bg-white p-3 rounded-lg shadow-sm cursor-pointer transition-all duration-200 border
                                 ${isSelected ? 'border-amber-500 ring-1 ring-amber-500' : 'border-slate-200 hover:border-amber-300'}`}>
                                <div className="flex items-center gap-3">
-                                   <img src={student.imageUrl || `https://i.pravatar.cc/150?u=${student.cpf}`} alt={student.name} className="w-12 h-12 rounded-full border-2 border-slate-100 object-cover" />
+                                   <img src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} alt={student.name} className="w-12 h-12 rounded-full border-2 border-slate-100 object-cover" />
                                    <div className="min-w-0">
                                        <h2 className="font-bold text-slate-800 text-sm truncate">{student.name}</h2>
                                        {belt && (
