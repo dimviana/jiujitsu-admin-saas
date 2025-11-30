@@ -3,7 +3,7 @@ import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
-import { Smartphone, Upload, CreditCard } from 'lucide-react';
+import { Smartphone, Upload } from 'lucide-react';
 
 const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }> = ({ label, id, ...props }) => (
     <div>
