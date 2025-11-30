@@ -41,13 +41,14 @@ export interface ThemeSettings {
   // Payment Gateways
   mercadoPagoAccessToken?: string;
   mercadoPagoPublicKey?: string;
-  creditCardEnabled?: boolean; // New: Toggle for Credit Card
+  creditCardEnabled?: boolean;
+  creditCardSurcharge?: number; // Novo campo: Acréscimo em Reais
 
   efiClientId?: string;
   efiClientSecret?: string;
-  efiEnabled?: boolean; // New: Toggle for EFI
-  efiPixKey?: string;   // New: Specific PIX key for EFI
-  efiPixCert?: string;  // New: Certificate for EFI (Base64)
+  efiEnabled?: boolean;
+  efiPixKey?: string;
+  efiPixCert?: string;
   
   // Feature Flags & Integrations
   publicPageEnabled: boolean;

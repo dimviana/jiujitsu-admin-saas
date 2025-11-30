@@ -207,7 +207,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
     );
 };
 
-const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfirm: () => Promise<void>; amount: number }> = ({ student, onClose, onConfirm, amount }) => {
+const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfirm: () => Promise<void>; amount: number; surcharge: number }> = ({ student, onClose, onConfirm, amount, surcharge }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [cardData, setCardData] = useState({
@@ -216,6 +216,8 @@ const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfi
         expiry: '',
         cvc: ''
     });
+    
+    const total = amount + surcharge;
 
     const handleFormatCardNumber = (e: React.ChangeEvent<HTMLInputElement>) => {
         let val = e.target.value.replace(/\D/g, '');
@@ -244,7 +246,7 @@ const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfi
                 },
                 body: JSON.stringify({
                     studentId: student.id,
-                    amount,
+                    amount, // Base amount, surcharge logic handled by backend or display
                     cardData
                 })
             });
@@ -268,12 +270,25 @@ const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfi
         <Modal isOpen={true} onClose={onClose} title="Pagamento com Cartão de Crédito">
             <form onSubmit={handlePayment} className="space-y-4">
                 <div className="bg-slate-50 p-4 rounded-lg mb-4 text-center border border-slate-100">
-                    <p className="text-sm text-slate-500">Valor a pagar</p>
-                    <p className="text-3xl font-bold text-slate-800">{amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    <div className="flex justify-between items-center text-sm text-slate-500 mb-1">
+                        <span>Mensalidade:</span>
+                        <span>{amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    </div>
+                    {surcharge > 0 && (
+                        <div className="flex justify-between items-center text-sm text-slate-500 mb-2 border-b border-slate-200 pb-2">
+                            <span>Taxa de Cartão:</span>
+                            <span>+ {surcharge.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
+                    )}
+                    
+                    <div className="flex justify-between items-center font-bold text-slate-800 text-lg">
+                        <span>Total a Pagar:</span>
+                        <span className="text-xl text-blue-600">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    </div>
                 </div>
 
                 {error && (
-                    <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+                    <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded relative text-sm" role="alert">
                         <strong className="font-bold">Erro: </strong>
                         <span className="block sm:inline">{error}</span>
                     </div>
@@ -588,6 +603,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <CreditCardModal 
                     student={studentData}
                     amount={themeSettings.monthlyFeeAmount}
+                    surcharge={themeSettings.creditCardSurcharge || 0}
                     onClose={() => setPaymentModalState('closed')}
                     onConfirm={handleConfirmPayment}
                 />

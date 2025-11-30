@@ -21,6 +21,7 @@ const SettingsPage: React.FC = () => {
     const { themeSettings, setThemeSettings, activityLogs, users, user, academies } = useContext(AppContext);
     const [settings, setSettings] = useState(themeSettings);
     const [monthlyFeeInput, setMonthlyFeeInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
+    const [surchargeInput, setSurchargeInput] = useState((themeSettings.creditCardSurcharge || 0).toFixed(2));
     const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos' | 'mensagens' | 'mobile'>('system');
     const certInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,6 +32,7 @@ const SettingsPage: React.FC = () => {
     useEffect(() => {
         setSettings(themeSettings);
         setMonthlyFeeInput(themeSettings.monthlyFeeAmount.toFixed(2));
+        setSurchargeInput((themeSettings.creditCardSurcharge || 0).toFixed(2));
     }, [themeSettings]);
 
 
@@ -39,11 +41,13 @@ const SettingsPage: React.FC = () => {
         const checked = (e.target as HTMLInputElement).checked;
         
         if (name === 'monthlyFeeAmount') {
-            setMonthlyFeeInput(value); // Keep typing fluid
+            setMonthlyFeeInput(value);
             const numValue = parseFloat(value);
-            if (!isNaN(numValue)) {
-                setSettings(prev => ({ ...prev, [name]: numValue }));
-            }
+            if (!isNaN(numValue)) setSettings(prev => ({ ...prev, [name]: numValue }));
+        } else if (name === 'creditCardSurcharge') {
+            setSurchargeInput(value);
+            const numValue = parseFloat(value);
+            if (!isNaN(numValue)) setSettings(prev => ({ ...prev, [name]: numValue }));
         } else {
             setSettings(prev => ({
                 ...prev,
@@ -60,6 +64,17 @@ const SettingsPage: React.FC = () => {
         } else {
             setMonthlyFeeInput('0.00');
             setSettings(prev => ({ ...prev, monthlyFeeAmount: 0 }));
+        }
+    };
+
+    const handleSurchargeBlur = () => {
+        const val = parseFloat(surchargeInput);
+        if (!isNaN(val)) {
+            setSurchargeInput(val.toFixed(2));
+            setSettings(prev => ({ ...prev, creditCardSurcharge: val }));
+        } else {
+            setSurchargeInput('0.00');
+            setSettings(prev => ({ ...prev, creditCardSurcharge: 0 }));
         }
     };
 
@@ -178,6 +193,7 @@ const SettingsPage: React.FC = () => {
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* ... System Tab (Unchanged) ... */}
                         {activeTab === 'system' && (
                             <>
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Identidade Visual</h2>
@@ -304,6 +320,17 @@ const SettingsPage: React.FC = () => {
                                         onChange={handleChange}
                                         placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                                     />
+                                    <Input 
+                                        label="Acréscimo no Cartão (R$)" 
+                                        name="creditCardSurcharge" 
+                                        type="number"
+                                        value={surchargeInput} 
+                                        onChange={handleChange}
+                                        onBlur={handleSurchargeBlur}
+                                        step="0.01"
+                                        placeholder="0.00"
+                                    />
+                                    <p className="text-[10px] text-[var(--theme-text-primary)]/50">Valor fixo adicionado ao total quando pago via cartão de crédito.</p>
                                 </div>
 
                                 {/* EFI Bank Section */}
@@ -371,6 +398,7 @@ const SettingsPage: React.FC = () => {
                             </div>
                         )}
 
+                        {/* ... (other tabs unchanged) ... */}
                         {activeTab === 'mensagens' && (
                             <div className="space-y-6 animate-fade-in-down">
                                 {/* ... existing messages settings ... */}
@@ -468,7 +496,6 @@ const SettingsPage: React.FC = () => {
 
                         {activeTab === 'webpage' && (
                              <>
-                                {/* ... existing webpage settings ... */}
                                 <div className="flex justify-between items-center">
                                     <h2 className="text-xl font-bold text-[var(--theme-accent)]">Configurar Página Web Pública</h2>
                                     <div className="flex items-center">
@@ -496,7 +523,6 @@ const SettingsPage: React.FC = () => {
 
                         {activeTab === 'direitos' && (
                              <div className="space-y-6 animate-fade-in-down">
-                                {/* ... existing rights settings ... */}
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Direitos Autorais e Versão</h2>
                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
                                   Personalize o texto de copyright e a versão exibidos no rodapé do sistema.
