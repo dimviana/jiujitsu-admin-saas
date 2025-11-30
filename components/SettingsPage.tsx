@@ -343,6 +343,17 @@ const SettingsPage: React.FC = () => {
                                 </p>
 
                                 <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <label htmlFor="mobileNavVisible" className="font-semibold text-[var(--theme-text-primary)]">Exibir Barra de Menu</label>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" id="mobileNavVisible" name="mobileNavVisible" checked={settings.mobileNavVisible !== false} onChange={handleChange} className="sr-only peer" />
+                                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
+                                        </label>
+                                    </div>
+                                    <p className="text-xs text-[var(--theme-text-primary)]/60 -mt-2">Desative para ocultar completamente o menu inferior em dispositivos móveis.</p>
+                                </div>
+
+                                <div className={`bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4 transition-opacity ${settings.mobileNavVisible === false ? 'opacity-50 pointer-events-none' : ''}`}>
                                     <h3 className="font-semibold text-[var(--theme-text-primary)]">Itens do Menu</h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="flex items-center">
@@ -364,7 +375,7 @@ const SettingsPage: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                <div className={`bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4 transition-opacity ${settings.mobileNavVisible === false ? 'opacity-50 pointer-events-none' : ''}`}>
                                     <h3 className="font-semibold text-[var(--theme-text-primary)]">Cores</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <Input label="Cor de Fundo da Barra" name="mobileNavBgColor" type="color" value={settings.mobileNavBgColor} onChange={handleChange} />
@@ -373,7 +384,7 @@ const SettingsPage: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                <div className={`bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4 transition-opacity ${settings.mobileNavVisible === false ? 'opacity-50 pointer-events-none' : ''}`}>
                                     <h3 className="font-semibold text-[var(--theme-text-primary)]">Dimensões e Estilo</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <Input label="Altura da Barra (px)" name="mobileNavHeight" type="number" value={settings.mobileNavHeight} onChange={handleChange} />

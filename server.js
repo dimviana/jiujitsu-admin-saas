@@ -234,6 +234,14 @@ app.get('/api/initial-data', async (req, res) => {
             `);
         }
 
+        // 24. Add mobileNavVisible to Theme Settings
+        try {
+            await pool.query("SELECT mobileNavVisible FROM theme_settings LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding mobileNavVisible to theme_settings");
+            await pool.query("ALTER TABLE theme_settings ADD COLUMN mobileNavVisible BOOLEAN DEFAULT TRUE");
+        }
+
         // ... (existing migrations 17-22) ...
         // 17. allowStudentRegistration on Academies
         try {
@@ -343,6 +351,7 @@ app.get('/api/initial-data', async (req, res) => {
             mobileNavShowStudents: Boolean(parsedSettings.mobileNavShowStudents),
             mobileNavShowProfile: Boolean(parsedSettings.mobileNavShowProfile),
             mobileNavFloating: Boolean(parsedSettings.mobileNavFloating),
+            mobileNavVisible: parsedSettings.mobileNavVisible === undefined || parsedSettings.mobileNavVisible === 1 || parsedSettings.mobileNavVisible === true,
         };
 
         res.json({ students: parsedStudents, users, academies: parsedAcademies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
@@ -621,7 +630,7 @@ app.post('/api/settings', async (req, res) => {
                 socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?,
                 mercadoPagoAccessToken=?, mercadoPagoPublicKey=?, efiClientId=?, efiClientSecret=?, whatsappMessageTemplate=?,
                 mobileNavShowDashboard=?, mobileNavShowSchedule=?, mobileNavShowStudents=?, mobileNavShowProfile=?, mobileNavBgColor=?,
-                mobileNavActiveColor=?, mobileNavInactiveColor=?, mobileNavHeight=?, mobileNavIconSize=?, mobileNavBorderRadius=?, mobileNavBottomMargin=?, mobileNavFloating=?
+                mobileNavActiveColor=?, mobileNavInactiveColor=?, mobileNavHeight=?, mobileNavIconSize=?, mobileNavBorderRadius=?, mobileNavBottomMargin=?, mobileNavFloating=?, mobileNavVisible=?
                 WHERE id = 1`,
                 [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
                  s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
@@ -630,7 +639,7 @@ app.post('/api/settings', async (req, res) => {
                  s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled,
                  s.mercadoPagoAccessToken, s.mercadoPagoPublicKey, s.efiClientId, s.efiClientSecret, s.whatsappMessageTemplate,
                  s.mobileNavShowDashboard, s.mobileNavShowSchedule, s.mobileNavShowStudents, s.mobileNavShowProfile, s.mobileNavBgColor,
-                 s.mobileNavActiveColor, s.mobileNavInactiveColor, s.mobileNavHeight, s.mobileNavIconSize, s.mobileNavBorderRadius, s.mobileNavBottomMargin, s.mobileNavFloating]
+                 s.mobileNavActiveColor, s.mobileNavInactiveColor, s.mobileNavHeight, s.mobileNavIconSize, s.mobileNavBorderRadius, s.mobileNavBottomMargin, s.mobileNavFloating, s.mobileNavVisible]
             );
         }
         res.json({ success: true });

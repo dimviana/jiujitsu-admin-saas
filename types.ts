@@ -55,6 +55,7 @@ export interface ThemeSettings {
   theme?: string;
 
   // Mobile Interface Settings
+  mobileNavVisible?: boolean; // New field
   mobileNavShowDashboard?: boolean;
   mobileNavShowSchedule?: boolean;
   mobileNavShowStudents?: boolean;

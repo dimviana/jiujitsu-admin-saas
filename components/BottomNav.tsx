@@ -10,6 +10,9 @@ interface BottomNavProps {
 const BottomNav: React.FC<BottomNavProps> = ({ currentPage, onNavigate }) => {
   const { themeSettings } = useContext(AppContext);
 
+  // If mobile nav is disabled in settings, do not render
+  if (themeSettings.mobileNavVisible === false) return null;
+
   const links = [
     { 
       to: 'dashboard', 

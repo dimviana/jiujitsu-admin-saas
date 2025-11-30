@@ -5,7 +5,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import StudentAttendanceChart from './charts/StudentAttendanceChart';
-import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap } from 'lucide-react';
+import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap, HeartHandshake } from 'lucide-react';
 
 // ... (Helper functions remain the same) ...
 
@@ -527,7 +527,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
     // Helper to get status visual data
     const getStatusInfo = () => {
-        if (studentData.paymentStatus === 'scholarship') {
+        if (studentData.isSocialProject) {
+            return { color: '#3B82F6', text: 'Projeto Social', icon: <HeartHandshake className="w-4 h-4 mr-1"/> };
+        } else if (studentData.paymentStatus === 'scholarship') {
             return { color: '#8B5CF6', text: 'Isento (Bolsa)', icon: <GraduationCap className="w-4 h-4 mr-1"/> };
         } else if (studentData.paymentStatus === 'paid') {
             return { color: '#10B981', text: 'Em Dia', icon: null };
