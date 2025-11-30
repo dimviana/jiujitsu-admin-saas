@@ -6,7 +6,6 @@ import {
 } from '../constants';
 
 type NotificationType = { message: string; details: string; type: 'error' | 'success' };
-type ThemeMode = 'light' | 'dark' | 'system';
 
 interface AppContextType {
     user: User | null;
@@ -24,10 +23,6 @@ interface AppContextType {
     setNotification: (notification: NotificationType | null) => void;
     globalAcademyFilter: string;
     setGlobalAcademyFilter: (filter: string) => void;
-    
-    // Theme
-    themeMode: ThemeMode;
-    setThemeMode: (mode: ThemeMode) => void;
     
     saveStudent: (student: Omit<Student, 'id' | 'paymentStatus' | 'lastSeen' | 'paymentHistory'> & { id?: string }) => Promise<void>;
     deleteStudent: (id: string) => Promise<void>;
@@ -64,11 +59,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (error) {
             return null;
         }
-    });
-
-    // Theme Mode State
-    const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
-        return (localStorage.getItem('themeMode') as ThemeMode) || 'system';
     });
 
     // Raw, unfiltered data from the API
@@ -197,54 +187,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     }, [user, globalAcademyFilter, allStudents, allProfessors, allSchedules, allAttendance, allUsers, allAcademies, allActivityLogs]);
 
-    const setThemeMode = (mode: ThemeMode) => {
-        setThemeModeState(mode);
-        localStorage.setItem('themeMode', mode);
-    };
-
-    // Apply Theme (CSS Variables)
+    // Apply Theme (CSS Variables) - Always Force Light/Configured Theme
     useEffect(() => {
         const root = document.documentElement;
         
-        const applyTheme = () => {
-            const isDark = themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-            
-            if (isDark) {
-                // Dark Mode Palette override
-                // Base: #333232
-                // Text: #ffffff
-                // Icons: #0863c2
-                root.style.setProperty('--theme-bg', '#333232'); 
-                root.style.setProperty('--theme-card-bg', '#414040'); // Um pouco mais claro que o fundo para contraste
-                root.style.setProperty('--theme-text-primary', '#ffffff');
-                root.style.setProperty('--theme-primary', '#0863c2'); 
-                root.style.setProperty('--theme-secondary', '#ffffff'); 
-                root.style.setProperty('--theme-accent', '#0863c2');
-                
-                root.classList.add('dark');
-            } else {
-                // Light Mode (Default from Settings)
-                root.style.setProperty('--theme-primary', effectiveThemeSettings.primaryColor);
-                root.style.setProperty('--theme-secondary', effectiveThemeSettings.secondaryColor);
-                root.style.setProperty('--theme-accent', effectiveThemeSettings.primaryColor);
-                root.style.setProperty('--theme-bg', effectiveThemeSettings.backgroundColor);
-                root.style.setProperty('--theme-card-bg', effectiveThemeSettings.cardBackgroundColor);
-                root.style.setProperty('--theme-text-primary', effectiveThemeSettings.secondaryColor);
-                
-                root.classList.remove('dark');
-            }
-        };
+        // Always apply settings from database/mock (Light mode essentially)
+        root.style.setProperty('--theme-primary', effectiveThemeSettings.primaryColor);
+        root.style.setProperty('--theme-secondary', effectiveThemeSettings.secondaryColor);
+        root.style.setProperty('--theme-accent', effectiveThemeSettings.primaryColor);
+        root.style.setProperty('--theme-bg', effectiveThemeSettings.backgroundColor);
+        root.style.setProperty('--theme-card-bg', effectiveThemeSettings.cardBackgroundColor);
+        root.style.setProperty('--theme-text-primary', effectiveThemeSettings.secondaryColor);
+        
+        // Ensure no dark class is present
+        root.classList.remove('dark');
 
-        applyTheme();
-
-        // Listener for system changes if in system mode
-        if (themeMode === 'system') {
-            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-            mediaQuery.addEventListener('change', applyTheme);
-            return () => mediaQuery.removeEventListener('change', applyTheme);
-        }
-
-    }, [effectiveThemeSettings, themeMode]);
+    }, [effectiveThemeSettings]);
 
     const handleLoginSuccess = async (userData: User) => {
         localStorage.setItem('jiujitsu-user', JSON.stringify(userData));
@@ -384,7 +342,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             themeSettings: effectiveThemeSettings, 
             loading, notification, setNotification,
             globalAcademyFilter, setGlobalAcademyFilter,
-            themeMode, setThemeMode,
             saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, demoteInstructor, updateStudentStatus, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor, updateProfessorStatus,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord, saveAcademy, updateAcademyStatus,
