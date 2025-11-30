@@ -1,4 +1,5 @@
-import React, { useState, useContext, FormEvent, useMemo } from 'react';
+
+import React, { useState, useContext, FormEvent, useMemo, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Student, Graduation } from '../types';
 import Card from '../components/ui/Card';
@@ -6,7 +7,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, MessageCircle, HeartHandshake } from 'lucide-react';
+import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, MessageCircle, HeartHandshake, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
 import { ConfirmationModal } from './ui/ConfirmationModal';
@@ -355,6 +356,11 @@ const StudentsPage: React.FC = () => {
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
     const [activeTab, setActiveTab] = useState<'adults' | 'kids' | 'social_project' | 'approvals'>('adults');
     
+    // Filtering and Pagination State
+    const [beltFilter, setBeltFilter] = useState<string>('all');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 12;
+
     // Confirmation Modal States
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
@@ -366,6 +372,11 @@ const StudentsPage: React.FC = () => {
     // Document Modal State
     const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
     const [studentForDocuments, setStudentForDocuments] = useState<Student | null>(null);
+
+    // Reset pagination when filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [beltFilter, activeTab]);
 
     const eligibilityData = useMemo(() => {
         const data = new Map<string, { eligible: boolean; nextBelt: Graduation | null; reason: string }>();
@@ -472,26 +483,37 @@ const StudentsPage: React.FC = () => {
     }, [students, graduations, attendanceRecords]);
 
     const filteredStudents = useMemo(() => {
-        // Pending Approval (Separate from Social Project)
+        // Base Filter: Tab (Adult/Kid/etc)
+        let baseList = [];
         if (activeTab === 'approvals') {
-            return students.filter(student => student.status === 'pending');
+            baseList = students.filter(student => student.status === 'pending');
+        } else {
+            const activeStudents = students.filter(s => s.status !== 'pending');
+            if (activeTab === 'social_project') {
+                baseList = activeStudents.filter(s => s.isSocialProject);
+            } else if (activeTab === 'adults') {
+                baseList = activeStudents.filter(s => !s.isSocialProject && calculateAge(s.birthDate || '') >= 16);
+            } else {
+                // Kids
+                baseList = activeStudents.filter(s => !s.isSocialProject && calculateAge(s.birthDate || '') < 16);
+            }
         }
 
-        // Active Students Logic
-        const activeStudents = students.filter(s => s.status !== 'pending');
-        
-        if (activeTab === 'social_project') {
-            return activeStudents.filter(s => s.isSocialProject);
+        // Apply Belt Filter
+        if (beltFilter !== 'all') {
+            return baseList.filter(s => s.beltId === beltFilter);
         }
 
-        if (activeTab === 'adults') {
-            return activeStudents.filter(s => !s.isSocialProject && calculateAge(s.birthDate || '') >= 16);
-        }
-        
-        // Kids
-        return activeStudents.filter(s => !s.isSocialProject && calculateAge(s.birthDate || '') < 16);
-    }, [students, activeTab]);
+        return baseList;
+    }, [students, activeTab, beltFilter]);
 
+    // Pagination Logic
+    const paginatedStudents = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredStudents.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredStudents, currentPage]);
+
+    const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
 
     const handlePromoteStudent = async (studentId: string) => {
         const student = students.find(s => s.id === studentId);
@@ -639,9 +661,24 @@ const StudentsPage: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center flex-wrap gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <h1 className="text-3xl font-bold text-slate-800">Alunos</h1>
-                <Button onClick={() => handleOpenModal({})}>Adicionar Aluno</Button>
+                <div className="flex gap-3 w-full md:w-auto">
+                    <div className="relative">
+                        <Filter className="w-4 h-4 absolute top-1/2 left-3 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        <select 
+                            value={beltFilter} 
+                            onChange={(e) => setBeltFilter(e.target.value)}
+                            className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
+                        >
+                            <option value="all">Todas as Graduações</option>
+                            {graduations.sort((a,b) => a.rank - b.rank).map(g => (
+                                <option key={g.id} value={g.id}>{g.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <Button onClick={() => handleOpenModal({})}>Adicionar Aluno</Button>
+                </div>
             </div>
 
             <div className="border-b border-slate-200 overflow-x-auto">
@@ -699,8 +736,9 @@ const StudentsPage: React.FC = () => {
             {loading ? (
                 <div className="text-center p-4">Carregando...</div>
             ) : (
+                <>
                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredStudents.length > 0 ? filteredStudents.map(student => {
+                    {paginatedStudents.length > 0 ? paginatedStudents.map(student => {
                         const belt = graduations.find(g => g.id === student.beltId);
                         const academy = academies.find(a => a.id === student.academyId);
                         const stripes = student.stripes;
@@ -911,6 +949,31 @@ const StudentsPage: React.FC = () => {
                         </div>
                     )}
                 </div>
+                
+                {totalPages > 1 && (
+                    <div className="flex justify-center items-center mt-8 space-x-2">
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        
+                        <span className="text-sm font-medium text-slate-600">
+                            Página {currentPage} de {totalPages}
+                        </span>
+
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
+                </>
              )}
 
             <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={selectedStudent?.id ? 'Editar Aluno' : 'Adicionar Aluno'}>

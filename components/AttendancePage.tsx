@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { DayOfWeek, Student, Graduation } from '../types';
@@ -12,6 +13,18 @@ const DAYS_OF_WEEK_MAP: { [key: number]: DayOfWeek } = { 0: 'Domingo', 1: 'Segun
 
 // --- Helper Functions ---
 const toYYYYMMDD = (date: Date) => date.toISOString().split('T')[0];
+
+const calculateAge = (birthDate: string): number => {
+    if (!birthDate) return 0;
+    const today = new Date();
+    const birthDateObj = new Date(birthDate);
+    let age = today.getFullYear() - birthDateObj.getFullYear();
+    const m = today.getMonth() - birthDateObj.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDateObj.getDate())) {
+        age--;
+    }
+    return age;
+};
 
 const getBeltStyle = (grad: Graduation) => {
     if (!grad.color2) return { background: grad.color };
@@ -48,6 +61,7 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
 
     const [attendance, setAttendance] = useState<Record<string, 'present' | 'absent'>>(() => {
         const initialState: Record<string, 'present' | 'absent'> = {};
+        // Initialize state from existing records to ensure persistence visualization
         attendanceRecords.filter(ar => ar.date === dateStr).forEach(ar => {
             initialState[`${ar.studentId}-${ar.scheduleId}`] = ar.status;
         });
@@ -92,10 +106,24 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
                 {todaysSchedules.length > 0 ? todaysSchedules.map(schedule => {
                      const eligibleStudents = students.filter(student => {
                         if (student.academyId !== schedule.academyId) return false;
+                        
                         const studentGrad = graduations.find(g => g.id === student.beltId);
                         const requiredGrad = graduations.find(g => g.id === schedule.requiredGraduationId);
-                        const reqRank = requiredGrad?.rank ?? 1; // Default to rank 1 (White belt) if not specified
-                        return (studentGrad?.rank ?? 0) >= reqRank;
+                        const reqRank = requiredGrad?.rank ?? 1; 
+                        
+                        // Check Rank
+                        if ((studentGrad?.rank ?? 0) < reqRank) return false;
+
+                        // Check Age & Class Type Logic
+                        // Rule: Children < 16 only in kids classes. > 16 show in both.
+                        const age = calculateAge(student.birthDate || '');
+                        const isKidsClass = requiredGrad?.type === 'kids';
+
+                        if (age < 16) {
+                            return isKidsClass; // Must be a kids class
+                        } else {
+                            return true; // Adults (>=16) show in both types
+                        }
                     });
 
                     const professor = users.find(u => u.id === schedule.professorId);
@@ -126,7 +154,8 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
                             <div className="divide-y divide-slate-50">
                                 {eligibleStudents.map(student => {
                                     const key = `${student.id}-${schedule.id}`;
-                                    const currentStatus = attendance[key];
+                                    // Use local state if changed, otherwise fallback to existing record (persisted)
+                                    const currentStatus = attendance[key]; 
                                     const belt = graduations.find(g => g.id === student.beltId);
 
                                     return (
@@ -184,7 +213,7 @@ const DayScheduleModal: React.FC<{ date: Date; onClose: () => void }> = ({ date,
                                 })}
                                 {eligibleStudents.length === 0 && (
                                     <div className="p-8 text-center">
-                                        <p className="text-slate-400 italic text-sm">Nenhum aluno elegível para esta turma (verifique as graduações).</p>
+                                        <p className="text-slate-400 italic text-sm">Nenhum aluno elegível para esta turma (verifique idade e graduação).</p>
                                     </div>
                                 )}
                             </div>
