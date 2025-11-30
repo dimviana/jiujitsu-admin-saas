@@ -7,7 +7,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, MessageCircle, HeartHandshake, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, MessageCircle, HeartHandshake, ChevronLeft, ChevronRight, Filter, ArrowUpCircle } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
 import { ConfirmationModal } from './ui/ConfirmationModal';
@@ -507,30 +507,79 @@ const StudentsPage: React.FC = () => {
         return baseList;
     }, [students, activeTab, beltFilter]);
 
+    // Sorting Logic: Rank (Desc) -> Time in Belt (Ascending Date/Higher Seniority)
+    const sortedStudents = useMemo(() => {
+        return [...filteredStudents].sort((a, b) => {
+            const beltA = graduations.find(g => g.id === a.beltId);
+            const beltB = graduations.find(g => g.id === b.beltId);
+            
+            // Primary Sort: Rank (Highest First)
+            const rankA = beltA?.rank || 0;
+            const rankB = beltB?.rank || 0;
+            if (rankA !== rankB) {
+                return rankB - rankA;
+            }
+
+            // Secondary Sort: Time in Belt (Seniority)
+            // Older promotion date = Longer time in belt = Higher Seniority
+            const dateA = a.lastPromotionDate || a.firstGraduationDate;
+            const dateB = b.lastPromotionDate || b.firstGraduationDate;
+            
+            const timeA = dateA ? new Date(dateA).getTime() : 0;
+            const timeB = dateB ? new Date(dateB).getTime() : 0;
+
+            // Handle cases where date might be missing (treat as very new/low seniority)
+            if (!timeA) return 1;
+            if (!timeB) return -1;
+
+            return timeA - timeB; // Ascending Order: Older dates (smaller timestamp) come first
+        });
+    }, [filteredStudents, graduations]);
+
     // Pagination Logic
     const paginatedStudents = useMemo(() => {
         const startIndex = (currentPage - 1) * itemsPerPage;
-        return filteredStudents.slice(startIndex, startIndex + itemsPerPage);
-    }, [filteredStudents, currentPage]);
+        return sortedStudents.slice(startIndex, startIndex + itemsPerPage);
+    }, [sortedStudents, currentPage]);
 
-    const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
+    const totalPages = Math.ceil(sortedStudents.length / itemsPerPage);
 
     const handlePromoteStudent = async (studentId: string) => {
         const student = students.find(s => s.id === studentId);
+        
+        // Manual override for adults, or automated check
+        let nextBelt: Graduation | undefined;
+        let eligible = false;
+
         const eligibility = eligibilityData.get(studentId);
         
-        if (!student || !eligibility || !eligibility.eligible || !eligibility.nextBelt) {
-            alert('Este aluno não está elegível para promoção.');
+        if (eligibility && eligibility.nextBelt) {
+            nextBelt = eligibility.nextBelt;
+            eligible = eligibility.eligible;
+        } else {
+            // Manual fallback if not in eligibility map (e.g. strict criteria failed but prof wants to promote)
+            const currentBelt = graduations.find(g => g.id === student?.beltId);
+            if (currentBelt) {
+                nextBelt = graduations.sort((a, b) => a.rank - b.rank).find(g => g.rank > currentBelt.rank);
+            }
+        }
+        
+        if (!student || !nextBelt) {
+            alert('Não foi possível determinar a próxima graduação.');
             return;
         }
 
-        if (window.confirm(`Promover ${student.name} para a faixa ${eligibility.nextBelt.name}?`)) {
+        const message = eligible 
+            ? `Promover ${student.name} para a faixa ${nextBelt.name}?` 
+            : `ATENÇÃO: ${student.name} ainda não cumpriu todos os requisitos automáticos. Deseja promover manualmente para a faixa ${nextBelt.name}?`;
+
+        if (window.confirm(message)) {
             // Destructure to remove fields that should not be passed to saveStudent and to keep the existing password
             const { paymentStatus, lastSeen, paymentHistory, password, documents, ...studentToSave } = student;
             
             const promotedStudentData = {
                 ...studentToSave,
-                beltId: eligibility.nextBelt.id,
+                beltId: nextBelt.id,
                 stripes: 0, // Always reset stripes to 0 upon promotion
                 lastPromotionDate: new Date().toISOString().split('T')[0],
             };
@@ -906,9 +955,6 @@ const StudentsPage: React.FC = () => {
                                             <div className="mt-4 p-3 bg-green-100 rounded-lg text-center border border-green-200">
                                                 <p className="font-bold text-green-800">Elegível para {eligibility.nextBelt.name}!</p>
                                                 <p className="text-xs text-green-700">{eligibility.reason}</p>
-                                                <Button size="sm" variant="success" className="w-full mt-2" onClick={() => handlePromoteStudent(student.id)}>
-                                                    Promover Aluno
-                                                </Button>
                                             </div>
                                         )}
 
@@ -920,6 +966,19 @@ const StudentsPage: React.FC = () => {
                                                 </>
                                             ) : (
                                                 <>
+                                                    {/* Promotion Button for Adults */}
+                                                    {activeTab === 'adults' && (
+                                                        <Button 
+                                                            size="sm" 
+                                                            variant="success"
+                                                            onClick={() => handlePromoteStudent(student.id)}
+                                                            title="Promover de Faixa"
+                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                        >
+                                                            <ArrowUpCircle className="w-4 h-4" />
+                                                        </Button>
+                                                    )}
+
                                                     {isEligibleForInstructor && (
                                                         <Button size="sm" variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleInstructorPromotionClick(student)} title="Promover a Instrutor">
                                                             <Briefcase className="w-4 h-4" />
