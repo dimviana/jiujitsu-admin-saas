@@ -42,17 +42,6 @@ const pool = mysql.createPool({
     queueLimit: 0
 });
 
-// --- Helper: Detect Payment Method ID ---
-const getPaymentMethodId = (cardNumber) => {
-    const bin = cardNumber.replace(/\D/g, '').substring(0, 6);
-    if (/^4/.test(bin)) return 'visa';
-    if (/^5[1-5]/.test(bin)) return 'master';
-    if (/^3[47]/.test(bin)) return 'amex';
-    if (/^6/.test(bin)) return 'elo'; // Simplification for Elo
-    if (/^30[0-5]|^3[68]/.test(bin)) return 'diners';
-    return 'visa'; // Default fallback, though MP might reject if mismatch
-};
-
 // --- Helper: Map Mercado Pago Errors ---
 const getFriendlyErrorMessage = (statusDetail) => {
     const errors = {
@@ -76,15 +65,14 @@ const getFriendlyErrorMessage = (statusDetail) => {
 
 // --- API Routes ---
 
-// ... (existing login and register routes remain the same) ...
+// ... (existing routes unchanged until /api/payments/credit-card) ...
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     try {
         const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
         
-        // Helper function to check academy status
         const checkAcademyStatus = async (academyId) => {
-            if (!academyId) return true; // No academy (e.g. super admin outside structure), allow
+            if (!academyId) return true; 
             
             const [rows] = await pool.query('SELECT status FROM academies WHERE id = ?', [academyId]);
             if (rows.length > 0) {
@@ -121,52 +109,29 @@ app.post('/api/login', async (req, res) => {
             return res.json({ user: users[0] });
         }
 
-        // Try logging in as Student directly
         const [students] = await pool.query('SELECT * FROM students WHERE email = ? OR cpf = ?', [email, email]);
         if (students.length > 0 && (students[0].password === password || !students[0].password)) {
              const student = students[0];
-             
-             // Check blocked/pending status
-             if (student.status === 'blocked') {
-                 return res.status(403).json({ message: 'Seu acesso foi temporariamente bloqueado. Contate a administração.' });
-             }
-             if (student.status === 'pending') {
-                 return res.status(403).json({ message: 'Seu cadastro está aguardando aprovação da academia.' });
-             }
+             if (student.status === 'blocked') return res.status(403).json({ message: 'Seu acesso foi temporariamente bloqueado. Contate a administração.' });
+             if (student.status === 'pending') return res.status(403).json({ message: 'Seu cadastro está aguardando aprovação da academia.' });
 
-             // Check Academy Status for Student
              await checkAcademyStatus(student.academyId);
 
              const userObj = { id: `user_${student.id}`, name: student.name, email: student.email, role: 'student', academyId: student.academyId, studentId: student.id, birthDate: student.birthDate };
-             
-             // Update lastSeen
-             try {
-                await pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [student.id]);
-             } catch (e) { console.error("Could not update lastSeen", e); }
+             try { await pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [student.id]); } catch (e) { console.error("Could not update lastSeen", e); }
 
             return res.json({ user: userObj });
         }
         
-        // Try logging in as Academy Admin (via Academies table email/pass)
         const [academies] = await pool.query('SELECT * FROM academies WHERE email = ? AND password = ?', [email, password]);
         if (academies.length > 0) {
              const academy = academies[0];
-             
-             if (academy.status === 'pending') {
-                 return res.status(403).json({ message: 'Sua academia está em análise. Aguarde a aprovação.' });
-             }
-             if (academy.status === 'rejected') {
-                 return res.status(403).json({ message: 'O cadastro da sua academia foi recusado.' });
-             }
-             if (academy.status === 'blocked') {
-                 return res.status(403).json({ message: 'Acesso temporariamente suspenso. Contate o administrador.' });
-             }
+             if (academy.status === 'pending') return res.status(403).json({ message: 'Sua academia está em análise. Aguarde a aprovação.' });
+             if (academy.status === 'rejected') return res.status(403).json({ message: 'O cadastro da sua academia foi recusado.' });
+             if (academy.status === 'blocked') return res.status(403).json({ message: 'Acesso temporariamente suspenso. Contate o administrador.' });
 
              const [adminUser] = await pool.query('SELECT * FROM users WHERE academyId = ? AND role = "academy_admin"', [academy.id]);
-             
-             if (adminUser.length > 0) {
-                 return res.json({ user: adminUser[0] });
-             }
+             if (adminUser.length > 0) return res.json({ user: adminUser[0] });
         }
 
         res.status(401).json({ message: 'User or password invalid' });
@@ -185,7 +150,6 @@ app.post('/api/register', async (req, res) => {
         const academyId = `academy_${Date.now()}`;
         const userId = `user_${Date.now()}`;
         
-        // Explicitly set status to 'pending'
         await conn.query(
             'INSERT INTO academies (id, name, address, responsible, responsibleRegistration, email, password, status, allowStudentRegistration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', 
             [academyId, name, address, responsible, responsibleRegistration, email, password, 'pending', true]
@@ -208,8 +172,6 @@ app.post('/api/register-student', async (req, res) => {
     const data = req.body;
     try {
         const id = `student_${Date.now()}`;
-        
-        // Sanitize
         if (data.birthDate) data.birthDate = data.birthDate.split('T')[0];
         
         const payload = {
@@ -221,10 +183,10 @@ app.post('/api/register-student', async (req, res) => {
             phone: data.phone,
             academyId: data.academyId,
             birthDate: data.birthDate,
-            beltId: 'white', // Default to white belt
+            beltId: 'white', 
             stripes: 0,
             paymentStatus: 'unpaid',
-            status: 'pending', // IMPORTANT: Pending approval
+            status: 'pending', 
             paymentDueDateDay: 10
         };
 
@@ -243,14 +205,8 @@ app.post('/api/register-student', async (req, res) => {
 
 app.get('/api/initial-data', async (req, res) => {
     try {
-        // --- Migrations ---
-        
-        // ... (existing migrations) ...
-        // 23. Add Mobile Interface Settings to Theme Settings
-        try {
-            await pool.query("SELECT mobileNavShowDashboard FROM theme_settings LIMIT 1");
-        } catch (e) {
-            console.log("Migrating: Adding mobile interface settings to theme_settings");
+        // ... (All migrations preserved) ...
+        try { await pool.query("SELECT mobileNavShowDashboard FROM theme_settings LIMIT 1"); } catch (e) {
             await pool.query(`ALTER TABLE theme_settings 
                 ADD COLUMN mobileNavShowDashboard BOOLEAN DEFAULT TRUE,
                 ADD COLUMN mobileNavShowSchedule BOOLEAN DEFAULT TRUE,
@@ -266,20 +222,8 @@ app.get('/api/initial-data', async (req, res) => {
                 ADD COLUMN mobileNavFloating BOOLEAN DEFAULT FALSE
             `);
         }
-
-        // 24. Add mobileNavVisible to Theme Settings
-        try {
-            await pool.query("SELECT mobileNavVisible FROM theme_settings LIMIT 1");
-        } catch (e) {
-            console.log("Migrating: Adding mobileNavVisible to theme_settings");
-            await pool.query("ALTER TABLE theme_settings ADD COLUMN mobileNavVisible BOOLEAN DEFAULT TRUE");
-        }
-
-        // 25. Add Payment Feature Flags and EFI Fields to Theme Settings
-        try {
-            await pool.query("SELECT creditCardEnabled FROM theme_settings LIMIT 1");
-        } catch (e) {
-            console.log("Migrating: Adding payment feature flags and EFI fields to theme_settings");
+        try { await pool.query("SELECT mobileNavVisible FROM theme_settings LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE theme_settings ADD COLUMN mobileNavVisible BOOLEAN DEFAULT TRUE"); }
+        try { await pool.query("SELECT creditCardEnabled FROM theme_settings LIMIT 1"); } catch (e) {
             await pool.query(`ALTER TABLE theme_settings 
                 ADD COLUMN creditCardEnabled BOOLEAN DEFAULT TRUE,
                 ADD COLUMN efiEnabled BOOLEAN DEFAULT FALSE,
@@ -287,64 +231,13 @@ app.get('/api/initial-data', async (req, res) => {
                 ADD COLUMN efiPixCert LONGTEXT
             `);
         }
-
-        // 26. Add Credit Card Surcharge to Theme Settings
-        try {
-            await pool.query("SELECT creditCardSurcharge FROM theme_settings LIMIT 1");
-        } catch (e) {
-            console.log("Migrating: Adding creditCardSurcharge to theme_settings");
-            await pool.query("ALTER TABLE theme_settings ADD COLUMN creditCardSurcharge REAL DEFAULT 0");
-        }
-
-        // ... (existing migrations 17-22) ...
-        // 17. allowStudentRegistration on Academies
-        try {
-            await pool.query("SELECT allowStudentRegistration FROM academies LIMIT 1");
-        } catch (e) {
-            await pool.query("ALTER TABLE academies ADD COLUMN allowStudentRegistration BOOLEAN DEFAULT TRUE");
-        }
-
-        // 18. Update paymentStatus column to accept 'scholarship'
-        try {
-             await pool.query("ALTER TABLE students DROP CHECK students_chk_1").catch(() => {});
-             await pool.query("ALTER TABLE students MODIFY COLUMN paymentStatus VARCHAR(255)");
-        } catch (e) {
-             console.log("Error migrating paymentStatus:", e.message);
-        }
-
-        // 19. Add Responsible Fields to Students (For minors)
-        try {
-            await pool.query("SELECT responsibleName FROM students LIMIT 1");
-        } catch (e) {
-            await pool.query("ALTER TABLE students ADD COLUMN responsibleName VARCHAR(255), ADD COLUMN responsiblePhone VARCHAR(255)");
-        }
-
-        // 20. Add whatsappMessageTemplate to Theme Settings
-        try {
-            await pool.query("SELECT whatsappMessageTemplate FROM theme_settings LIMIT 1");
-        } catch (e) {
-            await pool.query("ALTER TABLE theme_settings ADD COLUMN whatsappMessageTemplate TEXT");
-        }
-
-        // 21. Add isSocialProject and socialProjectName to Students
-        try {
-            await pool.query("SELECT isSocialProject FROM students LIMIT 1");
-        } catch (e) {
-            await pool.query("ALTER TABLE students ADD COLUMN isSocialProject BOOLEAN DEFAULT FALSE, ADD COLUMN socialProjectName VARCHAR(255)");
-        }
-
-        // 22. Add schedule_students table
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS schedule_students (
-                scheduleId VARCHAR(255),
-                studentId VARCHAR(255),
-                PRIMARY KEY (scheduleId, studentId),
-                FOREIGN KEY (scheduleId) REFERENCES class_schedules(id),
-                FOREIGN KEY (studentId) REFERENCES students(id)
-            )
-        `);
-
-        // --- Data Fetching ---
+        try { await pool.query("SELECT creditCardSurcharge FROM theme_settings LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE theme_settings ADD COLUMN creditCardSurcharge REAL DEFAULT 0"); }
+        try { await pool.query("SELECT allowStudentRegistration FROM academies LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE academies ADD COLUMN allowStudentRegistration BOOLEAN DEFAULT TRUE"); }
+        try { await pool.query("ALTER TABLE students DROP CHECK students_chk_1").catch(() => {}); await pool.query("ALTER TABLE students MODIFY COLUMN paymentStatus VARCHAR(255)"); } catch (e) {}
+        try { await pool.query("SELECT responsibleName FROM students LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE students ADD COLUMN responsibleName VARCHAR(255), ADD COLUMN responsiblePhone VARCHAR(255)"); }
+        try { await pool.query("SELECT whatsappMessageTemplate FROM theme_settings LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE theme_settings ADD COLUMN whatsappMessageTemplate TEXT"); }
+        try { await pool.query("SELECT isSocialProject FROM students LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE students ADD COLUMN isSocialProject BOOLEAN DEFAULT FALSE, ADD COLUMN socialProjectName VARCHAR(255)"); }
+        await pool.query(`CREATE TABLE IF NOT EXISTS schedule_students (scheduleId VARCHAR(255), studentId VARCHAR(255), PRIMARY KEY (scheduleId, studentId), FOREIGN KEY (scheduleId) REFERENCES class_schedules(id), FOREIGN KEY (studentId) REFERENCES students(id))`);
 
         const [students] = await pool.query('SELECT * FROM students');
         const parsedStudents = students.map(s => ({ 
@@ -358,7 +251,6 @@ app.get('/api/initial-data', async (req, res) => {
         }));
         const [payments] = await pool.query('SELECT * FROM payment_history');
         parsedStudents.forEach(s => { s.paymentHistory = payments.filter(p => p.studentId === s.id); });
-
         const [users] = await pool.query('SELECT * FROM users');
         const [academies] = await pool.query('SELECT * FROM academies');
         const parsedAcademies = academies.map(a => ({
@@ -367,30 +259,16 @@ app.get('/api/initial-data', async (req, res) => {
             status: a.status || 'active',
             allowStudentRegistration: a.allowStudentRegistration === 1 || a.allowStudentRegistration === true
         }));
-
         const [graduations] = await pool.query('SELECT * FROM graduations');
-        
         const [professors] = await pool.query('SELECT * FROM professors');
-        const parsedProfessors = professors.map(p => ({
-            ...p,
-            isInstructor: Boolean(p.isInstructor),
-            status: p.status || 'active'
-        }));
-
+        const parsedProfessors = professors.map(p => ({ ...p, isInstructor: Boolean(p.isInstructor), status: p.status || 'active' }));
         const [schedules] = await pool.query('SELECT * FROM class_schedules');
         const [assistants] = await pool.query('SELECT * FROM schedule_assistants');
         const [enrolledStudents] = await pool.query('SELECT * FROM schedule_students');
-        
-        const parsedSchedules = schedules.map(s => ({ 
-            ...s, 
-            assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId),
-            studentIds: enrolledStudents.filter(es => es.scheduleId === s.id).map(es => es.studentId)
-        }));
-
+        const parsedSchedules = schedules.map(s => ({ ...s, assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId), studentIds: enrolledStudents.filter(es => es.scheduleId === s.id).map(es => es.studentId) }));
         const [attendance] = await pool.query('SELECT * FROM attendance_records');
         const [logs] = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100');
         const [settings] = await pool.query('SELECT * FROM theme_settings LIMIT 1');
-        
         let parsedSettings = settings[0] || {};
         parsedSettings = { 
             ...parsedSettings, 
@@ -399,19 +277,16 @@ app.get('/api/initial-data', async (req, res) => {
             registrationEnabled: Boolean(parsedSettings.registrationEnabled), 
             socialLoginEnabled: Boolean(parsedSettings.socialLoginEnabled),
             studentProfileEditEnabled: Boolean(parsedSettings.studentProfileEditEnabled),
-            // Mobile Interface Parsing
             mobileNavShowDashboard: Boolean(parsedSettings.mobileNavShowDashboard),
             mobileNavShowSchedule: Boolean(parsedSettings.mobileNavShowSchedule),
             mobileNavShowStudents: Boolean(parsedSettings.mobileNavShowStudents),
             mobileNavShowProfile: Boolean(parsedSettings.mobileNavShowProfile),
             mobileNavFloating: Boolean(parsedSettings.mobileNavFloating),
             mobileNavVisible: parsedSettings.mobileNavVisible === undefined || parsedSettings.mobileNavVisible === 1 || parsedSettings.mobileNavVisible === true,
-            // Payment Parsing
             creditCardEnabled: Boolean(parsedSettings.creditCardEnabled),
             creditCardSurcharge: Number(parsedSettings.creditCardSurcharge || 0),
             efiEnabled: Boolean(parsedSettings.efiEnabled),
         };
-
         res.json({ students: parsedStudents, users, academies: parsedAcademies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
     } catch (error) {
         console.error(error);
@@ -419,7 +294,6 @@ app.get('/api/initial-data', async (req, res) => {
     }
 });
 
-// ... (other handlers createHandler, deleteHandler, auto-promote remain same) ...
 const createHandler = (table) => async (req, res) => {
     try {
         const data = req.body;
@@ -432,7 +306,6 @@ const createHandler = (table) => async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
-
 const deleteHandler = (table) => async (req, res) => {
     try {
         await pool.query(`DELETE FROM ${table} WHERE id = ?`, [req.params.id]);
@@ -441,7 +314,6 @@ const deleteHandler = (table) => async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
-
 app.post('/api/students/auto-promote-stripes', async (req, res) => {
     const conn = await pool.getConnection();
     try {
@@ -449,72 +321,42 @@ app.post('/api/students/auto-promote-stripes', async (req, res) => {
         const [students] = await conn.query("SELECT * FROM students WHERE status = 'active'");
         const [attendance] = await conn.query("SELECT * FROM attendance_records");
         const [graduations] = await conn.query("SELECT * FROM graduations");
-        
         let promotedCount = 0;
-
         for (const student of students) {
             const belt = graduations.find(g => g.id === student.beltId);
             if (!belt) continue;
-
             const isBlackBelt = belt.name.toLowerCase().includes('preta') || belt.name.toLowerCase().includes('black');
             let monthsThreshold = 6;
             let maxStripes = 4;
-            
-            if (isBlackBelt) {
-                monthsThreshold = 36; // 3 years
-                maxStripes = 6;       // Up to 6th degree automatically
-            }
-
+            if (isBlackBelt) { monthsThreshold = 36; maxStripes = 6; }
             if (student.stripes >= maxStripes) continue;
-
             const lastDateStr = student.lastPromotionDate || student.firstGraduationDate;
             if (!lastDateStr) continue;
-
             const lastDate = new Date(lastDateStr);
             const today = new Date();
             const thresholdDate = new Date(today.getFullYear(), today.getMonth() - monthsThreshold, today.getDate());
-
             if (lastDate <= thresholdDate) {
-                const relevantRecords = attendance.filter(r => 
-                    r.studentId === student.id && 
-                    new Date(r.date) >= lastDate
-                );
-
+                const relevantRecords = attendance.filter(r => r.studentId === student.id && new Date(r.date) >= lastDate);
                 const totalRecords = relevantRecords.length;
                 if (totalRecords === 0) continue;
-
                 const presentCount = relevantRecords.filter(r => r.status === 'present').length;
                 const attendanceRate = presentCount / totalRecords;
-
                 if (attendanceRate >= 0.70) {
-                    await conn.query(
-                        'UPDATE students SET stripes = stripes + 1, lastPromotionDate = ? WHERE id = ?', 
-                        [today.toISOString().split('T')[0], student.id]
-                    );
+                    await conn.query('UPDATE students SET stripes = stripes + 1, lastPromotionDate = ? WHERE id = ?', [today.toISOString().split('T')[0], student.id]);
                     const term = isBlackBelt ? 'grau na Faixa Preta' : 'grau';
-                    await conn.query(
-                        'INSERT INTO activity_logs (id, actorId, action, timestamp, details) VALUES (?, ?, ?, ?, ?)',
-                        [`log_${Date.now()}_${student.id}`, 'system', 'Auto Promotion', new Date(), `Aluno ${student.name} recebeu um ${term} automaticamente (Frequência: ${(attendanceRate * 100).toFixed(0)}%).`]
-                    );
+                    await conn.query('INSERT INTO activity_logs (id, actorId, action, timestamp, details) VALUES (?, ?, ?, ?, ?)', [`log_${Date.now()}_${student.id}`, 'system', 'Auto Promotion', new Date(), `Aluno ${student.name} recebeu um ${term} automaticamente (Frequência: ${(attendanceRate * 100).toFixed(0)}%).`]);
                     promotedCount++;
                 }
             }
         }
-
         await conn.commit();
         res.json({ success: true, message: `${promotedCount} alunos/professores graduados automaticamente.` });
-    } catch (error) {
-        await conn.rollback();
-        console.error("Auto promotion error:", error);
-        res.status(500).json({ message: 'Erro ao processar graduações automáticas.' });
-    } finally {
-        conn.release();
-    }
+    } catch (error) { await conn.rollback(); console.error("Auto promotion error:", error); res.status(500).json({ message: 'Erro ao processar graduações automáticas.' }); } finally { conn.release(); }
 });
 
-// --- NEW CREDIT CARD PAYMENT ENDPOINT ---
+// --- API Payments Credit Card ---
 app.post('/api/payments/credit-card', async (req, res) => {
-    const { studentId, amount, cardData } = req.body;
+    const { studentId, amount, token, paymentMethodId, installments, payer } = req.body;
     const conn = await pool.getConnection();
     
     try {
@@ -526,89 +368,46 @@ app.post('/api/payments/credit-card', async (req, res) => {
         const student = students[0];
 
         // 2. Get Payment Settings (Prioritize Academy Specific, fallback to Global)
-        // Fetch Academy Settings
         const [academies] = await conn.query('SELECT settings FROM academies WHERE id = ?', [student.academyId]);
         
         let accessToken = null;
-        let publicKey = null;
         let surcharge = 0;
 
-        // Check Academy Level Settings first
         if (academies.length > 0 && academies[0].settings) {
             try {
                 const acSettings = JSON.parse(academies[0].settings);
                 if (acSettings.mercadoPagoAccessToken) {
                     accessToken = acSettings.mercadoPagoAccessToken;
-                    publicKey = acSettings.mercadoPagoPublicKey;
                     surcharge = Number(acSettings.creditCardSurcharge || 0);
                 }
-            } catch (e) {
-                console.error("Error parsing academy settings", e);
-            }
+            } catch (e) { console.error("Error parsing academy settings", e); }
         }
 
-        // Fallback to Global Settings if Academy doesn't have token
         if (!accessToken) {
-            const [globalSettings] = await conn.query('SELECT mercadoPagoAccessToken, mercadoPagoPublicKey, creditCardSurcharge FROM theme_settings LIMIT 1');
+            const [globalSettings] = await conn.query('SELECT mercadoPagoAccessToken, creditCardSurcharge FROM theme_settings LIMIT 1');
             if (globalSettings.length > 0) {
                 accessToken = globalSettings[0].mercadoPagoAccessToken;
-                publicKey = globalSettings[0].mercadoPagoPublicKey;
-                // Use global surcharge if falling back to global creds
                 surcharge = Number(globalSettings[0].creditCardSurcharge || 0);
             }
         }
 
-        if (!accessToken) {
-            throw new Error("Configuração de pagamento (Mercado Pago) não encontrada para esta academia.");
-        }
+        if (!accessToken) throw new Error("Configuração de pagamento (Mercado Pago) não encontrada.");
 
-        // 3. Generate Card Token (Server-Side)
-        const cleanCardNumber = cardData.number.replace(/\D/g, '');
-        const [expMonth, expYear] = cardData.expiry.split('/');
-        const cleanYear = expYear.length === 2 ? `20${expYear}` : expYear;
-
-        const tokenPayload = {
-            card_number: cleanCardNumber,
-            expiration_month: Number(expMonth),
-            expiration_year: Number(cleanYear),
-            security_code: cardData.cvc,
-            cardholder: {
-                name: cardData.name
-            }
-        };
-
-        const tokenResponse = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${publicKey || ''}`, { 
-             method: 'POST',
-             headers: {
-                 'Authorization': `Bearer ${accessToken}`,
-                 'Content-Type': 'application/json'
-             },
-             body: JSON.stringify(tokenPayload)
-        });
-
-        const tokenData = await tokenResponse.json();
-        if (!tokenResponse.ok || !tokenData.id) {
-            console.error("Token Gen Error:", tokenData);
-            throw new Error("Erro ao validar dados do cartão. Verifique número, validade e CVC.");
-        }
-
-        const cardTokenId = tokenData.id;
-        const paymentMethodId = getPaymentMethodId(cleanCardNumber);
-
-        // 4. Prepare Payment Data using Token
+        // 3. Prepare Payment Payload
         const totalAmount = Number(amount) + surcharge;
         const paymentPayload = {
             transaction_amount: totalAmount,
-            token: cardTokenId,
+            token: token,
             description: `Mensalidade - ${student.name}`,
             payment_method_id: paymentMethodId,
             payer: {
-                email: student.email || 'email@naoinformado.com'
+                email: payer.email || student.email || 'email@naoinformado.com',
+                identification: payer.identification
             },
-            installments: 1
+            installments: Number(installments) || 1
         };
 
-        // 5. Call Mercado Pago Payment API
+        // 4. Call Mercado Pago API
         const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
             method: 'POST',
             headers: {
@@ -624,10 +423,9 @@ app.post('/api/payments/credit-card', async (req, res) => {
         if (!mpResponse.ok) {
             console.error("Mercado Pago Payment Error:", mpData);
             const errorDetail = mpData.message || (mpData.cause && mpData.cause[0]?.description) || 'Erro desconhecido no processamento.';
-            // Throw error with detail for frontend mapping, but ensure it's treated as 400 bad request in catch
             const specificError = new Error(errorDetail);
             // @ts-ignore
-            specificError.status = 400;
+            specificError.status = 400; // Set status to 400 for validation errors
             throw specificError;
         }
 
@@ -636,11 +434,11 @@ app.post('/api/payments/credit-card', async (req, res) => {
              const friendlyMessage = getFriendlyErrorMessage(statusDetail);
              const err = new Error(friendlyMessage);
              // @ts-ignore
-             err.status = 400; // Client side error (card rejected)
+             err.status = 400; // Client side error
              throw err;
         }
 
-        // 6. Update Database on Success
+        // 5. Update Database on Success
         await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', ['paid', studentId]);
         await conn.query(
             'INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', 
@@ -653,7 +451,6 @@ app.post('/api/payments/credit-card', async (req, res) => {
     } catch (error) {
         await conn.rollback();
         console.error("Credit Card Payment Error:", error);
-        // Use custom status if set, otherwise 500
         const status = error.status || 500;
         res.status(status).json({ message: error.message || 'Erro ao processar pagamento.' });
     } finally {
@@ -661,25 +458,16 @@ app.post('/api/payments/credit-card', async (req, res) => {
     }
 });
 
+// ... (Rest of the app.post handlers remain the same) ...
 app.post('/api/students', async (req, res) => {
-    // ... (logic same as previous, just ensure all columns are whitelisted if changed) ...
     const data = req.body;
     try {
-        const ALLOWED_COLUMNS = [
-            'name', 'email', 'password', 'birthDate', 'cpf', 'fjjpe_registration', 
-            'phone', 'address', 'beltId', 'academyId', 'firstGraduationDate', 
-            'lastPromotionDate', 'paymentStatus', 'paymentDueDateDay', 'imageUrl', 
-            'stripes', 'isCompetitor', 'lastCompetition', 'medals', 'isInstructor', 
-            'lastSeen', 'status', 'documents', 'responsibleName', 'responsiblePhone',
-            'isSocialProject', 'socialProjectName'
-        ];
+        const ALLOWED_COLUMNS = [ 'name', 'email', 'password', 'birthDate', 'cpf', 'fjjpe_registration', 'phone', 'address', 'beltId', 'academyId', 'firstGraduationDate', 'lastPromotionDate', 'paymentStatus', 'paymentDueDateDay', 'imageUrl', 'stripes', 'isCompetitor', 'lastCompetition', 'medals', 'isInstructor', 'lastSeen', 'status', 'documents', 'responsibleName', 'responsiblePhone', 'isSocialProject', 'socialProjectName' ];
         const payload = {};
         for (const key of ALLOWED_COLUMNS) { if (data[key] !== undefined) payload[key] = data[key]; }
         if (payload.medals && typeof payload.medals === 'object') payload.medals = JSON.stringify(payload.medals);
         if (payload.documents && typeof payload.documents === 'object') payload.documents = JSON.stringify(payload.documents);
-        for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate', 'lastSeen']) {
-            if (payload[key] && typeof payload[key] === 'string' && key !== 'lastSeen') { payload[key] = payload[key].split('T')[0]; } else if (payload[key] === '') { payload[key] = null; }
-        }
+        for (const key of ['birthDate', 'firstGraduationDate', 'lastPromotionDate', 'lastSeen']) { if (payload[key] && typeof payload[key] === 'string' && key !== 'lastSeen') { payload[key] = payload[key].split('T')[0]; } else if (payload[key] === '') { payload[key] = null; } }
         if (payload.isCompetitor !== undefined) payload.isCompetitor = payload.isCompetitor ? 1 : 0;
         if (payload.isInstructor !== undefined) payload.isInstructor = payload.isInstructor ? 1 : 0;
         if (payload.isSocialProject !== undefined) payload.isSocialProject = payload.isSocialProject ? 1 : 0;
@@ -707,172 +495,31 @@ app.post('/api/students', async (req, res) => {
     } catch(e) { console.error("Error saving student:", e.message); res.status(500).json({ message: e.message }); }
 });
 app.delete('/api/students/:id', deleteHandler('students'));
-app.post('/api/students/:id/status', async (req, res) => {
-    const { status } = req.body;
-    try { await pool.query('UPDATE students SET status = ? WHERE id = ?', [status, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); }
-});
+app.post('/api/students/:id/status', async (req, res) => { try { await pool.query('UPDATE students SET status = ? WHERE id = ?', [req.body.status, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); } });
 app.post('/api/students/promote-instructor', async (req, res) => {
-    const { studentId } = req.body;
-    const conn = await pool.getConnection();
-    try {
-        await conn.beginTransaction();
-        const [students] = await conn.query('SELECT * FROM students WHERE id = ?', [studentId]);
-        if (students.length === 0) throw new Error("Student not found");
-        const student = students[0];
-        await conn.query('UPDATE students SET isInstructor = 1 WHERE id = ?', [studentId]);
-        const professorId = `prof_inst_${student.id}`;
-        const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ?', [student.cpf]); 
-        if (existingProf.length === 0) {
-             await conn.query(`INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor, birthDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'active')`, [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl, student.birthDate]);
-        } else {
-             await conn.query('UPDATE professors SET isInstructor = 1, graduationId = ?, academyId = ? WHERE id = ?', [student.beltId, student.academyId, existingProf[0].id]);
-        }
-        await conn.commit();
-        res.json({ success: true });
-    } catch (error) { await conn.rollback(); console.error("Error promoting student:", error); res.status(500).json({ message: error.message }); } finally { conn.release(); }
+    const { studentId } = req.body; const conn = await pool.getConnection();
+    try { await conn.beginTransaction(); const [students] = await conn.query('SELECT * FROM students WHERE id = ?', [studentId]); if (students.length === 0) throw new Error("Student not found"); const student = students[0]; await conn.query('UPDATE students SET isInstructor = 1 WHERE id = ?', [studentId]); const professorId = `prof_inst_${student.id}`; const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ?', [student.cpf]); if (existingProf.length === 0) { await conn.query(`INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor, birthDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'active')`, [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl, student.birthDate]); } else { await conn.query('UPDATE professors SET isInstructor = 1, graduationId = ?, academyId = ? WHERE id = ?', [student.beltId, student.academyId, existingProf[0].id]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); console.error("Error promoting student:", error); res.status(500).json({ message: error.message }); } finally { conn.release(); }
 });
 app.post('/api/students/demote-instructor', async (req, res) => {
-    const { professorId } = req.body;
-    const conn = await pool.getConnection();
-    try {
-        await conn.beginTransaction();
-        const [professors] = await conn.query('SELECT cpf, isInstructor FROM professors WHERE id = ?', [professorId]);
-        if (professors.length > 0) {
-            const prof = professors[0];
-            if (prof.cpf) { await conn.query('UPDATE students SET isInstructor = 0 WHERE cpf = ?', [prof.cpf]); }
-            await conn.query('DELETE FROM professors WHERE id = ?', [professorId]);
-        }
-        await conn.commit();
-        res.json({ success: true });
-    } catch (error) { await conn.rollback(); console.error("Error demoting instructor:", error); res.status(500).json({ message: error.message }); } finally { conn.release(); }
+    const { professorId } = req.body; const conn = await pool.getConnection();
+    try { await conn.beginTransaction(); const [professors] = await conn.query('SELECT cpf, isInstructor FROM professors WHERE id = ?', [professorId]); if (professors.length > 0) { const prof = professors[0]; if (prof.cpf) { await conn.query('UPDATE students SET isInstructor = 0 WHERE cpf = ?', [prof.cpf]); } await conn.query('DELETE FROM professors WHERE id = ?', [professorId]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); console.error("Error demoting instructor:", error); res.status(500).json({ message: error.message }); } finally { conn.release(); }
 });
 app.post('/api/students/payment', async (req, res) => {
-    const { studentId, status, amount } = req.body;
-    const conn = await pool.getConnection();
-    try {
-        await conn.beginTransaction();
-        await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', [status, studentId]);
-        if (status === 'paid') { await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', [`pay_${Date.now()}`, studentId, new Date(), amount]); }
-        await conn.commit();
-        res.json({ success: true });
-    } catch (error) { await conn.rollback(); console.error("Error processing payment:", error); res.status(500).json({ message: error.message || 'Erro ao processar pagamento.' }); } finally { conn.release(); }
+    const { studentId, status, amount } = req.body; const conn = await pool.getConnection();
+    try { await conn.beginTransaction(); await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', [status, studentId]); if (status === 'paid') { await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', [`pay_${Date.now()}`, studentId, new Date(), amount]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); console.error("Error processing payment:", error); res.status(500).json({ message: error.message || 'Erro ao processar pagamento.' }); } finally { conn.release(); }
 });
-app.post('/api/professors', async (req, res) => {
-    try {
-        const data = req.body;
-        if (data.blackBeltDate && typeof data.blackBeltDate === 'string') data.blackBeltDate = data.blackBeltDate.split('T')[0]; else if (data.blackBeltDate === '') data.blackBeltDate = null;
-        if (data.birthDate && typeof data.birthDate === 'string') data.birthDate = data.birthDate.split('T')[0]; else if (data.birthDate === '') data.birthDate = null;
-        data.isInstructor = data.hasOwnProperty('isInstructor') && data.isInstructor ? 1 : 0;
-        if (data.id) {
-            const { id, ...updateData } = data;
-            const updateFields = Object.keys(updateData).map(key => `\`${key}\` = ?`).join(', ');
-            const updateValues = Object.values(updateData);
-            await pool.query(`UPDATE professors SET ${updateFields} WHERE id = ?`, [...updateValues, id]);
-        } else {
-            data.id = `prof_${Date.now()}`;
-            if (!data.status) data.status = 'active';
-            const keys = Object.keys(data).map(key => `\`${key}\``).join(',');
-            const placeholders = Object.keys(data).map(() => '?').join(',');
-            const values = Object.values(data);
-            await pool.query(`INSERT INTO professors (${keys}) VALUES (${placeholders})`, values);
-        }
-        res.json({ success: true });
-    } catch (error) { console.error(`Error in professors:`, error); res.status(500).json({ message: error.message }); }
-});
+app.post('/api/professors', async (req, res) => { try { const data = req.body; if (data.blackBeltDate && typeof data.blackBeltDate === 'string') data.blackBeltDate = data.blackBeltDate.split('T')[0]; else if (data.blackBeltDate === '') data.blackBeltDate = null; if (data.birthDate && typeof data.birthDate === 'string') data.birthDate = data.birthDate.split('T')[0]; else if (data.birthDate === '') data.birthDate = null; data.isInstructor = data.hasOwnProperty('isInstructor') && data.isInstructor ? 1 : 0; if (data.id) { const { id, ...updateData } = data; const updateFields = Object.keys(updateData).map(key => `\`${key}\` = ?`).join(', '); const updateValues = Object.values(updateData); await pool.query(`UPDATE professors SET ${updateFields} WHERE id = ?`, [...updateValues, id]); } else { data.id = `prof_${Date.now()}`; if (!data.status) data.status = 'active'; const keys = Object.keys(data).map(key => `\`${key}\``).join(','); const placeholders = Object.keys(data).map(() => '?').join(','); const values = Object.values(data); await pool.query(`INSERT INTO professors (${keys}) VALUES (${placeholders})`, values); } res.json({ success: true }); } catch (error) { console.error(`Error in professors:`, error); res.status(500).json({ message: error.message }); } });
 app.delete('/api/professors/:id', deleteHandler('professors'));
-app.post('/api/professors/:id/status', async (req, res) => {
-    const { status } = req.body;
-    try { await pool.query('UPDATE professors SET status = ? WHERE id = ?', [status, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); }
-});
-app.post('/api/schedules', async (req, res) => {
-    const { assistantIds, studentIds, ...schedule } = req.body;
-    const sanitize = (val) => (val === '' || val === undefined ? null : val);
-    schedule.professorId = sanitize(schedule.professorId);
-    schedule.academyId = sanitize(schedule.academyId);
-    schedule.requiredGraduationId = sanitize(schedule.requiredGraduationId);
-    schedule.observations = sanitize(schedule.observations);
-    const conn = await pool.getConnection();
-    try {
-        await conn.beginTransaction();
-        const id = schedule.id || `schedule_${Date.now()}`;
-        await conn.query(`INSERT INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId, observations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE className = VALUES(className), dayOfWeek = VALUES(dayOfWeek), startTime = VALUES(startTime), endTime = VALUES(endTime), professorId = VALUES(professorId), academyId = VALUES(academyId), requiredGraduationId = VALUES(requiredGraduationId), observations = VALUES(observations)`, [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, schedule.professorId, schedule.academyId, schedule.requiredGraduationId, schedule.observations]);
-        await conn.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [id]);
-        if (assistantIds && assistantIds.length > 0) { for (const assistId of assistantIds) { await conn.query('INSERT INTO schedule_assistants (scheduleId, assistantId) VALUES (?, ?)', [id, assistId]); } }
-        await conn.query('DELETE FROM schedule_students WHERE scheduleId = ?', [id]);
-        if (studentIds && studentIds.length > 0) { for (const studId of studentIds) { await conn.query('INSERT INTO schedule_students (scheduleId, studentId) VALUES (?, ?)', [id, studId]); } }
-        await conn.commit();
-        res.json({ success: true });
-    } catch (error) { await conn.rollback(); console.error("Error saving schedule:", error); res.status(500).send(error.message); } finally { conn.release(); }
-});
-app.delete('/api/schedules/:id', async (req, res) => {
-    try {
-        await pool.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [req.params.id]);
-        await pool.query('DELETE FROM schedule_students WHERE scheduleId = ?', [req.params.id]); 
-        await pool.query('DELETE FROM class_schedules WHERE id = ?', [req.params.id]);
-        res.json({ success: true });
-    } catch(e) { res.status(500).send(e.message); }
-});
+app.post('/api/professors/:id/status', async (req, res) => { try { await pool.query('UPDATE professors SET status = ? WHERE id = ?', [req.body.status, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); } });
+app.post('/api/schedules', async (req, res) => { const { assistantIds, studentIds, ...schedule } = req.body; const sanitize = (val) => (val === '' || val === undefined ? null : val); schedule.professorId = sanitize(schedule.professorId); schedule.academyId = sanitize(schedule.academyId); schedule.requiredGraduationId = sanitize(schedule.requiredGraduationId); schedule.observations = sanitize(schedule.observations); const conn = await pool.getConnection(); try { await conn.beginTransaction(); const id = schedule.id || `schedule_${Date.now()}`; await conn.query(`INSERT INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId, observations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE className = VALUES(className), dayOfWeek = VALUES(dayOfWeek), startTime = VALUES(startTime), endTime = VALUES(endTime), professorId = VALUES(professorId), academyId = VALUES(academyId), requiredGraduationId = VALUES(requiredGraduationId), observations = VALUES(observations)`, [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, schedule.professorId, schedule.academyId, schedule.requiredGraduationId, schedule.observations]); await conn.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [id]); if (assistantIds && assistantIds.length > 0) { for (const assistId of assistantIds) { await conn.query('INSERT INTO schedule_assistants (scheduleId, assistantId) VALUES (?, ?)', [id, assistId]); } } await conn.query('DELETE FROM schedule_students WHERE scheduleId = ?', [id]); if (studentIds && studentIds.length > 0) { for (const studId of studentIds) { await conn.query('INSERT INTO schedule_students (scheduleId, studentId) VALUES (?, ?)', [id, studId]); } } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); console.error("Error saving schedule:", error); res.status(500).send(error.message); } finally { conn.release(); } });
+app.delete('/api/schedules/:id', async (req, res) => { try { await pool.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [req.params.id]); await pool.query('DELETE FROM schedule_students WHERE scheduleId = ?', [req.params.id]); await pool.query('DELETE FROM class_schedules WHERE id = ?', [req.params.id]); res.json({ success: true }); } catch(e) { res.status(500).send(e.message); } });
 app.post('/api/graduations', createHandler('graduations'));
 app.delete('/api/graduations/:id', deleteHandler('graduations'));
-app.post('/api/graduations/reorder', async (req, res) => {
-    const items = req.body;
-    const conn = await pool.getConnection();
-    try { await conn.beginTransaction(); for (const item of items) { await conn.query('UPDATE graduations SET `rank` = ? WHERE id = ?', [item.rank, item.id]); } await conn.commit(); res.json({ success: true }); } catch(e) { await conn.rollback(); res.status(500).send(e.message); } finally { conn.release(); }
-});
-
-app.post('/api/settings', async (req, res) => {
-    const s = req.body;
-    const academyId = req.query.academyId;
-
-    try {
-        if (academyId) {
-            const settingsJson = JSON.stringify(s);
-            await pool.query('UPDATE academies SET settings = ? WHERE id = ?', [settingsJson, academyId]);
-        } else {
-            await pool.query(`UPDATE theme_settings SET 
-                systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, 
-                cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?,
-                useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?,
-                publicPageEnabled=?, registrationEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?,
-                socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?,
-                mercadoPagoAccessToken=?, mercadoPagoPublicKey=?, efiClientId=?, efiClientSecret=?, whatsappMessageTemplate=?,
-                mobileNavShowDashboard=?, mobileNavShowSchedule=?, mobileNavShowStudents=?, mobileNavShowProfile=?, mobileNavBgColor=?,
-                mobileNavActiveColor=?, mobileNavInactiveColor=?, mobileNavHeight=?, mobileNavIconSize=?, mobileNavBorderRadius=?, mobileNavBottomMargin=?, mobileNavFloating=?, mobileNavVisible=?,
-                creditCardEnabled=?, efiEnabled=?, efiPixKey=?, efiPixCert=?, creditCardSurcharge=?
-                WHERE id = 1`,
-                [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
-                 s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
-                 s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount,
-                 s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs,
-                 s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled,
-                 s.mercadoPagoAccessToken, s.mercadoPagoPublicKey, s.efiClientId, s.efiClientSecret, s.whatsappMessageTemplate,
-                 s.mobileNavShowDashboard, s.mobileNavShowSchedule, s.mobileNavShowStudents, s.mobileNavShowProfile, s.mobileNavBgColor,
-                 s.mobileNavActiveColor, s.mobileNavInactiveColor, s.mobileNavHeight, s.mobileNavIconSize, s.mobileNavBorderRadius, s.mobileNavBottomMargin, s.mobileNavFloating, s.mobileNavVisible,
-                 s.creditCardEnabled, s.efiEnabled, s.efiPixKey, s.efiPixCert, s.creditCardSurcharge]
-            );
-        }
-        res.json({ success: true });
-    } catch(e) { console.error(e); res.status(500).send(e.message); }
-});
-
+app.post('/api/graduations/reorder', async (req, res) => { const items = req.body; const conn = await pool.getConnection(); try { await conn.beginTransaction(); for (const item of items) { await conn.query('UPDATE graduations SET `rank` = ? WHERE id = ?', [item.rank, item.id]); } await conn.commit(); res.json({ success: true }); } catch(e) { await conn.rollback(); res.status(500).send(e.message); } finally { conn.release(); } });
+app.post('/api/settings', async (req, res) => { const s = req.body; const academyId = req.query.academyId; try { if (academyId) { const settingsJson = JSON.stringify(s); await pool.query('UPDATE academies SET settings = ? WHERE id = ?', [settingsJson, academyId]); } else { await pool.query(`UPDATE theme_settings SET systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?, useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?, publicPageEnabled=?, registrationEnabled=?, heroHtml=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?, socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?, mercadoPagoAccessToken=?, mercadoPagoPublicKey=?, efiClientId=?, efiClientSecret=?, whatsappMessageTemplate=?, mobileNavShowDashboard=?, mobileNavShowSchedule=?, mobileNavShowStudents=?, mobileNavShowProfile=?, mobileNavBgColor=?, mobileNavActiveColor=?, mobileNavInactiveColor=?, mobileNavHeight=?, mobileNavIconSize=?, mobileNavBorderRadius=?, mobileNavBottomMargin=?, mobileNavFloating=?, mobileNavVisible=?, creditCardEnabled=?, efiEnabled=?, efiPixKey=?, efiPixCert=?, creditCardSurcharge=? WHERE id = 1`, [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2, s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount, s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs, s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled, s.mercadoPagoAccessToken, s.mercadoPagoPublicKey, s.efiClientId, s.efiClientSecret, s.whatsappMessageTemplate, s.mobileNavShowDashboard, s.mobileNavShowSchedule, s.mobileNavShowStudents, s.mobileNavShowProfile, s.mobileNavBgColor, s.mobileNavActiveColor, s.mobileNavInactiveColor, s.mobileNavHeight, s.mobileNavIconSize, s.mobileNavBorderRadius, s.mobileNavBottomMargin, s.mobileNavFloating, s.mobileNavVisible, s.creditCardEnabled, s.efiEnabled, s.efiPixKey, s.efiPixCert, s.creditCardSurcharge]); } res.json({ success: true }); } catch(e) { console.error(e); res.status(500).send(e.message); } });
 app.post('/api/attendance', createHandler('attendance_records'));
-app.post('/api/academies', async (req, res) => {
-    const data = req.body;
-    if (data.settings && typeof data.settings === 'object') data.settings = JSON.stringify(data.settings);
-    const keys = Object.keys(data).map(key => `\`${key}\``);
-    const values = Object.values(data).map(v => v);
-    try { await pool.query(`REPLACE INTO academies (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values); res.json({ success: true }); } catch (e) { console.error(e); res.status(500).json({ message: e.message }); }
-});
-app.post('/api/academies/:id/status', async (req, res) => {
-    const { id } = req.params; const { status } = req.body;
-    if (!['active', 'rejected', 'blocked'].includes(status)) return res.status(400).json({ message: 'Invalid status' });
-    try { await pool.query('UPDATE academies SET status = ? WHERE id = ?', [status, id]); res.json({ success: true }); } catch (error) { console.error("Error updating academy status:", error); res.status(500).json({ message: error.message }); }
-});
+app.post('/api/academies', async (req, res) => { const data = req.body; if (data.settings && typeof data.settings === 'object') data.settings = JSON.stringify(data.settings); const keys = Object.keys(data).map(key => `\`${key}\``); const values = Object.values(data).map(v => v); try { await pool.query(`REPLACE INTO academies (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values); res.json({ success: true }); } catch (e) { console.error(e); res.status(500).json({ message: e.message }); } });
+app.post('/api/academies/:id/status', async (req, res) => { const { id } = req.params; const { status } = req.body; if (!['active', 'rejected', 'blocked'].includes(status)) return res.status(400).json({ message: 'Invalid status' }); try { await pool.query('UPDATE academies SET status = ? WHERE id = ?', [status, id]); res.json({ success: true }); } catch (error) { console.error("Error updating academy status:", error); res.status(500).json({ message: error.message }); } });
 
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
-
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'dist', 'index.html')); });
+app.listen(PORT, () => { console.log(`Server running on port ${PORT}`); });

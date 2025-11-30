@@ -6,8 +6,9 @@ import Modal from './ui/Modal';
 import Input from './ui/Input';
 import StudentAttendanceChart from './charts/StudentAttendanceChart';
 import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap, HeartHandshake } from 'lucide-react';
+import { initMercadoPago } from '@mercadopago/sdk-react';
 
-// ... (Helper functions remain the same) ...
+// --- Helper Functions ---
 
 const crc16ccitt = (payload: string): string => {
     let crc = 0xFFFF;
@@ -39,43 +40,23 @@ const generatePixPayload = (
         return `${id}${len}${value}`;
     };
 
-    // 1. Tratamento de Dados
     const safeKey = key.trim();
-    const safeName = normalize(name).substring(0, 25); // Max 25 chars
-    const safeCity = normalize(city).substring(0, 15) || 'BRASILIA'; // Max 15 chars
+    const safeName = normalize(name).substring(0, 25); 
+    const safeCity = normalize(city).substring(0, 15) || 'BRASILIA';
     const safeAmount = amount.toFixed(2);
-    // TxID deve ser alfanumérico, sem espaços, max 25 chars.
     const safeTxid = txid.replace(/[^a-zA-Z0-9]/g, '').substring(0, 25) || '***';
 
-    // 2. Montagem dos Campos
-    // 26 - Merchant Account Information
     const gui = formatField('00', 'BR.GOV.BCB.PIX');
     const chave = formatField('01', safeKey);
     const merchantAccount = formatField('26', gui + chave);
-
-    // 52 - Category Code (0000 = Geral)
     const categoryCode = formatField('52', '0000');
-
-    // 53 - Currency (986 = BRL)
     const currency = formatField('53', '986');
-
-    // 54 - Amount
     const amountField = formatField('54', safeAmount);
-
-    // 58 - Country
     const country = formatField('58', 'BR');
-
-    // 59 - Merchant Name
     const merchantName = formatField('59', safeName);
-
-    // 60 - Merchant City
     const merchantCity = formatField('60', safeCity);
-
-    // 62 - Additional Data (TxID)
     const referenceLabel = formatField('05', safeTxid);
     const additionalData = formatField('62', referenceLabel);
-
-    // 3. Concatenação Inicial (IDs 00 a 62)
     const payloadFormatIndicator = formatField('00', '01');
     
     const rawPayload = 
@@ -88,20 +69,18 @@ const generatePixPayload = (
         merchantName +
         merchantCity +
         additionalData +
-        '6304'; // Adiciona ID do CRC e tamanho 04
+        '6304'; 
 
-    // 4. Cálculo e Adição do CRC
     const crc = crc16ccitt(rawPayload);
-    
     return rawPayload + crc;
 };
 
-// ... (Sub-components: PixPaymentModal, CreditCardModal, UploadProofModal, StatCard) ...
+// --- Sub-components ---
 
 const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProceedToUpload: () => void; themeSettings: ThemeSettings }> = ({ student, onClose, onProceedToUpload, themeSettings }) => {
     const pixCodeRef = useRef<HTMLInputElement>(null);
     const [copySuccess, setCopySuccess] = useState('');
-    const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
+    const [countdown, setCountdown] = useState(300); 
 
     useEffect(() => {
         if (countdown > 0) {
@@ -116,17 +95,13 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
     const minutes = String(Math.floor(countdown / 60)).padStart(2, '0');
     const seconds = String(countdown % 60).padStart(2, '0');
 
-
     const brCode = useMemo(() => {
-        // Use EFI Key if enabled, otherwise use General Key
         const activePixKey = themeSettings.efiEnabled ? themeSettings.efiPixKey : themeSettings.pixKey;
 
         if (!activePixKey || !themeSettings.pixHolderName) {
             return null;
         }
         
-        // Identificador da transação único e seguro
-        // Formato: JJ + ultimos 8 digitos do ID + timestamp curto
         const cleanId = student.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8); 
         const timestamp = Date.now().toString().slice(-6); 
         const rawTxid = `JJ${cleanId}${timestamp}`;
@@ -134,7 +109,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
         return generatePixPayload(
             activePixKey,
             themeSettings.pixHolderName,
-            "SAAS", // Cidade padrão ou fixa, pois muitas vezes não vem na config
+            "SAAS", 
             themeSettings.monthlyFeeAmount,
             rawTxid
         );
@@ -154,7 +129,6 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
              <Modal isOpen={true} onClose={onClose} title="Pagamento via PIX">
                  <div className="text-center">
                     <p className="text-slate-600">A configuração de PIX não foi realizada corretamente pelo administrador.</p>
-                    <p className="text-sm text-slate-500 mt-2">Por favor, entre em contato com a academia.</p>
                     <div className="mt-6 flex justify-end">
                         <Button variant="secondary" onClick={onClose}>Fechar</Button>
                     </div>
@@ -163,7 +137,6 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
         );
     }
     
-    // Gerar QR Code Visual
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(brCode)}`;
 
     return (
@@ -171,11 +144,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
             <div className="space-y-4 text-center">
                  {isExpired ? (
                     <div className="flex flex-col items-center justify-center p-8">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-red-500 mb-4" fill="none" viewBox="0 0 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
                         <h3 className="text-xl font-bold text-slate-800">Código PIX Expirado</h3>
-                        <p className="text-slate-600 mt-2">O tempo para pagamento acabou. Por favor, feche esta janela e clique em "Pagar Mensalidade" para gerar um novo código.</p>
                         <Button onClick={onClose} className="mt-6">Fechar</Button>
                     </div>
                 ) : (
@@ -183,21 +152,19 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
                         <div className="bg-amber-100 text-amber-800 font-bold p-3 rounded-lg">
                             Este código expira em: {minutes}:{seconds}
                         </div>
-                        <p className="text-slate-600">Pague a mensalidade no valor de <span className="font-bold">{themeSettings.monthlyFeeAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> usando o QR Code ou o código abaixo.</p>
+                        <p className="text-slate-600">Pague a mensalidade no valor de <span className="font-bold">{themeSettings.monthlyFeeAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>.</p>
                         
                         <div className="flex justify-center my-4">
                             <img src={qrCodeUrl} alt="PIX QR Code" className="border-4 border-slate-200 rounded-lg"/>
                         </div>
 
                         <div className="space-y-1 text-left">
-                            <label className="text-sm font-medium text-slate-700">PIX Copia e Cola</label>
                             <div className="flex gap-2">
                                 <Input readOnly value={brCode} ref={pixCodeRef} />
                                 <Button onClick={handleCopy} variant="secondary">{copySuccess || 'Copiar'}</Button>
                             </div>
                         </div>
                          <div className="mt-6 pt-6 border-t border-slate-200 flex flex-col items-center">
-                             <p className="font-semibold text-amber-600 mb-2">Já realizou o pagamento?</p>
                              <Button onClick={onProceedToUpload}>Anexar Comprovante</Button>
                          </div>
                     </>
@@ -207,7 +174,16 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
     );
 };
 
-const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfirm: () => Promise<void>; amount: number; surcharge: number }> = ({ student, onClose, onConfirm, amount, surcharge }) => {
+interface CreditCardModalProps { 
+    student: Student; 
+    onClose: () => void; 
+    onConfirm: () => Promise<void>; 
+    amount: number; 
+    surcharge: number;
+    publicKey: string;
+}
+
+const CreditCardModal: React.FC<CreditCardModalProps> = ({ student, onClose, onConfirm, amount, surcharge, publicKey }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [cardData, setCardData] = useState({
@@ -216,7 +192,18 @@ const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfi
         expiry: '',
         cvc: ''
     });
-    
+
+    // Initialize Mercado Pago SDK
+    useEffect(() => {
+        if (publicKey) {
+            try {
+                initMercadoPago(publicKey);
+            } catch (e) {
+                console.error("Erro ao iniciar Mercado Pago SDK React", e);
+            }
+        }
+    }, [publicKey]);
+
     const total = amount + surcharge;
 
     const handleFormatCardNumber = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -233,41 +220,85 @@ const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfi
         setCardData(prev => ({ ...prev, expiry: val }));
     };
 
+    const getPaymentMethodId = (cardNumber: string) => {
+        const bin = cardNumber.replace(/\D/g, '').substring(0, 6);
+        if (/^4/.test(bin)) return 'visa';
+        if (/^5[1-5]/.test(bin)) return 'master';
+        if (/^3[47]/.test(bin)) return 'amex';
+        if (/^6/.test(bin)) return 'elo';
+        return 'visa';
+    };
+
     const handlePayment = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
 
         try {
+            if (!(window as any).MercadoPago) {
+                throw new Error("Mercado Pago SDK não carregado. Atualize a página.");
+            }
+            
+            const mp = new (window as any).MercadoPago(publicKey);
+            
+            // Prepare data for token generation
+            const cleanCardNumber = cardData.number.replace(/\D/g, '');
+            const [expMonth, expYear] = cardData.expiry.split('/');
+            const cleanYear = expYear.length === 2 ? `20${expYear}` : expYear;
+            
+            // Generate Token via SDK
+            const tokenResponse = await mp.createCardToken({
+                cardNumber: cleanCardNumber,
+                cardholderName: cardData.name,
+                cardExpirationMonth: expMonth,
+                cardExpirationYear: cleanYear,
+                securityCode: cardData.cvc,
+                identification: {
+                    type: 'CPF', // Simplification: Defaulting to CPF
+                    number: student.cpf?.replace(/\D/g, '') || '00000000000'
+                }
+            });
+            
+            if (!tokenResponse || !tokenResponse.id) {
+                console.error("Token Error", tokenResponse);
+                throw new Error("Não foi possível validar o cartão. Verifique os dados.");
+            }
+
+            // Send Token to Backend
             const response = await fetch('/api/payments/credit-card', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     studentId: student.id,
-                    amount, // Base amount, surcharge logic handled by backend or display
-                    cardData
+                    amount,
+                    token: tokenResponse.id,
+                    paymentMethodId: getPaymentMethodId(cleanCardNumber),
+                    installments: 1,
+                    payer: {
+                        email: student.email,
+                        identification: { type: 'CPF', number: student.cpf?.replace(/\D/g, '') }
+                    }
                 })
             });
 
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.message || 'Erro ao processar pagamento.');
+                throw new Error(data.message || 'Pagamento recusado.');
             }
 
-            await onConfirm(); // Refresh UI logic from parent
+            await onConfirm();
             onClose();
         } catch (err: any) {
-            setError(err.message || 'Falha na transação.');
+            console.error(err);
+            setError(err.message || 'Erro ao processar transação.');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Modal isOpen={true} onClose={onClose} title="Pagamento com Cartão de Crédito">
+        <Modal isOpen={true} onClose={onClose} title="Pagamento com Cartão">
             <form onSubmit={handlePayment} className="space-y-4">
                 <div className="bg-slate-50 p-4 rounded-lg mb-4 text-center border border-slate-100">
                     <div className="flex justify-between items-center text-sm text-slate-500 mb-1">
@@ -280,62 +311,37 @@ const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfi
                             <span>+ {surcharge.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                         </div>
                     )}
-                    
                     <div className="flex justify-between items-center font-bold text-slate-800 text-lg">
-                        <span>Total a Pagar:</span>
+                        <span>Total:</span>
                         <span className="text-xl text-blue-600">{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                     </div>
                 </div>
 
                 {error && (
-                    <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded relative text-sm" role="alert">
+                    <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded relative text-sm">
                         <strong className="font-bold">Erro: </strong>
                         <span className="block sm:inline">{error}</span>
                     </div>
                 )}
+                
+                {!publicKey && (
+                     <div className="bg-amber-100 border border-amber-200 text-amber-700 px-4 py-3 rounded relative text-sm mb-2">
+                        <strong className="font-bold">Atenção: </strong>
+                        <span>Pagamento por cartão não configurado pela academia.</span>
+                    </div>
+                )}
 
-                <Input 
-                    label="Número do Cartão" 
-                    value={cardData.number} 
-                    onChange={handleFormatCardNumber} 
-                    placeholder="0000 0000 0000 0000" 
-                    required 
-                />
-                <Input 
-                    label="Nome do Titular" 
-                    value={cardData.name} 
-                    onChange={(e) => setCardData(prev => ({ ...prev, name: e.target.value.toUpperCase() }))} 
-                    placeholder="COMO ESTÁ NO CARTÃO" 
-                    required 
-                />
+                <Input label="Número do Cartão" value={cardData.number} onChange={handleFormatCardNumber} placeholder="0000 0000 0000 0000" required />
+                <Input label="Nome do Titular" value={cardData.name} onChange={(e) => setCardData(prev => ({ ...prev, name: e.target.value.toUpperCase() }))} placeholder="COMO ESTÁ NO CARTÃO" required />
                 <div className="grid grid-cols-2 gap-4">
-                    <Input 
-                        label="Validade" 
-                        value={cardData.expiry} 
-                        onChange={handleFormatExpiry} 
-                        placeholder="MM/AA" 
-                        maxLength={5} 
-                        required 
-                    />
-                    <Input 
-                        label="CVV" 
-                        value={cardData.cvc} 
-                        onChange={(e) => setCardData(prev => ({ ...prev, cvc: e.target.value.replace(/\D/g, '').substring(0, 4) }))} 
-                        placeholder="123" 
-                        type="password"
-                        maxLength={4} 
-                        required 
-                    />
+                    <Input label="Validade" value={cardData.expiry} onChange={handleFormatExpiry} placeholder="MM/AA" maxLength={5} required />
+                    <Input label="CVV" value={cardData.cvc} onChange={(e) => setCardData(prev => ({ ...prev, cvc: e.target.value.replace(/\D/g, '').substring(0, 4) }))} placeholder="123" type="password" maxLength={4} required />
                 </div>
 
                 <div className="pt-4 flex items-center justify-end gap-3">
                     <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
-                    <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-                        {loading ? (
-                            <><Loader className="w-4 h-4 mr-2 animate-spin" /> Processando...</>
-                        ) : (
-                            'Pagar Agora'
-                        )}
+                    <Button type="submit" disabled={loading || !publicKey} className="w-full sm:w-auto">
+                        {loading ? <><Loader className="w-4 h-4 mr-2 animate-spin" /> Processando...</> : 'Pagar Agora'}
                     </Button>
                 </div>
             </form>
@@ -402,15 +408,12 @@ const calculateTrainingTime = (startDateString?: string): { years: number; month
   if (!startDateString) return { years: 0, months: 0, totalMonths: 0 };
   const startDate = new Date(startDateString);
   const now = new Date();
-  
   let years = now.getFullYear() - startDate.getFullYear();
   let months = now.getMonth() - startDate.getMonth();
-  
   if (months < 0) {
     years--;
     months += 12;
   }
-  
   return { years, months, totalMonths: years * 12 + months };
 };
 
@@ -435,7 +438,6 @@ const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string |
       <p className="text-xl font-bold text-slate-800">{value}</p>
     </div>
   </Card>
-  
 );
 
 interface StudentDashboardProps {
@@ -458,7 +460,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     themeSettings, 
     updateStudentPayment 
 }) => {
-    // ... (Component implementation) ...
     const [paymentModalState, setPaymentModalState] = useState<'closed' | 'pix' | 'card' | 'upload'>('closed');
     const [paymentSuccess, setPaymentSuccess] = useState(false);
 
@@ -467,23 +468,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
     const graduation = useMemo(() => graduations.find(g => g.id === studentData?.beltId), [graduations, studentData]);
     const nextGraduation = useMemo(() => graduations.sort((a,b) => a.rank - b.rank).find(g => g.rank > (graduation?.rank ?? 0)), [graduations, graduation]);
-
     const { totalMonths: trainingMonths } = calculateTrainingTime(studentData?.firstGraduationDate);
 
     const timeToNextGrad = useMemo(() => {
         if (!studentData || !graduation || !nextGraduation) return "Parabéns!";
-
         const age = studentData.birthDate ? calculateAge(studentData.birthDate) : 20;
-        
-        // Kids' system logic
         if (age < 16 && graduation.type === 'kids' && nextGraduation.minAge) {
-            if (age >= nextGraduation.minAge) {
-                return "Já tem idade!";
-            }
+            if (age >= nextGraduation.minAge) return "Já tem idade!";
             return `Elegível aos ${nextGraduation.minAge} anos`;
         }
-        
-        // Adult system logic
         const timeNeeded = graduation.minTimeInMonths;
         if (timeNeeded === 0) return "N/A";
         const timeRemaining = Math.max(0, timeNeeded - (trainingMonths % timeNeeded));
@@ -508,49 +501,36 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
     const shouldShowPaymentButton = useMemo(() => {
         if (!studentData) return false;
-        
-        // Scholarship students don't need to pay
         if (studentData.paymentStatus === 'scholarship') return false;
-        
-        // Only show if unpaid
         if (studentData.paymentStatus !== 'unpaid') return false;
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const dueDateDay = studentData.paymentDueDateDay;
-
         const dueDateThisMonth = new Date(today.getFullYear(), today.getMonth(), dueDateDay);
         const isOverdue = today > dueDateThisMonth;
-        
         let upcomingDueDate = new Date(today.getFullYear(), today.getMonth(), dueDateDay);
         if (today.getDate() > dueDateDay) {
             upcomingDueDate.setMonth(upcomingDueDate.getMonth() + 1);
         }
-        
         const timeDiff = upcomingDueDate.getTime() - today.getTime();
         const daysUntilDue = Math.ceil(timeDiff / (1000 * 3600 * 24));
         const isReminderPeriod = daysUntilDue <= 5;
-
         return isOverdue || isReminderPeriod;
     }, [studentData]);
-
 
     const handleConfirmPayment = async () => {
         if (!studentData) return;
         await updateStudentPayment(studentData.id, 'paid');
         setPaymentSuccess(true);
-        setTimeout(() => {
-            setPaymentSuccess(false);
-        }, 3000);
+        setTimeout(() => setPaymentSuccess(false), 3000);
     };
 
     const getBeltStyle = (grad: Graduation) => {
         if (!grad.color2) return { background: grad.color };
-
         const angle = grad.gradientAngle ?? 90;
         const hardness = (grad.gradientHardness ?? 0) / 100;
         const color3 = grad.color3 || grad.color2;
-
         const c1End = 33.33 * hardness;
         const c2Start = 50 - (16.67 * hardness);
         const c2End = 50 + (16.67 * hardness);
@@ -564,17 +544,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 ${grad.color2} ${c2End}%,
                 ${color3} ${c3Start}%,
                 ${color3} 100%
-        )`
-        };
+        )`};
     };
 
-    if (!studentData || !graduation) {
-        return <div className="text-center p-8 text-slate-500">Carregando dados do aluno...</div>;
-    }
-
+    if (!studentData || !graduation) return <div className="text-center p-8 text-slate-500">Carregando dados do aluno...</div>;
     const stripes = studentData.stripes;
 
-    // Helper to get status visual data
     const getStatusInfo = () => {
         if (studentData.isSocialProject) {
             return { color: '#3B82F6', text: 'Projeto Social', icon: <HeartHandshake className="w-4 h-4 mr-1"/> };
@@ -586,7 +561,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             return { color: '#EF4444', text: 'Pendente', icon: null };
         }
     };
-    
     const statusInfo = getStatusInfo();
 
     return (
@@ -604,6 +578,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     student={studentData}
                     amount={themeSettings.monthlyFeeAmount}
                     surcharge={themeSettings.creditCardSurcharge || 0}
+                    publicKey={themeSettings.mercadoPagoPublicKey || ''}
                     onClose={() => setPaymentModalState('closed')}
                     onConfirm={handleConfirmPayment}
                 />

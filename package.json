@@ -20,7 +20,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "recharts": "^2.12.2",
-    "jspdf": "^2.5.1"
+    "jspdf": "^2.5.1",
+    "@mercadopago/sdk-react": "^0.0.19"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
