@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 
-// FIX: Increase payload limit to 50mb to handle Base64 images
+// FIX: Increase payload limit to 50mb to handle Base64 images and certificates
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -213,6 +213,7 @@ app.get('/api/initial-data', async (req, res) => {
     try {
         // --- Migrations ---
         
+        // ... (existing migrations) ...
         // 23. Add Mobile Interface Settings to Theme Settings
         try {
             await pool.query("SELECT mobileNavShowDashboard FROM theme_settings LIMIT 1");
@@ -240,6 +241,19 @@ app.get('/api/initial-data', async (req, res) => {
         } catch (e) {
             console.log("Migrating: Adding mobileNavVisible to theme_settings");
             await pool.query("ALTER TABLE theme_settings ADD COLUMN mobileNavVisible BOOLEAN DEFAULT TRUE");
+        }
+
+        // 25. Add Payment Feature Flags and EFI Fields to Theme Settings
+        try {
+            await pool.query("SELECT creditCardEnabled FROM theme_settings LIMIT 1");
+        } catch (e) {
+            console.log("Migrating: Adding payment feature flags and EFI fields to theme_settings");
+            await pool.query(`ALTER TABLE theme_settings 
+                ADD COLUMN creditCardEnabled BOOLEAN DEFAULT TRUE,
+                ADD COLUMN efiEnabled BOOLEAN DEFAULT FALSE,
+                ADD COLUMN efiPixKey VARCHAR(255),
+                ADD COLUMN efiPixCert LONGTEXT
+            `);
         }
 
         // ... (existing migrations 17-22) ...
@@ -352,6 +366,9 @@ app.get('/api/initial-data', async (req, res) => {
             mobileNavShowProfile: Boolean(parsedSettings.mobileNavShowProfile),
             mobileNavFloating: Boolean(parsedSettings.mobileNavFloating),
             mobileNavVisible: parsedSettings.mobileNavVisible === undefined || parsedSettings.mobileNavVisible === 1 || parsedSettings.mobileNavVisible === true,
+            // Payment Parsing
+            creditCardEnabled: Boolean(parsedSettings.creditCardEnabled),
+            efiEnabled: Boolean(parsedSettings.efiEnabled),
         };
 
         res.json({ students: parsedStudents, users, academies: parsedAcademies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
@@ -630,7 +647,8 @@ app.post('/api/settings', async (req, res) => {
                 socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?,
                 mercadoPagoAccessToken=?, mercadoPagoPublicKey=?, efiClientId=?, efiClientSecret=?, whatsappMessageTemplate=?,
                 mobileNavShowDashboard=?, mobileNavShowSchedule=?, mobileNavShowStudents=?, mobileNavShowProfile=?, mobileNavBgColor=?,
-                mobileNavActiveColor=?, mobileNavInactiveColor=?, mobileNavHeight=?, mobileNavIconSize=?, mobileNavBorderRadius=?, mobileNavBottomMargin=?, mobileNavFloating=?, mobileNavVisible=?
+                mobileNavActiveColor=?, mobileNavInactiveColor=?, mobileNavHeight=?, mobileNavIconSize=?, mobileNavBorderRadius=?, mobileNavBottomMargin=?, mobileNavFloating=?, mobileNavVisible=?,
+                creditCardEnabled=?, efiEnabled=?, efiPixKey=?, efiPixCert=?
                 WHERE id = 1`,
                 [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, 
                  s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2,
@@ -639,7 +657,8 @@ app.post('/api/settings', async (req, res) => {
                  s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled,
                  s.mercadoPagoAccessToken, s.mercadoPagoPublicKey, s.efiClientId, s.efiClientSecret, s.whatsappMessageTemplate,
                  s.mobileNavShowDashboard, s.mobileNavShowSchedule, s.mobileNavShowStudents, s.mobileNavShowProfile, s.mobileNavBgColor,
-                 s.mobileNavActiveColor, s.mobileNavInactiveColor, s.mobileNavHeight, s.mobileNavIconSize, s.mobileNavBorderRadius, s.mobileNavBottomMargin, s.mobileNavFloating, s.mobileNavVisible]
+                 s.mobileNavActiveColor, s.mobileNavInactiveColor, s.mobileNavHeight, s.mobileNavIconSize, s.mobileNavBorderRadius, s.mobileNavBottomMargin, s.mobileNavFloating, s.mobileNavVisible,
+                 s.creditCardEnabled, s.efiEnabled, s.efiPixKey, s.efiPixCert]
             );
         }
         res.json({ success: true });

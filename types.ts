@@ -41,8 +41,13 @@ export interface ThemeSettings {
   // Payment Gateways
   mercadoPagoAccessToken?: string;
   mercadoPagoPublicKey?: string;
+  creditCardEnabled?: boolean; // New: Toggle for Credit Card
+
   efiClientId?: string;
   efiClientSecret?: string;
+  efiEnabled?: boolean; // New: Toggle for EFI
+  efiPixKey?: string;   // New: Specific PIX key for EFI
+  efiPixCert?: string;  // New: Certificate for EFI (Base64)
   
   // Feature Flags & Integrations
   publicPageEnabled: boolean;
@@ -55,7 +60,7 @@ export interface ThemeSettings {
   theme?: string;
 
   // Mobile Interface Settings
-  mobileNavVisible?: boolean; // New field to toggle visibility
+  mobileNavVisible?: boolean; 
   mobileNavShowDashboard?: boolean;
   mobileNavShowSchedule?: boolean;
   mobileNavShowStudents?: boolean;

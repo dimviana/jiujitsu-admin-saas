@@ -118,7 +118,10 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
 
 
     const brCode = useMemo(() => {
-        if (!themeSettings.pixKey || !themeSettings.pixHolderName) {
+        // Use EFI Key if enabled, otherwise use General Key
+        const activePixKey = themeSettings.efiEnabled ? themeSettings.efiPixKey : themeSettings.pixKey;
+
+        if (!activePixKey || !themeSettings.pixHolderName) {
             return null;
         }
         
@@ -129,7 +132,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
         const rawTxid = `JJ${cleanId}${timestamp}`;
 
         return generatePixPayload(
-            themeSettings.pixKey,
+            activePixKey,
             themeSettings.pixHolderName,
             "SAAS", // Cidade padrão ou fixa, pois muitas vezes não vem na config
             themeSettings.monthlyFeeAmount,
@@ -150,7 +153,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
         return (
              <Modal isOpen={true} onClose={onClose} title="Pagamento via PIX">
                  <div className="text-center">
-                    <p className="text-slate-600">A configuração de PIX não foi realizada pelo administrador.</p>
+                    <p className="text-slate-600">A configuração de PIX não foi realizada corretamente pelo administrador.</p>
                     <p className="text-sm text-slate-500 mt-2">Por favor, entre em contato com a academia.</p>
                     <div className="mt-6 flex justify-end">
                         <Button variant="secondary" onClick={onClose}>Fechar</Button>
@@ -597,10 +600,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                     <IconPix className="w-4 h-4 mr-2" />
                                     PIX
                                 </Button>
-                                <Button size="sm" variant="secondary" onClick={() => setPaymentModalState('card')}>
-                                    <CreditCard className="w-4 h-4 mr-2" />
-                                    Cartão
-                                </Button>
+                                {themeSettings.creditCardEnabled !== false && (
+                                    <Button size="sm" variant="secondary" onClick={() => setPaymentModalState('card')}>
+                                        <CreditCard className="w-4 h-4 mr-2" />
+                                        Cartão
+                                    </Button>
+                                )}
                              </div>
                         )}
                     </div>

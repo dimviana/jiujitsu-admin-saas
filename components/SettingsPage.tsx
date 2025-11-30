@@ -1,9 +1,9 @@
-import React, { useContext, useState, FormEvent, useEffect } from 'react';
+import React, { useContext, useState, FormEvent, useEffect, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
-import { Smartphone } from 'lucide-react';
+import { Smartphone, Upload, CreditCard } from 'lucide-react';
 
 const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }> = ({ label, id, ...props }) => (
     <div>
@@ -22,6 +22,7 @@ const SettingsPage: React.FC = () => {
     const [settings, setSettings] = useState(themeSettings);
     const [monthlyFeeInput, setMonthlyFeeInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
     const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos' | 'mensagens' | 'mobile'>('system');
+    const certInputRef = useRef<HTMLInputElement>(null);
 
     const isAcademyAdmin = user?.role === 'academy_admin';
     const currentAcademyName = isAcademyAdmin ? academies.find(a => a.id === user.academyId)?.name : 'Sistema Global';
@@ -59,6 +60,19 @@ const SettingsPage: React.FC = () => {
         } else {
             setMonthlyFeeInput('0.00');
             setSettings(prev => ({ ...prev, monthlyFeeAmount: 0 }));
+        }
+    };
+
+    const handleCertUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const base64 = event.target?.result as string;
+                // Store base64 content
+                setSettings(prev => ({ ...prev, efiPixCert: base64 }));
+            };
+            reader.readAsDataURL(file);
         }
     };
     
@@ -166,7 +180,6 @@ const SettingsPage: React.FC = () => {
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {activeTab === 'system' && (
                             <>
-                                {/* ... existing system settings ... */}
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Identidade Visual</h2>
                                 <Input label="Nome do Sistema" name="systemName" value={settings.systemName} onChange={handleChange} />
                                 <Input label="URL da Logo" name="logoUrl" value={settings.logoUrl} onChange={handleChange} />
@@ -227,14 +240,13 @@ const SettingsPage: React.FC = () => {
                         
                         {activeTab === 'pagamentos' && (
                             <div className="space-y-6 animate-fade-in-down">
-                                {/* ... existing payments settings ... */}
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração Financeira e Gateways</h2>
                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
                                   {isAcademyAdmin ? 'Configure os dados de recebimento e integrações de pagamento da sua academia.' : 'Configure os dados padrão do sistema.'}
                                 </p>
                                 
                                 <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
-                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Dados Gerais e PIX</h3>
+                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Dados Gerais e PIX (Manual)</h3>
                                     <Input 
                                         label="Valor Padrão da Mensalidade (R$)"
                                         name="monthlyFeeAmount"
@@ -246,7 +258,7 @@ const SettingsPage: React.FC = () => {
                                     />
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <Input 
-                                          label="Chave PIX" 
+                                          label="Chave PIX (Manual)" 
                                           name="pixKey" 
                                           value={settings.pixKey} 
                                           onChange={handleChange}
@@ -264,10 +276,19 @@ const SettingsPage: React.FC = () => {
 
                                 {/* Mercado Pago Section */}
                                 <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
-                                    <h3 className="font-semibold text-blue-600 flex items-center">
-                                        Mercado Pago
-                                        <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Cartão de Crédito</span>
-                                    </h3>
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-semibold text-blue-600 flex items-center">
+                                            Mercado Pago
+                                            <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Cartão de Crédito</span>
+                                        </h3>
+                                        <div className="flex items-center">
+                                            <label htmlFor="creditCardEnabled" className="mr-2 text-sm font-medium text-[var(--theme-text-primary)]">Ativar Cartão</label>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="creditCardEnabled" name="creditCardEnabled" checked={settings.creditCardEnabled !== false} onChange={handleChange} className="sr-only peer" />
+                                                <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                            </label>
+                                        </div>
+                                    </div>
                                     <p className="text-xs text-[var(--theme-text-primary)]/60">Credenciais para processamento de cartão via Mercado Pago.</p>
                                     <Input 
                                         label="Access Token (Produção)" 
@@ -287,11 +308,21 @@ const SettingsPage: React.FC = () => {
 
                                 {/* EFI Bank Section */}
                                 <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
-                                    <h3 className="font-semibold text-orange-600 flex items-center">
-                                        EFI Bank (Efí)
-                                        <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Boleto / Pix API</span>
-                                    </h3>
-                                    <p className="text-xs text-[var(--theme-text-primary)]/60">Credenciais para emissão automatizada.</p>
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-semibold text-orange-600 flex items-center">
+                                            EFI Bank (Efí)
+                                            <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Boleto / Pix API</span>
+                                        </h3>
+                                        <div className="flex items-center">
+                                            <label htmlFor="efiEnabled" className="mr-2 text-sm font-medium text-[var(--theme-text-primary)]">Ativar Integração EFI</label>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="efiEnabled" name="efiEnabled" checked={!!settings.efiEnabled} onChange={handleChange} className="sr-only peer" />
+                                                <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-[var(--theme-text-primary)]/60">Credenciais para emissão automatizada. Quando ativo, substitui a chave PIX manual.</p>
+                                    
                                     <Input 
                                         label="Client ID" 
                                         name="efiClientId" 
@@ -307,6 +338,35 @@ const SettingsPage: React.FC = () => {
                                         type="password"
                                         placeholder="Client_Secret_..."
                                     />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input 
+                                            label="Chave PIX (EFI)" 
+                                            name="efiPixKey" 
+                                            value={settings.efiPixKey || ''} 
+                                            onChange={handleChange}
+                                            placeholder="Chave cadastrada no EFI"
+                                        />
+                                        <div>
+                                            <label className="block text-sm font-medium text-[var(--theme-text-primary)]/80 mb-1">PIX Certificado (Upload)</label>
+                                            <div className="flex items-center gap-2">
+                                                <label className="cursor-pointer bg-[var(--theme-card-bg)] border border-[var(--theme-text-primary)]/20 hover:bg-[var(--theme-bg)] text-[var(--theme-text-primary)] px-4 py-2 rounded-lg flex items-center transition-colors text-sm">
+                                                    <Upload className="w-4 h-4 mr-2" />
+                                                    Selecionar Arquivo
+                                                    <input 
+                                                        type="file" 
+                                                        className="hidden" 
+                                                        ref={certInputRef}
+                                                        onChange={handleCertUpload}
+                                                        accept=".pem,.p12,.crt"
+                                                    />
+                                                </label>
+                                                {settings.efiPixCert && (
+                                                    <span className="text-xs text-green-600 font-medium">Certificado Carregado ✓</span>
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] text-[var(--theme-text-primary)]/50 mt-1">Formatos: .pem, .p12</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
