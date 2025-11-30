@@ -207,8 +207,9 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
     );
 };
 
-const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfirm: () => Promise<void>; amount: number }> = ({ onClose, onConfirm, amount }) => {
+const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfirm: () => Promise<void>; amount: number }> = ({ student, onClose, onConfirm, amount }) => {
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [cardData, setCardData] = useState({
         number: '',
         name: '',
@@ -233,11 +234,34 @@ const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfi
     const handlePayment = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        // Simulating API latency
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        await onConfirm();
-        setLoading(false);
-        onClose();
+        setError(null);
+
+        try {
+            const response = await fetch('/api/payments/credit-card', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    studentId: student.id,
+                    amount,
+                    cardData
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Erro ao processar pagamento.');
+            }
+
+            await onConfirm(); // Refresh UI logic from parent
+            onClose();
+        } catch (err: any) {
+            setError(err.message || 'Falha na transação.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -247,6 +271,13 @@ const CreditCardModal: React.FC<{ student: Student; onClose: () => void; onConfi
                     <p className="text-sm text-slate-500">Valor a pagar</p>
                     <p className="text-3xl font-bold text-slate-800">{amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                 </div>
+
+                {error && (
+                    <div className="bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+                        <strong className="font-bold">Erro: </strong>
+                        <span className="block sm:inline">{error}</span>
+                    </div>
+                )}
 
                 <Input 
                     label="Número do Cartão" 
