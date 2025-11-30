@@ -53,6 +53,27 @@ const getPaymentMethodId = (cardNumber) => {
     return 'visa'; // Default fallback, though MP might reject if mismatch
 };
 
+// --- Helper: Map Mercado Pago Errors ---
+const getFriendlyErrorMessage = (statusDetail) => {
+    const errors = {
+        'cc_rejected_bad_filled_card_number': 'Revise o número do cartão.',
+        'cc_rejected_bad_filled_date': 'Revise a data de vencimento.',
+        'cc_rejected_bad_filled_other': 'Revise os dados do cartão.',
+        'cc_rejected_bad_filled_security_code': 'Revise o código de segurança.',
+        'cc_rejected_blacklist': 'Não pudemos processar seu pagamento.',
+        'cc_rejected_call_for_authorize': 'Ligue para o seu banco para autorizar o pagamento.',
+        'cc_rejected_card_disabled': 'Ligue para o seu banco para ativar seu cartão.',
+        'cc_rejected_card_error': 'Não conseguimos processar seu pagamento.',
+        'cc_rejected_duplicated_payment': 'Você já efetuou um pagamento com esse valor. Caso precise pagar novamente, utilize outro cartão ou outra forma de pagamento.',
+        'cc_rejected_high_risk': 'Seu pagamento foi recusado por segurança. Escolha outra forma de pagamento.',
+        'cc_rejected_insufficient_amount': 'O cartão possui saldo insuficiente.',
+        'cc_rejected_invalid_installments': 'O cartão não processa pagamentos nesta quantidade de parcelas.',
+        'cc_rejected_max_attempts': 'Você atingiu o limite de tentativas permitidas. Escolha outro cartão ou outra forma de pagamento.',
+        'cc_rejected_other_reason': 'O cartão não processou o pagamento.'
+    };
+    return errors[statusDetail] || `Pagamento recusado: ${statusDetail}`;
+};
+
 // --- API Routes ---
 
 // ... (existing login and register routes remain the same) ...
@@ -499,23 +520,49 @@ app.post('/api/payments/credit-card', async (req, res) => {
     try {
         await conn.beginTransaction();
 
-        // 1. Get Payment Settings (Access Token and Surcharge)
-        const [settings] = await conn.query('SELECT mercadoPagoAccessToken, creditCardSurcharge FROM theme_settings LIMIT 1');
-        const accessToken = settings[0]?.mercadoPagoAccessToken;
-        const surcharge = Number(settings[0]?.creditCardSurcharge || 0);
-
-        if (!accessToken) {
-            throw new Error("Mercado Pago Access Token não configurado.");
-        }
-
-        // 2. Get Student Data for Payer Info
-        const [students] = await conn.query('SELECT email, name FROM students WHERE id = ?', [studentId]);
+        // 1. Get Student Data and Academy Link
+        const [students] = await conn.query('SELECT s.email, s.name, s.academyId FROM students s WHERE s.id = ?', [studentId]);
         if (students.length === 0) throw new Error("Aluno não encontrado.");
         const student = students[0];
 
+        // 2. Get Payment Settings (Prioritize Academy Specific, fallback to Global)
+        // Fetch Academy Settings
+        const [academies] = await conn.query('SELECT settings FROM academies WHERE id = ?', [student.academyId]);
+        
+        let accessToken = null;
+        let publicKey = null;
+        let surcharge = 0;
+
+        // Check Academy Level Settings first
+        if (academies.length > 0 && academies[0].settings) {
+            try {
+                const acSettings = JSON.parse(academies[0].settings);
+                if (acSettings.mercadoPagoAccessToken) {
+                    accessToken = acSettings.mercadoPagoAccessToken;
+                    publicKey = acSettings.mercadoPagoPublicKey;
+                    surcharge = Number(acSettings.creditCardSurcharge || 0);
+                }
+            } catch (e) {
+                console.error("Error parsing academy settings", e);
+            }
+        }
+
+        // Fallback to Global Settings if Academy doesn't have token
+        if (!accessToken) {
+            const [globalSettings] = await conn.query('SELECT mercadoPagoAccessToken, mercadoPagoPublicKey, creditCardSurcharge FROM theme_settings LIMIT 1');
+            if (globalSettings.length > 0) {
+                accessToken = globalSettings[0].mercadoPagoAccessToken;
+                publicKey = globalSettings[0].mercadoPagoPublicKey;
+                // Use global surcharge if falling back to global creds
+                surcharge = Number(globalSettings[0].creditCardSurcharge || 0);
+            }
+        }
+
+        if (!accessToken) {
+            throw new Error("Configuração de pagamento (Mercado Pago) não encontrada para esta academia.");
+        }
+
         // 3. Generate Card Token (Server-Side)
-        // Standard flow requires frontend tokenization, but for this architecture/request, we generate it here
-        // This mimics a frontend call
         const cleanCardNumber = cardData.number.replace(/\D/g, '');
         const [expMonth, expYear] = cardData.expiry.split('/');
         const cleanYear = expYear.length === 2 ? `20${expYear}` : expYear;
@@ -530,10 +577,10 @@ app.post('/api/payments/credit-card', async (req, res) => {
             }
         };
 
-        const tokenResponse = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${settings[0]?.mercadoPagoPublicKey}`, { // Use public key if available for token, usually access token works for backend
+        const tokenResponse = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${publicKey || ''}`, { 
              method: 'POST',
              headers: {
-                 'Authorization': `Bearer ${accessToken}`, // Using access token for backend auth
+                 'Authorization': `Bearer ${accessToken}`,
                  'Content-Type': 'application/json'
              },
              body: JSON.stringify(tokenPayload)
@@ -552,7 +599,7 @@ app.post('/api/payments/credit-card', async (req, res) => {
         const totalAmount = Number(amount) + surcharge;
         const paymentPayload = {
             transaction_amount: totalAmount,
-            token: cardTokenId, // Use the generated token
+            token: cardTokenId,
             description: `Mensalidade - ${student.name}`,
             payment_method_id: paymentMethodId,
             payer: {
@@ -576,12 +623,21 @@ app.post('/api/payments/credit-card', async (req, res) => {
 
         if (!mpResponse.ok) {
             console.error("Mercado Pago Payment Error:", mpData);
-            const errorMessage = mpData.message || (mpData.cause && mpData.cause[0]?.description) || 'Pagamento recusado pelo processador.';
-            throw new Error(errorMessage);
+            const errorDetail = mpData.message || (mpData.cause && mpData.cause[0]?.description) || 'Erro desconhecido no processamento.';
+            // Throw error with detail for frontend mapping, but ensure it's treated as 400 bad request in catch
+            const specificError = new Error(errorDetail);
+            // @ts-ignore
+            specificError.status = 400;
+            throw specificError;
         }
 
         if (mpData.status !== 'approved') {
-             throw new Error(`Pagamento não aprovado. Status: ${mpData.status_detail}`);
+             const statusDetail = mpData.status_detail;
+             const friendlyMessage = getFriendlyErrorMessage(statusDetail);
+             const err = new Error(friendlyMessage);
+             // @ts-ignore
+             err.status = 400; // Client side error (card rejected)
+             throw err;
         }
 
         // 6. Update Database on Success
@@ -597,7 +653,9 @@ app.post('/api/payments/credit-card', async (req, res) => {
     } catch (error) {
         await conn.rollback();
         console.error("Credit Card Payment Error:", error);
-        res.status(500).json({ message: error.message || 'Erro ao processar pagamento.' });
+        // Use custom status if set, otherwise 500
+        const status = error.status || 500;
+        res.status(status).json({ message: error.message || 'Erro ao processar pagamento.' });
     } finally {
         conn.release();
     }
