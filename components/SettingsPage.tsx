@@ -166,6 +166,7 @@ const SettingsPage: React.FC = () => {
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {activeTab === 'system' && (
                             <>
+                                {/* ... existing system settings ... */}
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Identidade Visual</h2>
                                 <Input label="Nome do Sistema" name="systemName" value={settings.systemName} onChange={handleChange} />
                                 <Input label="URL da Logo" name="logoUrl" value={settings.logoUrl} onChange={handleChange} />
@@ -226,6 +227,7 @@ const SettingsPage: React.FC = () => {
                         
                         {activeTab === 'pagamentos' && (
                             <div className="space-y-6 animate-fade-in-down">
+                                {/* ... existing payments settings ... */}
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração Financeira e Gateways</h2>
                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
                                   {isAcademyAdmin ? 'Configure os dados de recebimento e integrações de pagamento da sua academia.' : 'Configure os dados padrão do sistema.'}
@@ -311,6 +313,7 @@ const SettingsPage: React.FC = () => {
 
                         {activeTab === 'mensagens' && (
                             <div className="space-y-6 animate-fade-in-down">
+                                {/* ... existing messages settings ... */}
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração de Mensagens</h2>
                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
                                   Personalize as mensagens automáticas enviadas via WhatsApp.
@@ -405,6 +408,7 @@ const SettingsPage: React.FC = () => {
 
                         {activeTab === 'webpage' && (
                              <>
+                                {/* ... existing webpage settings ... */}
                                 <div className="flex justify-between items-center">
                                     <h2 className="text-xl font-bold text-[var(--theme-accent)]">Configurar Página Web Pública</h2>
                                     <div className="flex items-center">
@@ -432,6 +436,7 @@ const SettingsPage: React.FC = () => {
 
                         {activeTab === 'direitos' && (
                              <div className="space-y-6 animate-fade-in-down">
+                                {/* ... existing rights settings ... */}
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Direitos Autorais e Versão</h2>
                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
                                   Personalize o texto de copyright e a versão exibidos no rodapé do sistema.

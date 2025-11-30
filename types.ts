@@ -55,7 +55,7 @@ export interface ThemeSettings {
   theme?: string;
 
   // Mobile Interface Settings
-  mobileNavVisible?: boolean; // New field
+  mobileNavVisible?: boolean; // New field to toggle visibility
   mobileNavShowDashboard?: boolean;
   mobileNavShowSchedule?: boolean;
   mobileNavShowStudents?: boolean;
@@ -183,7 +183,7 @@ export interface ClassSchedule {
     academyId: string;
     requiredGraduationId?: string;
     assistantIds: string[];
-    studentIds?: string[]; // Added field
+    studentIds?: string[];
     observations?: string;
 }
 

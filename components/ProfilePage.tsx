@@ -1,5 +1,3 @@
-
-
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
@@ -150,6 +148,21 @@ const ProfilePage: React.FC = () => {
         setIsEditModalOpen(false);
     };
 
+    // Determine financial status badge style and text
+    let statusText = 'Inadimplente';
+    let statusClass = 'bg-red-100 text-red-800';
+
+    if (studentData.isSocialProject) {
+        statusText = 'Projeto Social';
+        statusClass = 'bg-blue-100 text-blue-800';
+    } else if (studentData.paymentStatus === 'scholarship') {
+        statusText = 'Isento (Bolsa)';
+        statusClass = 'bg-purple-100 text-purple-800';
+    } else if (studentData.paymentStatus === 'paid') {
+        statusText = 'Em Dia';
+        statusClass = 'bg-green-100 text-green-800';
+    }
+
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-slate-800">Meu Perfil</h1>
@@ -204,8 +217,8 @@ const ProfilePage: React.FC = () => {
                         <p><strong>Tempo de Treino:</strong> {trainingTime}</p>
                         <p><strong>Vencimento da Mensalidade:</strong> Dia {studentData.paymentDueDateDay} de cada mês</p>
                          <p><strong>Status Financeiro:</strong> 
-                            <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${studentData.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                {studentData.paymentStatus === 'paid' ? 'Em Dia' : 'Inadimplente'}
+                            <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${statusClass}`}>
+                                {statusText}
                             </span>
                         </p>
                     </div>
