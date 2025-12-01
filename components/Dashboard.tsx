@@ -9,7 +9,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail
+    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone
 } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 
