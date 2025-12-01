@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-    BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, Legend, AreaChart, Area
+    PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts';
 import { Student, User, ClassSchedule, Graduation, ThemeSettings, AttendanceRecord } from '../types';
 import Card from './ui/Card';
@@ -10,7 +9,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Clock, Award, ChevronRight 
+    DollarSign, Award 
 } from 'lucide-react';
 
 interface DashboardProps {
