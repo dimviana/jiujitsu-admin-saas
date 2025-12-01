@@ -9,7 +9,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Award 
+    DollarSign, Award, ChevronLeft, ChevronRight 
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -50,6 +50,132 @@ const PaymentModal: React.FC<{
             </div>
         </Modal>
     )
+};
+
+// --- Calendar Modal ---
+const DayDetailsModal: React.FC<{
+    date: Date;
+    schedules: ClassSchedule[];
+    users: User[];
+    onClose: () => void;
+}> = ({ date, schedules, users, onClose }) => {
+    const dayOfWeek = DAYS_OF_WEEK_MAP[date.getDay()];
+    const daysSchedules = schedules
+        .filter(s => s.dayOfWeek === dayOfWeek)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title={`Aulas de ${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}`}>
+            <div className="space-y-3">
+                {daysSchedules.length > 0 ? (
+                    daysSchedules.map(schedule => {
+                        const professor = users.find(u => u.id === schedule.professorId);
+                        return (
+                            <div key={schedule.id} className="p-3 border border-slate-100 rounded-lg bg-slate-50 flex justify-between items-center transition-colors hover:bg-slate-100">
+                                <div>
+                                    <div className="font-bold text-slate-800">{schedule.className}</div>
+                                    <div className="text-xs text-slate-500">Prof. {professor?.name || 'N/A'}</div>
+                                </div>
+                                <div className="bg-white px-2 py-1 rounded border border-slate-200 text-xs font-semibold text-slate-700 shadow-sm">
+                                    {schedule.startTime} - {schedule.endTime}
+                                </div>
+                            </div>
+                        );
+                    })
+                ) : (
+                    <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-slate-500 text-sm">
+                        Nenhuma aula agendada para este dia.
+                    </div>
+                )}
+            </div>
+            <div className="mt-6 flex justify-end pt-4 border-t border-slate-100">
+                <Button variant="secondary" onClick={onClose}>Fechar</Button>
+            </div>
+        </Modal>
+    );
+};
+
+// --- Calendar Widget ---
+const CalendarWidget: React.FC<{ schedules: ClassSchedule[]; users: User[] }> = ({ schedules, users }) => {
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+    const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+    const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+    const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
+    const firstDay = getFirstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    const emptyDays = Array.from({ length: firstDay }, (_, i) => i);
+
+    const changeMonth = (offset: number) => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
+    };
+
+    return (
+        <Card className="flex flex-col">
+            <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                    <Calendar className="w-5 h-5 mr-2 text-primary" /> Calendário
+                </h3>
+                <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                    <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600">
+                        <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs font-bold text-slate-700 w-24 text-center capitalize select-none">
+                        {currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '')}
+                    </span>
+                    <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600">
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-7 text-center mb-2">
+                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
+                    <div key={i} className="text-[10px] font-bold text-slate-400 uppercase">{d}</div>
+                ))}
+            </div>
+            
+            <div className="grid grid-cols-7 gap-1">
+                {emptyDays.map(d => <div key={`empty-${d}`} />)}
+                {days.map(day => {
+                    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                    const isToday = date.toDateString() === new Date().toDateString();
+                    const dayOfWeek = DAYS_OF_WEEK_MAP[date.getDay()];
+                    const hasClasses = schedules.some(s => s.dayOfWeek === dayOfWeek);
+
+                    return (
+                        <button
+                            key={day}
+                            onClick={() => setSelectedDate(date)}
+                            className={`
+                                h-8 rounded-lg flex flex-col items-center justify-center text-xs transition-all relative
+                                ${isToday 
+                                    ? 'bg-primary text-white font-bold shadow-sm' 
+                                    : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+                                }
+                            `}
+                        >
+                            {day}
+                            {hasClasses && !isToday && (
+                                <span className="absolute bottom-1 w-1 h-1 bg-primary/50 rounded-full"></span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+            
+            {selectedDate && (
+                <DayDetailsModal 
+                    date={selectedDate} 
+                    schedules={schedules} 
+                    users={users} 
+                    onClose={() => setSelectedDate(null)} 
+                />
+            )}
+        </Card>
+    );
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
@@ -142,11 +268,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const overdueStudents = useMemo(() => 
         activeStudents.filter(s => s.paymentStatus === 'unpaid').slice(0, 5), 
     [activeStudents]);
-
-    const todaysClasses = useMemo(() => {
-        const todayName = DAYS_OF_WEEK_MAP[new Date().getDay()];
-        return schedules.filter(s => s.dayOfWeek === todayName).sort((a,b) => a.startTime.localeCompare(b.startTime));
-    }, [schedules]);
 
     // --- Actions ---
     const handleConfirmPayment = async (studentId: string) => {
@@ -318,32 +439,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                 </Card>
 
-                {/* Today's Classes */}
+                {/* Calendar & Belt Distribution */}
                 <div className="space-y-6">
-                    <Card>
-                        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
-                            <Calendar className="w-5 h-5 mr-2 text-primary" /> Aulas de Hoje
-                        </h3>
-                        <div className="space-y-3">
-                            {todaysClasses.length > 0 ? todaysClasses.map(c => (
-                                <div key={c.id} className="flex items-center p-3 rounded-lg border border-slate-100 bg-slate-50 hover:border-primary/30 transition-colors">
-                                    <div className="bg-white text-primary font-bold px-3 py-1.5 rounded border border-slate-200 text-xs mr-3 shadow-sm">
-                                        {c.startTime}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-bold text-slate-800 truncate">{c.className}</div>
-                                        <div className="text-xs text-slate-500">
-                                            Prof. {users.find(u => u.id === c.professorId)?.name?.split(' ')[0]}
-                                        </div>
-                                    </div>
-                                </div>
-                            )) : (
-                                <div className="text-center py-6 text-slate-400 text-sm">
-                                    Sem aulas agendadas para hoje.
-                                </div>
-                            )}
-                        </div>
-                    </Card>
+                    {/* Replaced 'Today's Classes' List with Calendar Widget */}
+                    <CalendarWidget schedules={schedules} users={users} />
 
                     {/* Belt Distribution Mini Chart */}
                     <Card>
