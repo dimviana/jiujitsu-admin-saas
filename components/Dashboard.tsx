@@ -3,13 +3,13 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
     PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts';
-import { Student, User, ClassSchedule, Graduation, ThemeSettings, AttendanceRecord } from '../types';
+import { Student, User, ClassSchedule, Graduation, ThemeSettings, AttendanceRecord, PaymentHistory } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail
+    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail, FileText, Paperclip
 } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 
@@ -175,6 +175,165 @@ const BeltListModal: React.FC<{
     );
 };
 
+// --- Payment Proofs Modal ---
+const PaymentProofsModal: React.FC<{
+    date: Date;
+    payments: { student: Student; amount: number; paymentId: string }[];
+    onClose: () => void;
+}> = ({ date, payments, onClose }) => {
+    return (
+        <Modal isOpen={true} onClose={onClose} title={`Comprovantes: ${date.toLocaleDateString('pt-BR')}`}>
+            <div className="space-y-4">
+                <div className="text-sm text-slate-500 mb-2">
+                    {payments.length} pagamento(s) registrado(s) nesta data.
+                </div>
+                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                    {payments.length > 0 ? payments.map((item, idx) => (
+                        <div key={`${item.paymentId}-${idx}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:bg-slate-100 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <img 
+                                    src={item.student.imageUrl || `https://ui-avatars.com/api/?name=${item.student.name}`} 
+                                    alt={item.student.name} 
+                                    className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                                />
+                                <div>
+                                    <p className="font-semibold text-slate-800 text-sm">{item.student.name}</p>
+                                    <div className="text-xs text-green-600 font-bold">
+                                        {item.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </div>
+                                </div>
+                            </div>
+                            <button 
+                                className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full border border-blue-100 hover:bg-blue-100 transition-colors"
+                                title="Visualizar Comprovante"
+                            >
+                                <Paperclip className="w-3 h-3" />
+                                Comprovante
+                            </button>
+                        </div>
+                    )) : (
+                        <div className="text-center py-8 text-slate-400 italic">
+                            Nenhum pagamento encontrado.
+                        </div>
+                    )}
+                </div>
+                <div className="flex justify-end pt-4 border-t border-slate-100">
+                    <Button variant="secondary" onClick={onClose}>Fechar</Button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+// --- Financial Calendar Widget ---
+const FinancialCalendarWidget: React.FC<{ 
+    students: Student[]; 
+}> = ({ students }) => {
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+    // Flatten payment history from all students
+    const paymentEvents = useMemo(() => {
+        const events: { dateStr: string; student: Student; amount: number; paymentId: string }[] = [];
+        students.forEach(student => {
+            if (student.paymentHistory && student.paymentHistory.length > 0) {
+                student.paymentHistory.forEach(pay => {
+                    // Assuming pay.date is a string like "YYYY-MM-DD" or ISO
+                    const dateObj = new Date(pay.date);
+                    const dateStr = dateObj.toISOString().split('T')[0]; // Normalize
+                    events.push({
+                        dateStr,
+                        student,
+                        amount: pay.amount,
+                        paymentId: pay.id
+                    });
+                });
+            }
+        });
+        return events;
+    }, [students]);
+
+    const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+    const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+    const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
+    const firstDay = getFirstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    const emptyDays = Array.from({ length: firstDay }, (_, i) => i);
+
+    const changeMonth = (offset: number) => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
+    };
+
+    const getPaymentsForDate = (date: Date) => {
+        const dateStr = date.toISOString().split('T')[0];
+        return paymentEvents.filter(e => e.dateStr === dateStr);
+    };
+
+    return (
+        <Card className="flex flex-col">
+            <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                    <FileText className="w-5 h-5 mr-2 text-green-600" /> Pagamentos (Comprovantes)
+                </h3>
+                <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                    <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600">
+                        <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs font-bold text-slate-700 w-24 text-center capitalize select-none">
+                        {currentDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '')}
+                    </span>
+                    <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600">
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-7 text-center mb-2">
+                {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
+                    <div key={i} className="text-[10px] font-bold text-slate-400 uppercase">{d}</div>
+                ))}
+            </div>
+            
+            <div className="grid grid-cols-7 gap-1">
+                {emptyDays.map(d => <div key={`empty-${d}`} />)}
+                {days.map(day => {
+                    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                    const isToday = date.toDateString() === new Date().toDateString();
+                    const dailyPayments = getPaymentsForDate(date);
+                    const hasPayments = dailyPayments.length > 0;
+
+                    return (
+                        <button
+                            key={day}
+                            onClick={() => hasPayments && setSelectedDate(date)}
+                            disabled={!hasPayments}
+                            className={`
+                                h-8 rounded-lg flex flex-col items-center justify-center text-xs transition-all relative
+                                ${isToday ? 'bg-slate-800 text-white font-bold shadow-sm' : ''}
+                                ${hasPayments ? 'hover:bg-green-50 text-slate-800 cursor-pointer font-semibold' : 'text-slate-400 cursor-default'}
+                            `}
+                        >
+                            {day}
+                            {hasPayments && (
+                                <span className="absolute bottom-1 w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+            
+            {selectedDate && (
+                <PaymentProofsModal 
+                    date={selectedDate} 
+                    payments={getPaymentsForDate(selectedDate)}
+                    onClose={() => setSelectedDate(null)} 
+                />
+            )}
+        </Card>
+    );
+};
+
 // --- Calendar Modal ---
 const DayDetailsModal: React.FC<{
     date: Date;
@@ -287,7 +446,7 @@ const CalendarWidget: React.FC<{
         <Card className="flex flex-col">
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
                 <h3 className="text-lg font-bold text-slate-800 flex items-center">
-                    <Calendar className="w-5 h-5 mr-2 text-primary" /> Calendário
+                    <Calendar className="w-5 h-5 mr-2 text-primary" /> Calendário de Aulas
                 </h3>
                 <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
                     <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600">
@@ -559,11 +718,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </Card>
             </div>
 
-            {/* Bottom Lists */}
+            {/* Bottom Lists & Widgets */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Pending Payments List */}
-                <Card className="lg:col-span-2">
+                <Card className="lg:col-span-1">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-bold text-slate-800">Pagamentos Pendentes</h3>
                         <Button size="sm" variant="secondary">Ver Todos</Button>
@@ -573,7 +732,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             <thead>
                                 <tr className="border-b border-slate-100 text-xs uppercase text-slate-500">
                                     <th className="py-2 px-1 font-semibold">Aluno</th>
-                                    <th className="py-2 px-1 font-semibold">Vencimento</th>
+                                    <th className="py-2 px-1 font-semibold">Dia</th>
                                     <th className="py-2 px-1 font-semibold text-right">Ação</th>
                                 </tr>
                             </thead>
@@ -585,16 +744,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                                 <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center mr-3 text-xs font-bold text-slate-600 overflow-hidden">
                                                     {s.imageUrl ? <img src={s.imageUrl} className="w-full h-full object-cover" /> : s.name.charAt(0)}
                                                 </div>
-                                                <span className="font-medium text-slate-700">{s.name}</span>
+                                                <span className="font-medium text-slate-700 truncate w-20 sm:w-auto">{s.name.split(' ')[0]}</span>
                                             </div>
                                         </td>
-                                        <td className="py-3 px-1 text-slate-500">Dia {s.paymentDueDateDay}</td>
+                                        <td className="py-3 px-1 text-slate-500">{s.paymentDueDateDay}</td>
                                         <td className="py-3 px-1 text-right">
                                             <button 
                                                 onClick={() => setPaymentStudent(s)}
                                                 className="text-xs bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 px-3 py-1.5 rounded-full font-medium transition-colors"
                                             >
-                                                Registrar
+                                                Pagar
                                             </button>
                                         </td>
                                     </tr>
@@ -602,7 +761,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                     <tr>
                                         <td colSpan={3} className="py-8 text-center text-slate-400">
                                             <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                                            Nenhuma pendência encontrada.
+                                            Nenhuma pendência.
                                         </td>
                                     </tr>
                                 )}
@@ -611,15 +770,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                 </Card>
 
-                {/* Calendar & Belt Distribution */}
-                <div className="space-y-6">
-                    {/* Replaced 'Today's Classes' List with Calendar Widget */}
-                    <CalendarWidget 
-                        schedules={schedules} 
-                        users={users} 
-                        students={students}
-                        onOpenDashboard={(student) => setDashboardStudent(student)} 
-                    />
+                {/* Calendar, Belt Distribution & Payment Calendar */}
+                <div className="lg:col-span-2 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Class Calendar Widget */}
+                        <CalendarWidget 
+                            schedules={schedules} 
+                            users={users} 
+                            students={students}
+                            onOpenDashboard={(student) => setDashboardStudent(student)} 
+                        />
+
+                        {/* Financial Calendar Widget */}
+                        <FinancialCalendarWidget students={activeStudents} />
+                    </div>
 
                     {/* Belt Distribution Mini Chart */}
                     <Card>
