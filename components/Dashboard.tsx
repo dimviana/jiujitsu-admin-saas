@@ -9,7 +9,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail, FileText, Paperclip
+    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail, FileText, Paperclip, Eye
 } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 
@@ -51,6 +51,30 @@ const PaymentModal: React.FC<{
             </div>
         </Modal>
     )
+};
+
+// --- Document Viewer Modal ---
+const DocumentViewerModal: React.FC<{
+    url: string | null;
+    onClose: () => void;
+}> = ({ url, onClose }) => {
+    if (!url) return null;
+
+    return (
+        <Modal isOpen={!!url} onClose={onClose} title="Visualizar Comprovante" size="4xl">
+            <div className="h-[75vh] w-full bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                <iframe 
+                    src={url} 
+                    className="w-full h-full" 
+                    title="Comprovante"
+                    style={{ border: 'none' }} 
+                />
+            </div>
+            <div className="flex justify-end pt-4 border-t border-slate-100 mt-4">
+                <Button variant="secondary" onClick={onClose}>Fechar</Button>
+            </div>
+        </Modal>
+    );
 };
 
 // --- Financial List Modal ---
@@ -178,9 +202,22 @@ const BeltListModal: React.FC<{
 // --- Payment Proofs Modal ---
 const PaymentProofsModal: React.FC<{
     date: Date;
-    payments: { student: Student; amount: number; paymentId: string }[];
+    payments: { dateStr: string; student: Student; amount: number; paymentId: string }[];
     onClose: () => void;
-}> = ({ date, payments, onClose }) => {
+    onViewProof: (url: string) => void;
+}> = ({ date, payments, onClose, onViewProof }) => {
+    
+    // Helper to find document corresponding to the payment date
+    const getProofDocument = (student: Student, paymentDateStr: string) => {
+        if (!student.documents) return null;
+        // Look for a document uploaded on the same day as the payment
+        // We compare the YYYY-MM-DD part
+        return student.documents.find(doc => {
+            const docDate = new Date(doc.uploadDate).toISOString().split('T')[0];
+            return docDate === paymentDateStr;
+        });
+    };
+
     return (
         <Modal isOpen={true} onClose={onClose} title={`Comprovantes: ${date.toLocaleDateString('pt-BR')}`}>
             <div className="space-y-4">
@@ -188,30 +225,35 @@ const PaymentProofsModal: React.FC<{
                     {payments.length} pagamento(s) registrado(s) nesta data.
                 </div>
                 <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                    {payments.length > 0 ? payments.map((item, idx) => (
-                        <div key={`${item.paymentId}-${idx}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:bg-slate-100 transition-colors">
-                            <div className="flex items-center gap-3">
-                                <img 
-                                    src={item.student.imageUrl || `https://ui-avatars.com/api/?name=${item.student.name}`} 
-                                    alt={item.student.name} 
-                                    className="w-10 h-10 rounded-full object-cover border border-slate-200"
-                                />
-                                <div>
-                                    <p className="font-semibold text-slate-800 text-sm">{item.student.name}</p>
-                                    <div className="text-xs text-green-600 font-bold">
-                                        {item.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {payments.length > 0 ? payments.map((item, idx) => {
+                        const proofDoc = getProofDocument(item.student, item.dateStr);
+                        
+                        return (
+                            <div key={`${item.paymentId}-${idx}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:bg-slate-100 transition-colors">
+                                <div className="flex items-center gap-3">
+                                    <img 
+                                        src={item.student.imageUrl || `https://ui-avatars.com/api/?name=${item.student.name}`} 
+                                        alt={item.student.name} 
+                                        className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                                    />
+                                    <div>
+                                        <p className="font-semibold text-slate-800 text-sm">{item.student.name}</p>
+                                        <div className="text-xs text-green-600 font-bold">
+                                            {item.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                        </div>
                                     </div>
                                 </div>
+                                <button 
+                                    className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border transition-colors ${proofDoc ? 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100 cursor-pointer' : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'}`}
+                                    title={proofDoc ? "Visualizar Comprovante" : "Comprovante não encontrado"}
+                                    onClick={() => proofDoc ? onViewProof(proofDoc.url) : alert('Nenhum comprovante anexado encontrado para esta data.')}
+                                >
+                                    {proofDoc ? <Eye className="w-3 h-3" /> : <Paperclip className="w-3 h-3" />}
+                                    Comprovante
+                                </button>
                             </div>
-                            <button 
-                                className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full border border-blue-100 hover:bg-blue-100 transition-colors cursor-default"
-                                title="Comprovante Anexado"
-                            >
-                                <Paperclip className="w-3 h-3" />
-                                Comprovante
-                            </button>
-                        </div>
-                    )) : (
+                        );
+                    }) : (
                         <div className="text-center py-8 text-slate-400 italic">
                             Nenhum pagamento encontrado.
                         </div>
@@ -228,7 +270,8 @@ const PaymentProofsModal: React.FC<{
 // --- Financial Calendar Widget ---
 const FinancialCalendarWidget: React.FC<{ 
     students: Student[]; 
-}> = ({ students }) => {
+    onViewProof: (url: string) => void;
+}> = ({ students, onViewProof }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
@@ -327,7 +370,8 @@ const FinancialCalendarWidget: React.FC<{
                 <PaymentProofsModal 
                     date={selectedDate} 
                     payments={getPaymentsForDate(selectedDate)}
-                    onClose={() => setSelectedDate(null)} 
+                    onClose={() => setSelectedDate(null)}
+                    onViewProof={onViewProof}
                 />
             )}
         </Card>
@@ -523,6 +567,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
     const [financialModalStatus, setFinancialModalStatus] = useState<'paid' | 'unpaid' | 'scholarship' | null>(null);
     const [selectedBeltId, setSelectedBeltId] = useState<string | null>(null);
+    const [viewingDocUrl, setViewingDocUrl] = useState<string | null>(null);
 
     // --- Statistics Calculations ---
     const activeStudents = students.filter(s => s.status !== 'blocked' && s.status !== 'pending');
@@ -782,7 +827,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         />
 
                         {/* Financial Calendar Widget */}
-                        <FinancialCalendarWidget students={activeStudents} />
+                        <FinancialCalendarWidget 
+                            students={activeStudents} 
+                            onViewProof={(url) => setViewingDocUrl(url)}
+                        />
                     </div>
 
                     {/* Belt Distribution Mini Chart */}
@@ -851,6 +899,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         updateStudentPayment={updateStudentPayment} 
                     />
                 </Modal>
+            )}
+
+            {/* Document Viewer Modal */}
+            {viewingDocUrl && (
+                <DocumentViewerModal 
+                    url={viewingDocUrl} 
+                    onClose={() => setViewingDocUrl(null)} 
+                />
             )}
         </div>
     );
