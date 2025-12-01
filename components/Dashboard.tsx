@@ -9,7 +9,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone
+    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail
 } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 
@@ -106,6 +106,64 @@ const FinancialListModal: React.FC<{
                     )) : (
                         <div className="text-center py-8 text-slate-400 italic">
                             Nenhum aluno encontrado nesta categoria.
+                        </div>
+                    )}
+                </div>
+                <div className="flex justify-end pt-4 border-t border-slate-100">
+                    <Button variant="secondary" onClick={onClose}>Fechar</Button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+// --- Belt List Modal ---
+const BeltListModal: React.FC<{
+    beltId: string | null;
+    students: Student[];
+    graduations: Graduation[];
+    onClose: () => void;
+}> = ({ beltId, students, graduations, onClose }) => {
+    if (!beltId) return null;
+
+    const belt = graduations.find(g => g.id === beltId);
+    const filteredStudents = students.filter(s => s.beltId === beltId);
+
+    return (
+        <Modal isOpen={!!beltId} onClose={onClose} title={`Alunos - ${belt?.name || 'Graduação'}`}>
+            <div className="space-y-4">
+                <div className="text-sm font-medium text-slate-600 mb-2">
+                    Total: {filteredStudents.length} alunos
+                </div>
+                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                    {filteredStudents.length > 0 ? filteredStudents.map(student => (
+                        <div key={student.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:bg-slate-100 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <img 
+                                    src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
+                                    alt={student.name} 
+                                    className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                                />
+                                <div>
+                                    <p className="font-semibold text-slate-800 text-sm">{student.name}</p>
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs text-slate-500">
+                                        <span className="flex items-center">
+                                            <Mail className="w-3 h-3 mr-1" />
+                                            {student.email}
+                                        </span>
+                                        {student.phone && (
+                                            <span className="flex items-center">
+                                                <Phone className="w-3 h-3 mr-1" />
+                                                {student.phone}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )) : (
+                        <div className="text-center py-8 text-slate-400 italic">
+                            Nenhum aluno nesta graduação.
                         </div>
                     )}
                 </div>
@@ -305,6 +363,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const [paymentStudent, setPaymentStudent] = useState<Student | null>(null);
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
     const [financialModalStatus, setFinancialModalStatus] = useState<'paid' | 'unpaid' | 'scholarship' | null>(null);
+    const [selectedBeltId, setSelectedBeltId] = useState<string | null>(null);
 
     // --- Statistics Calculations ---
     const activeStudents = students.filter(s => s.status !== 'blocked' && s.status !== 'pending');
@@ -332,24 +391,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     // 1. Belt Distribution
     const beltData = useMemo(() => {
-        const counts: Record<string, { count: number, color: string }> = {};
-        
-        // Initialize with all graduations to keep order/colors correct even if 0 students
-        graduations.forEach(g => {
-            counts[g.name] = { count: 0, color: g.color };
-        });
-
-        activeStudents.forEach(s => {
-            const belt = graduations.find(g => g.id === s.beltId);
-            if (belt) {
-                counts[belt.name].count += 1;
-            }
-        });
-
-        return Object.entries(counts)
-            .map(([name, data]) => ({ name, value: data.count, color: data.color }))
-            .filter(d => d.value > 0) // Hide empty segments for cleaner chart
-            .sort((a, b) => b.value - a.value); // Sort by count desc
+        return graduations.map(g => {
+            const count = activeStudents.filter(s => s.beltId === g.id).length;
+            return {
+                id: g.id,
+                name: g.name,
+                value: count,
+                color: g.color
+            };
+        })
+        .filter(d => d.value > 0)
+        .sort((a, b) => b.value - a.value);
     }, [activeStudents, graduations]);
 
     // 2. Financial Overview
@@ -573,8 +625,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <Card>
                         <h3 className="text-lg font-bold text-slate-800 mb-4">Alunos por Faixa</h3>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                            {beltData.map((item, idx) => (
-                                <div key={idx} className="flex items-center justify-between text-sm">
+                            {beltData.map((item) => (
+                                <div 
+                                    key={item.id} 
+                                    className="flex items-center justify-between text-sm p-2 hover:bg-slate-50 rounded cursor-pointer transition-colors"
+                                    onClick={() => setSelectedBeltId(item.id)}
+                                >
                                     <div className="flex items-center">
                                         <span 
                                             className="w-3 h-3 rounded-full mr-2 shadow-sm border border-black/10" 
@@ -604,6 +660,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 status={financialModalStatus} 
                 students={activeStudents}
                 onClose={() => setFinancialModalStatus(null)} 
+            />
+
+            {/* Belt List Modal */}
+            <BeltListModal 
+                beltId={selectedBeltId}
+                students={activeStudents}
+                graduations={graduations}
+                onClose={() => setSelectedBeltId(null)}
             />
 
             {/* Dashboard Student Modal */}
