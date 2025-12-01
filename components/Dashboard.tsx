@@ -9,7 +9,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard 
+    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail
 } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 
@@ -51,6 +51,70 @@ const PaymentModal: React.FC<{
             </div>
         </Modal>
     )
+};
+
+// --- Financial List Modal ---
+const FinancialListModal: React.FC<{
+    status: 'paid' | 'unpaid' | 'scholarship' | null;
+    students: Student[];
+    onClose: () => void;
+}> = ({ status, students, onClose }) => {
+    if (!status) return null;
+
+    const filteredStudents = students.filter(s => s.paymentStatus === status);
+    
+    let title = "Alunos";
+    let headerColor = "text-slate-800";
+    
+    if (status === 'paid') { title = "Alunos em Dia"; headerColor = "text-green-600"; }
+    else if (status === 'unpaid') { title = "Alunos Pendentes"; headerColor = "text-red-600"; }
+    else if (status === 'scholarship') { title = "Alunos Bolsistas"; headerColor = "text-blue-600"; }
+
+    return (
+        <Modal isOpen={!!status} onClose={onClose} title={title}>
+            <div className="space-y-4">
+                <div className={`text-sm font-medium ${headerColor} mb-2`}>
+                    Total: {filteredStudents.length} registros
+                </div>
+                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                    {filteredStudents.length > 0 ? filteredStudents.map(student => (
+                        <div key={student.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100 hover:bg-slate-100 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <img 
+                                    src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
+                                    alt={student.name} 
+                                    className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                                />
+                                <div>
+                                    <p className="font-semibold text-slate-800 text-sm">{student.name}</p>
+                                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                                        {student.phone && (
+                                            <span className="flex items-center" title="Telefone">
+                                                <Phone className="w-3 h-3 mr-1" />
+                                                {student.phone}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            {status === 'unpaid' && (
+                                <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded border border-red-100">
+                                    Dia {student.paymentDueDateDay}
+                                </span>
+                            )}
+                        </div>
+                    )) : (
+                        <div className="text-center py-8 text-slate-400 italic">
+                            Nenhum aluno encontrado nesta categoria.
+                        </div>
+                    )}
+                </div>
+                <div className="flex justify-end pt-4 border-t border-slate-100">
+                    <Button variant="secondary" onClick={onClose}>Fechar</Button>
+                </div>
+            </div>
+        </Modal>
+    );
 };
 
 // --- Calendar Modal ---
@@ -240,6 +304,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 }) => {
     const [paymentStudent, setPaymentStudent] = useState<Student | null>(null);
     const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
+    const [financialModalStatus, setFinancialModalStatus] = useState<'paid' | 'unpaid' | 'scholarship' | null>(null);
 
     // --- Statistics Calculations ---
     const activeStudents = students.filter(s => s.status !== 'blocked' && s.status !== 'pending');
@@ -289,9 +354,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     // 2. Financial Overview
     const financialData = [
-        { name: 'Em Dia', value: activeStudents.filter(s => s.paymentStatus === 'paid').length, color: '#10b981' }, // emerald-500
-        { name: 'Pendente', value: pendingPaymentsCount, color: '#ef4444' }, // red-500
-        { name: 'Bolsista', value: scholarshipCount, color: '#3b82f6' } // blue-500
+        { name: 'Em Dia', value: activeStudents.filter(s => s.paymentStatus === 'paid').length, color: '#10b981', key: 'paid' }, // emerald-500
+        { name: 'Pendente', value: pendingPaymentsCount, color: '#ef4444', key: 'unpaid' }, // red-500
+        { name: 'Bolsista', value: scholarshipCount, color: '#3b82f6', key: 'scholarship' } // blue-500
     ];
 
     // 3. Attendance Trend (Last 6 Months)
@@ -393,6 +458,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                     outerRadius={80}
                                     paddingAngle={5}
                                     dataKey="value"
+                                    onClick={(data) => setFinancialModalStatus(data.key as any)}
+                                    cursor="pointer"
                                 >
                                     {financialData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -530,6 +597,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 onClose={() => setPaymentStudent(null)} 
                 student={paymentStudent} 
                 onConfirm={handleConfirmPayment} 
+            />
+
+            {/* Financial List Modal */}
+            <FinancialListModal 
+                status={financialModalStatus} 
+                students={activeStudents}
+                onClose={() => setFinancialModalStatus(null)} 
             />
 
             {/* Dashboard Student Modal */}
