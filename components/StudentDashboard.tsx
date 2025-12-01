@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Student, User, Graduation, ClassSchedule, ThemeSettings } from '../types';
+import React, { useMemo, useState, useRef, useEffect, useContext } from 'react';
+import { Student, User, Graduation, ClassSchedule, ThemeSettings, StudentDocument } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
@@ -7,6 +7,7 @@ import Input from './ui/Input';
 import StudentAttendanceChart from './charts/StudentAttendanceChart';
 import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap, HeartHandshake } from 'lucide-react';
 import { initMercadoPago } from '@mercadopago/sdk-react';
+import { AppContext } from '../context/AppContext';
 
 // --- Helper Functions ---
 
@@ -53,7 +54,6 @@ const generatePixPayload = (
     const safeAmount = amount.toFixed(2);
     
     // IMPORTANT: For static QRs, using '***' as txid ensures maximum compatibility with all banks.
-    // Specific IDs often fail if not strictly formatted or if the bank expects dynamic QR logic.
     const safeTxid = '***'; 
 
     const gui = formatField('00', 'BR.GOV.BCB.PIX');
@@ -333,16 +333,17 @@ const CreditCardModal: React.FC<CreditCardModalProps> = ({ student, onClose, onC
     );
 };
 
-const UploadProofModal: React.FC<{ onConfirm: () => Promise<void>; onClose: () => void; }> = ({ onConfirm, onClose }) => {
+const UploadProofModal: React.FC<{ student: Student; onConfirm: () => Promise<void>; onClose: () => void; }> = ({ student, onConfirm, onClose }) => {
+    const { saveStudent } = useContext(AppContext);
     const [receiptFile, setReceiptFile] = useState<File | null>(null);
     const [isPaying, setIsPaying] = useState(false);
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            if (e.target.files[0].type === 'application/pdf') {
+            if (e.target.files[0].type === 'application/pdf' || e.target.files[0].type.startsWith('image/')) {
                 setReceiptFile(e.target.files[0]);
             } else {
-                alert('Por favor, selecione um arquivo PDF.');
+                alert('Por favor, selecione um arquivo PDF ou Imagem.');
                 e.target.value = ''; // Clear the input
                 setReceiptFile(null);
             }
@@ -352,15 +353,46 @@ const UploadProofModal: React.FC<{ onConfirm: () => Promise<void>; onClose: () =
     const handleSendReceipt = async () => {
         if (!receiptFile) return;
         setIsPaying(true);
-        await onConfirm();
-        setIsPaying(false);
-        onClose();
+
+        // 1. Convert File to Base64
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const base64String = reader.result as string;
+            
+            // 2. Create Document Object
+            const newDoc: StudentDocument = {
+                id: `doc_pay_${Date.now()}`,
+                name: `Comprovante - ${new Date().toLocaleDateString()}`,
+                type: receiptFile.type.includes('pdf') ? 'pdf' : 'image',
+                url: base64String,
+                uploadDate: new Date().toISOString()
+            };
+
+            const currentDocs = student.documents || [];
+            const updatedDocs = [...currentDocs, newDoc];
+
+            // 3. Save Student with new Document
+            // Filter out fields that shouldn't be updated or cause issues
+            const { paymentStatus, lastSeen, paymentHistory, password, ...studentData } = student;
+            await saveStudent({
+                ...studentData,
+                documents: updatedDocs
+            });
+
+            // 4. Confirm Payment (Update status)
+            await onConfirm();
+            
+            setIsPaying(false);
+            onClose();
+        };
+        
+        reader.readAsDataURL(receiptFile);
     };
 
     return (
         <Modal isOpen={true} onClose={onClose} title="Enviar Comprovante de Pagamento">
             <div className="space-y-4">
-                <p className="text-slate-600">Para confirmar seu pagamento, por favor, anexe o comprovante em formato PDF.</p>
+                <p className="text-slate-600">Para confirmar seu pagamento, por favor, anexe o comprovante (PDF ou Imagem).</p>
                 <label
                     htmlFor="receipt-upload"
                     className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100"
@@ -370,9 +402,9 @@ const UploadProofModal: React.FC<{ onConfirm: () => Promise<void>; onClose: () =
                         <p className="mb-2 text-sm text-slate-500">
                             <span className="font-semibold">Clique para enviar comprovante</span>
                         </p>
-                        <p className="text-xs text-slate-500">Apenas arquivos PDF (obrigatório)</p>
+                        <p className="text-xs text-slate-500">PDF, JPG ou PNG (Obrigatório)</p>
                     </div>
-                    <input id="receipt-upload" type="file" className="hidden" accept="application/pdf" onChange={handleFileChange} />
+                    <input id="receipt-upload" type="file" className="hidden" accept="application/pdf,image/*" onChange={handleFileChange} />
                 </label>
                  {receiptFile && (
                     <p className="text-center text-sm text-green-600 font-medium">Arquivo: {receiptFile.name}</p>
@@ -380,7 +412,7 @@ const UploadProofModal: React.FC<{ onConfirm: () => Promise<void>; onClose: () =
                 <div className="flex justify-end gap-2 mt-4">
                     <Button variant="secondary" onClick={onClose}>Cancelar</Button>
                     <Button onClick={handleSendReceipt} disabled={!receiptFile || isPaying}>
-                        {isPaying ? 'Enviando...' : 'Enviar Comprovante'}
+                        {isPaying ? 'Enviando e Confirmando...' : 'Enviar Comprovante'}
                     </Button>
                 </div>
             </div>
@@ -556,6 +588,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             )}
             {paymentModalState === 'upload' && (
                  <UploadProofModal 
+                    student={studentData}
                     onClose={() => setPaymentModalState('closed')}
                     onConfirm={handleConfirmPayment}
                 />
