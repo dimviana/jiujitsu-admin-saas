@@ -1,14 +1,12 @@
 
-import React, { useState, useMemo, useContext, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
     BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, Legend
 } from 'recharts';
 import { Student, User, ClassSchedule, Graduation, ThemeSettings, AttendanceRecord } from '../types';
-import { AppContext } from '../context/AppContext';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
-import { Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -34,7 +32,7 @@ const PaymentModal: React.FC<{
     if (!isOpen || !student) return null;
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Registrar Pagamento">
-            <div className="space-y-4">
+            <div className="space-y-4 text-slate-800">
                 <p>Confirmar recebimento de mensalidade de <strong>{student.name}</strong>?</p>
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                     <Button variant="secondary" onClick={onClose}>Cancelar</Button>
@@ -46,7 +44,6 @@ const PaymentModal: React.FC<{
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
-    user, 
     students, 
     users, 
     schedules, 
@@ -65,12 +62,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const scholarshipCount = students.filter(s => s.paymentStatus === 'scholarship').length;
 
     const eligibleStudentsCount = useMemo(() => {
-        // Simplified eligibility logic for dashboard summary
         let count = 0;
         students.forEach(s => {
             const belt = graduations.find(g => g.id === s.beltId);
             if(belt) {
-                // Mock logic: if time in belt > minTime (simplified)
                const promoDate = s.lastPromotionDate || s.firstGraduationDate;
                if(promoDate) {
                    const months = (new Date().getFullYear() - new Date(promoDate).getFullYear()) * 12 + (new Date().getMonth() - new Date(promoDate).getMonth());
@@ -85,7 +80,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     // --- Charts Data ---
     
-    // 1. Distribution by Belt (instead of "Turmas" for better visual)
+    // 1. Distribution by Belt
     const beltDistributionData = useMemo(() => {
         const counts: Record<string, number> = {};
         students.forEach(s => {
@@ -375,7 +370,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                     dataKey="value"
                                     stroke="none"
                                 >
-                                    {beltDistributionData.map((entry, index) => (
+                                    {beltDistributionData.map((_entry, index) => (
                                         <Cell key={`cell-${index}`} fill={beltColors[index % beltColors.length]} />
                                     ))}
                                 </Pie>
