@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import { AppProvider, AppContext } from './context/AppContext';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
+import { StudentDashboard } from './components/StudentDashboard';
 import StudentsPage from './components/StudentsPage';
 import { PublicPage } from './components/PublicPage';
 import { Financial } from './components/Financial';
@@ -46,17 +47,28 @@ const AppContent: React.FC = () => {
       return (
           <Layout user={user} onLogout={() => { logout(); setPage('home'); }} onNavigate={(p) => setPage(p as Page)} currentPage={page}>
             {page === 'dashboard' && (
-                <Dashboard 
-                    user={user} 
-                    students={students} 
-                    users={users} 
-                    schedules={schedules} 
-                    graduations={graduations}
-                    themeSettings={themeSettings}
-                    updateStudentPayment={updateStudentPayment}
-                    // FIX: Pass the required `attendanceRecords` prop to Dashboard.
-                    attendanceRecords={attendanceRecords}
-                />
+                user.role === 'student' ? (
+                    <StudentDashboard 
+                        user={user}
+                        students={students} 
+                        graduations={graduations} 
+                        schedules={schedules} 
+                        themeSettings={themeSettings} 
+                        updateStudentPayment={updateStudentPayment} 
+                    />
+                ) : (
+                    <Dashboard 
+                        user={user} 
+                        students={students} 
+                        users={users} 
+                        schedules={schedules} 
+                        graduations={graduations}
+                        themeSettings={themeSettings}
+                        updateStudentPayment={updateStudentPayment}
+                        // FIX: Pass the required `attendanceRecords` prop to Dashboard.
+                        attendanceRecords={attendanceRecords}
+                    />
+                )
             )}
             {page === 'students' && <StudentsPage />}
             {page === 'professors' && <ProfessorsPage />}
