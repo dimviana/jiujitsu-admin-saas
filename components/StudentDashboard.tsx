@@ -31,8 +31,7 @@ const generatePixPayload = (
     key: string, 
     name: string, 
     city: string, 
-    amount: number, 
-    txid: string // Not used in this version to ensure compatibility (forced to ***)
+    amount: number
 ): string => {
     // Normalization: Remove accents, special chars, keep only A-Z, 0-9 and Space
     const normalize = (str: string) => {
@@ -103,8 +102,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
             activePixKey,
             themeSettings.pixHolderName,
             "SAAS", 
-            themeSettings.monthlyFeeAmount,
-            "" // Placeholder
+            themeSettings.monthlyFeeAmount
         );
     }, [themeSettings, student]);
 
