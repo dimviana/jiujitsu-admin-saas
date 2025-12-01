@@ -2,11 +2,16 @@
 import React, { useState, useMemo } from 'react';
 import { 
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-    BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, Legend
+    BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, Legend, AreaChart, Area
 } from 'recharts';
 import { Student, User, ClassSchedule, Graduation, ThemeSettings, AttendanceRecord } from '../types';
-import Modal from './ui/Modal';
+import Card from './ui/Card';
 import Button from './ui/Button';
+import Modal from './ui/Modal';
+import { 
+    Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
+    DollarSign, Clock, Award, ChevronRight 
+} from 'lucide-react';
 
 interface DashboardProps {
   user: User;
@@ -19,10 +24,10 @@ interface DashboardProps {
   attendanceRecords: AttendanceRecord[];
 }
 
-const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const DAYS_OF_WEEK_MAP: { [key: number]: string } = { 0: 'Domingo', 1: 'Segunda-feira', 2: 'Terça-feira', 3: 'Quarta-feira', 4: 'Quinta-feira', 5: 'Sexta-feira', 6: 'Sábado' };
 
-// --- Payment Modal ---
+// --- Payment Confirmation Modal ---
 const PaymentModal: React.FC<{ 
     isOpen: boolean; 
     onClose: () => void;
@@ -32,11 +37,16 @@ const PaymentModal: React.FC<{
     if (!isOpen || !student) return null;
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Registrar Pagamento">
-            <div className="space-y-4 text-slate-800">
-                <p>Confirmar recebimento de mensalidade de <strong>{student.name}</strong>?</p>
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <div className="space-y-4 text-slate-600">
+                <div className="flex items-center justify-center p-4 bg-green-50 rounded-full w-16 h-16 mx-auto mb-4">
+                    <DollarSign className="w-8 h-8 text-green-600" />
+                </div>
+                <p className="text-center">
+                    Confirmar o recebimento da mensalidade de <strong className="text-slate-900">{student.name}</strong>?
+                </p>
+                <div className="flex justify-center gap-3 pt-4">
                     <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-                    <Button onClick={() => onConfirm(student.id)}>Confirmar Pagamento</Button>
+                    <Button variant="success" onClick={() => onConfirm(student.id)}>Confirmar Recebimento</Button>
                 </div>
             </div>
         </Modal>
@@ -51,471 +61,314 @@ export const Dashboard: React.FC<DashboardProps> = ({
     updateStudentPayment,
     attendanceRecords
 }) => {
-    // --- State ---
-    const [currentDate, setCurrentDate] = useState(new Date());
     const [paymentStudent, setPaymentStudent] = useState<Student | null>(null);
 
-    // --- Calculated Data ---
-    const totalStudents = students.length;
-    const totalProfessors = users.filter(u => u.role !== 'student').length;
-    const activeClasses = schedules.length;
-    const scholarshipCount = students.filter(s => s.paymentStatus === 'scholarship').length;
-
+    // --- Statistics Calculations ---
+    const activeStudents = students.filter(s => s.status !== 'blocked' && s.status !== 'pending');
+    const totalStudents = activeStudents.length;
+    const pendingPaymentsCount = activeStudents.filter(s => s.paymentStatus === 'unpaid').length;
+    const scholarshipCount = activeStudents.filter(s => s.isSocialProject || s.paymentStatus === 'scholarship').length;
+    
+    // Eligible for Graduation Logic
     const eligibleStudentsCount = useMemo(() => {
         let count = 0;
-        students.forEach(s => {
+        activeStudents.forEach(s => {
             const belt = graduations.find(g => g.id === s.beltId);
             if(belt) {
                const promoDate = s.lastPromotionDate || s.firstGraduationDate;
                if(promoDate) {
                    const months = (new Date().getFullYear() - new Date(promoDate).getFullYear()) * 12 + (new Date().getMonth() - new Date(promoDate).getMonth());
-                   if(months >= belt.minTimeInMonths) count++;
+                   if(months >= belt.minTimeInMonths && belt.minTimeInMonths > 0) count++;
                }
             }
         });
         return count;
-    }, [students, graduations]);
+    }, [activeStudents, graduations]);
 
-    const overdueStudents = useMemo(() => students.filter(s => s.paymentStatus === 'unpaid').slice(0, 5), [students]);
+    // --- Chart Data ---
 
-    // --- Charts Data ---
-    
-    // 1. Distribution by Belt
-    const beltDistributionData = useMemo(() => {
-        const counts: Record<string, number> = {};
-        students.forEach(s => {
-            const beltName = graduations.find(g => g.id === s.beltId)?.name || 'Outros';
-            counts[beltName] = (counts[beltName] || 0) + 1;
+    // 1. Belt Distribution
+    const beltData = useMemo(() => {
+        const counts: Record<string, { count: number, color: string }> = {};
+        
+        // Initialize with all graduations to keep order/colors correct even if 0 students
+        graduations.forEach(g => {
+            counts[g.name] = { count: 0, color: g.color };
         });
-        return Object.entries(counts).map(([name, value]) => ({ name, value }));
-    }, [students, graduations]);
 
-    const beltColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#6366f1'];
+        activeStudents.forEach(s => {
+            const belt = graduations.find(g => g.id === s.beltId);
+            if (belt) {
+                counts[belt.name].count += 1;
+            }
+        });
 
-    // 2. Financial Status
+        return Object.entries(counts)
+            .map(([name, data]) => ({ name, value: data.count, color: data.color }))
+            .filter(d => d.value > 0) // Hide empty segments for cleaner chart
+            .sort((a, b) => b.value - a.value); // Sort by count desc
+    }, [activeStudents, graduations]);
+
+    // 2. Financial Overview
     const financialData = [
-        { name: 'Em Dia', value: students.filter(s => s.paymentStatus === 'paid').length, color: '#10b981' },
-        { name: 'Pendente', value: students.filter(s => s.paymentStatus === 'unpaid').length, color: '#ef4444' },
-        { name: 'Bolsista', value: scholarshipCount, color: '#f59e0b' }
+        { name: 'Em Dia', value: activeStudents.filter(s => s.paymentStatus === 'paid').length, color: '#10b981' }, // emerald-500
+        { name: 'Pendente', value: pendingPaymentsCount, color: '#ef4444' }, // red-500
+        { name: 'Bolsista', value: scholarshipCount, color: '#3b82f6' } // blue-500
     ];
 
-    // 3. Attendance Trend (Last 6 months)
-    const attendanceTrendData = useMemo(() => {
+    // 3. Attendance Trend (Last 6 Months)
+    const attendanceData = useMemo(() => {
         const data = [];
         const today = new Date();
         for (let i = 5; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             const monthKey = d.toISOString().slice(0, 7); // YYYY-MM
+            
+            // Filter records for this month
             const monthRecords = attendanceRecords.filter(r => r.date.startsWith(monthKey));
-            const present = monthRecords.filter(r => r.status === 'present').length;
-            const total = monthRecords.length;
-            const percentage = total > 0 ? (present / total) * 100 : 0;
+            
+            // Calculate average attendance per scheduled class is complex without total classes held history
+            // Simplified metric: Total "present" records in that month
+            const presentCount = monthRecords.filter(r => r.status === 'present').length;
             
             data.push({
-                name: MONTH_NAMES[d.getMonth()].substring(0, 3),
-                percentage: Math.round(percentage)
+                name: MONTH_NAMES[d.getMonth()],
+                presencas: presentCount
             });
         }
         return data;
     }, [attendanceRecords]);
 
-    // --- Calendar Logic ---
-    const calendarDays = useMemo(() => {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const firstDayOfMonth = new Date(year, month, 1).getDay();
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const prevMonthLastDay = new Date(year, month, 0).getDate();
+    // --- Lists Data ---
+    const overdueStudents = useMemo(() => 
+        activeStudents.filter(s => s.paymentStatus === 'unpaid').slice(0, 5), 
+    [activeStudents]);
 
-        const days = [];
-        // Prev Month
-        for (let i = firstDayOfMonth - 1; i >= 0; i--) {
-            days.push({ day: prevMonthLastDay - i, isCurrent: false });
-        }
-        // Current Month
-        for (let i = 1; i <= daysInMonth; i++) {
-            days.push({ day: i, isCurrent: true, isToday: i === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear() });
-        }
-        // Next Month (Fill grid)
-        const remaining = 42 - days.length;
-        for (let i = 1; i <= remaining; i++) {
-            days.push({ day: i, isCurrent: false });
-        }
-        return days;
-    }, [currentDate]);
-
-    // --- Classes Today ---
     const todaysClasses = useMemo(() => {
         const todayName = DAYS_OF_WEEK_MAP[new Date().getDay()];
         return schedules.filter(s => s.dayOfWeek === todayName).sort((a,b) => a.startTime.localeCompare(b.startTime));
     }, [schedules]);
 
-    // --- Handlers ---
+    // --- Actions ---
     const handleConfirmPayment = async (studentId: string) => {
         await updateStudentPayment(studentId, 'paid');
         setPaymentStudent(null);
     };
 
     return (
-        <div className="dashboard-container -m-6 md:-m-10 p-6 md:p-10 min-h-screen text-slate-100">
-            <style>{`
-                :root {
-                    --primary: #0f172a;
-                    --secondary: #1e293b;
-                    --accent: #3b82f6;
-                    --accent-light: #60a5fa;
-                    --text: #f8fafc;
-                    --text-secondary: #cbd5e1;
-                    --success: #10b981;
-                    --warning: #f59e0b;
-                    --danger: #ef4444;
-                    --glass: rgba(255, 255, 255, 0.05);
-                    --border: rgba(255, 255, 255, 0.1);
-                }
+        <div className="space-y-6">
+            <h1 className="text-3xl font-bold text-slate-800">Visão Geral</h1>
 
-                .dashboard-container {
-                    background: linear-gradient(135deg, var(--primary), #0a0f1f);
-                }
-
-                .dashboard-grid {
-                    display: grid;
-                    grid-template-columns: repeat(12, 1fr);
-                    gap: 20px;
-                    grid-template-areas:
-                        "header header header header header header header header header header header header"
-                        "stats stats stats stats stats stats stats stats stats stats stats stats"
-                        "frequencia frequencia frequencia graduacao graduacao graduacao graduacao graduacao graduacao pendencias pendencias pendencias"
-                        "grafico1 grafico1 grafico1 grafico1 grafico2 grafico2 grafico2 grafico2 grafico3 grafico3 grafico3 grafico3"
-                        "calendario calendario aulas aulas aulas turmas turmas turmas turmas turmas turmas turmas"
-                        "footer footer footer footer footer footer footer footer footer footer footer footer";
-                }
-
-                .d-card {
-                    background: var(--glass);
-                    backdrop-filter: blur(10px);
-                    border: 1px solid var(--border);
-                    border-radius: 16px;
-                    padding: 20px;
-                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-                    transition: transform 0.3s ease, box-shadow 0.3s ease;
-                }
-
-                .d-card:hover {
-                    transform: translateY(-5px);
-                    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
-                }
-
-                .area-header { grid-area: header; }
-                .area-stats { grid-area: stats; }
-                .area-frequencia { grid-area: frequencia; }
-                .area-graduacao { grid-area: graduacao; }
-                .area-pendencias { grid-area: pendencias; }
-                .area-grafico1 { grid-area: grafico1; }
-                .area-grafico2 { grid-area: grafico2; }
-                .area-grafico3 { grid-area: grafico3; }
-                .area-calendario { grid-area: calendario; }
-                .area-aulas { grid-area: aulas; }
-                .area-turmas { grid-area: turmas; }
-                .area-footer { grid-area: footer; }
-
-                .stat-card {
-                    background: linear-gradient(135deg, var(--secondary), rgba(30, 41, 59, 0.7));
-                    position: relative;
-                    overflow: hidden;
-                }
-                .stat-card::before {
-                    content: '';
-                    position: absolute;
-                    top: 0; left: 0; width: 100%; height: 4px;
-                    background: linear-gradient(90deg, var(--accent), var(--accent-light));
-                }
-                .stat-card.success::before { background: linear-gradient(90deg, var(--success), #34d399); }
-                .stat-card.warning::before { background: linear-gradient(90deg, var(--warning), #fbbf24); }
-                .stat-card.danger::before { background: linear-gradient(90deg, var(--danger), #f87171); }
-
-                @media (max-width: 1200px) {
-                    .dashboard-grid {
-                        grid-template-columns: repeat(6, 1fr);
-                        grid-template-areas:
-                            "header header header header header header"
-                            "stats stats stats stats stats stats"
-                            "frequencia frequencia frequencia graduacao graduacao graduacao"
-                            "pendencias pendencias pendencias pendencias pendencias pendencias"
-                            "grafico1 grafico1 grafico1 grafico2 grafico2 grafico2"
-                            "grafico3 grafico3 grafico3 grafico3 grafico3 grafico3"
-                            "calendario calendario aulas aulas turmas turmas"
-                            "footer footer footer footer footer footer";
-                    }
-                }
-
-                @media (max-width: 768px) {
-                    .dashboard-grid {
-                        display: flex;
-                        flex-direction: column;
-                    }
-                }
-            `}</style>
-
-            <div className="dashboard-grid">
-                {/* Header */}
-                <div className="d-card area-header text-center border-b border-white/10 mb-5">
-                    <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-blue-200 mb-2">
-                        Dashboard Administrativo
-                    </h1>
-                    <p className="text-slate-400 text-lg">Visão geral completa do desempenho e atividades acadêmicas</p>
-                </div>
-
-                {/* Stats */}
-                <div className="area-stats grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    <div className="d-card stat-card text-center py-6">
-                        <h3 className="text-sm text-slate-400 uppercase tracking-widest mb-2">Total de Alunos</h3>
-                        <div className="text-4xl font-bold text-white">{totalStudents}</div>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <Card className="flex items-center p-5 border-l-4 border-l-blue-500">
+                    <div className="p-3 bg-blue-50 rounded-full mr-4">
+                        <Users className="w-6 h-6 text-blue-500" />
                     </div>
-                    <div className="d-card stat-card success text-center py-6">
-                        <h3 className="text-sm text-slate-400 uppercase tracking-widest mb-2">Professores</h3>
-                        <div className="text-4xl font-bold text-white">{totalProfessors}</div>
+                    <div>
+                        <p className="text-sm font-medium text-slate-500">Total de Alunos</p>
+                        <p className="text-2xl font-bold text-slate-800">{totalStudents}</p>
                     </div>
-                    <div className="d-card stat-card warning text-center py-6">
-                        <h3 className="text-sm text-slate-400 uppercase tracking-widest mb-2">Turmas Ativas</h3>
-                        <div className="text-4xl font-bold text-white">{activeClasses}</div>
-                    </div>
-                    <div className="d-card stat-card danger text-center py-6">
-                        <h3 className="text-sm text-slate-400 uppercase tracking-widest mb-2">Bolsistas</h3>
-                        <div className="text-4xl font-bold text-white">{scholarshipCount}</div>
-                    </div>
-                </div>
+                </Card>
 
-                {/* Frequencia */}
-                <div className="d-card area-frequencia">
-                    <h2 className="text-xl font-bold text-blue-300 flex items-center mb-5 after:content-[''] after:flex-1 after:h-[1px] after:bg-white/10 after:ml-4">
-                        Status de Graduação
-                    </h2>
-                    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center mt-4">
-                        <h3 className="text-emerald-400 mb-2 font-medium">Aptos para Graduação</h3>
-                        <div className="text-4xl font-bold text-white">{eligibleStudentsCount}</div>
+                <Card className="flex items-center p-5 border-l-4 border-l-red-500">
+                    <div className="p-3 bg-red-50 rounded-full mr-4">
+                        <AlertCircle className="w-6 h-6 text-red-500" />
                     </div>
-                </div>
+                    <div>
+                        <p className="text-sm font-medium text-slate-500">Pagamentos Pendentes</p>
+                        <p className="text-2xl font-bold text-slate-800">{pendingPaymentsCount}</p>
+                    </div>
+                </Card>
 
-                {/* Graduacao Breakdown */}
-                <div className="d-card area-graduacao">
-                    <h2 className="text-xl font-bold text-blue-300 flex items-center mb-5 after:content-[''] after:flex-1 after:h-[1px] after:bg-white/10 after:ml-4">
-                        Distribuição por Faixa
-                    </h2>
-                    <ul className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar pr-2">
-                        {beltDistributionData.map((item, idx) => (
-                            <li key={idx} className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                                <span className="text-slate-300">{item.name}</span>
-                                <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded text-xs font-bold">{item.value}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
+                <Card className="flex items-center p-5 border-l-4 border-l-emerald-500">
+                    <div className="p-3 bg-emerald-50 rounded-full mr-4">
+                        <TrendingUp className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-slate-500">Frequência Mensal</p>
+                        <p className="text-2xl font-bold text-slate-800">
+                            {attendanceData[attendanceData.length - 1]?.presencas || 0} <span className="text-xs font-normal text-slate-400">presenças</span>
+                        </p>
+                    </div>
+                </Card>
 
-                {/* Pendencias */}
-                <div className="d-card area-pendencias">
-                    <h2 className="text-xl font-bold text-blue-300 flex items-center mb-5 after:content-[''] after:flex-1 after:h-[1px] after:bg-white/10 after:ml-4">
-                        Pendências Financeiras
-                    </h2>
+                <Card className="flex items-center p-5 border-l-4 border-l-amber-500">
+                    <div className="p-3 bg-amber-50 rounded-full mr-4">
+                        <Award className="w-6 h-6 text-amber-500" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-slate-500">Elegíveis Graduação</p>
+                        <p className="text-2xl font-bold text-slate-800">{eligibleStudentsCount}</p>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Financial Chart */}
+                <Card className="lg:col-span-1 min-h-[300px] flex flex-col">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4">Status Financeiro</h3>
+                    <div className="flex-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={financialData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {financialData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                                    itemStyle={{ color: '#1e293b' }}
+                                />
+                                <Legend verticalAlign="bottom" height={36}/>
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
+
+                {/* Attendance Chart */}
+                <Card className="lg:col-span-2 min-h-[300px] flex flex-col">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4">Evolução da Frequência (Total de Presenças)</h3>
+                    <div className="flex-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={attendanceData}>
+                                <defs>
+                                    <linearGradient id="colorPresencas" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                                />
+                                <Area 
+                                    type="monotone" 
+                                    dataKey="presencas" 
+                                    stroke="#f59e0b" 
+                                    fillOpacity={1} 
+                                    fill="url(#colorPresencas)" 
+                                    strokeWidth={3}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Bottom Lists */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Pending Payments List */}
+                <Card className="lg:col-span-2">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Pagamentos Pendentes</h3>
+                        <Button size="sm" variant="secondary">Ver Todos</Button>
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr>
-                                    <th className="p-3 text-xs uppercase tracking-wider text-blue-300 border-b border-white/10">Nome</th>
-                                    <th className="p-3 text-xs uppercase tracking-wider text-blue-300 border-b border-white/10">Status</th>
-                                    <th className="p-3 text-xs uppercase tracking-wider text-blue-300 border-b border-white/10 text-right">Ação</th>
+                                <tr className="border-b border-slate-100 text-xs uppercase text-slate-500">
+                                    <th className="py-2 px-1 font-semibold">Aluno</th>
+                                    <th className="py-2 px-1 font-semibold">Vencimento</th>
+                                    <th className="py-2 px-1 font-semibold text-right">Ação</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {overdueStudents.map(s => (
-                                    <tr key={s.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                        <td className="p-3 text-sm text-slate-300">{s.name.split(' ')[0]}</td>
-                                        <td className="p-3">
-                                            <span className="px-2 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400">Pendente</span>
+                            <tbody className="text-sm">
+                                {overdueStudents.length > 0 ? overdueStudents.map(s => (
+                                    <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                        <td className="py-3 px-1">
+                                            <div className="flex items-center">
+                                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center mr-3 text-xs font-bold text-slate-600 overflow-hidden">
+                                                    {s.imageUrl ? <img src={s.imageUrl} className="w-full h-full object-cover" /> : s.name.charAt(0)}
+                                                </div>
+                                                <span className="font-medium text-slate-700">{s.name}</span>
+                                            </div>
                                         </td>
-                                        <td className="p-3 text-right">
+                                        <td className="py-3 px-1 text-slate-500">Dia {s.paymentDueDateDay}</td>
+                                        <td className="py-3 px-1 text-right">
                                             <button 
                                                 onClick={() => setPaymentStudent(s)}
-                                                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs transition-colors"
+                                                className="text-xs bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 px-3 py-1.5 rounded-full font-medium transition-colors"
                                             >
-                                                Pagar
+                                                Registrar
                                             </button>
                                         </td>
                                     </tr>
-                                ))}
-                                {overdueStudents.length === 0 && (
+                                )) : (
                                     <tr>
-                                        <td colSpan={3} className="p-4 text-center text-slate-500 text-sm">Nenhuma pendência recente.</td>
+                                        <td colSpan={3} className="py-8 text-center text-slate-400">
+                                            <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                                            Nenhuma pendência encontrada.
+                                        </td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </Card>
 
-                {/* Charts */}
-                <div className="d-card area-grafico1 flex flex-col">
-                    <h2 className="text-xl font-bold text-blue-300 flex items-center mb-4 after:content-[''] after:flex-1 after:h-[1px] after:bg-white/10 after:ml-4">
-                        Alunos por Faixa
-                    </h2>
-                    <div className="flex-1 min-h-[200px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={beltDistributionData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={50}
-                                    outerRadius={70}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    stroke="none"
-                                >
-                                    {beltDistributionData.map((_entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={beltColors[index % beltColors.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }} 
-                                    itemStyle={{ color: '#f8fafc' }}
-                                />
-                                <Legend />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                <div className="d-card area-grafico2 flex flex-col">
-                    <h2 className="text-xl font-bold text-blue-300 flex items-center mb-4 after:content-[''] after:flex-1 after:h-[1px] after:bg-white/10 after:ml-4">
-                        Status Financeiro
-                    </h2>
-                    <div className="flex-1 min-h-[200px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={financialData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                <YAxis stroke="#94a3b8" tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                <Tooltip 
-                                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-                                />
-                                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                                    {financialData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                <div className="d-card area-grafico3 flex flex-col">
-                    <h2 className="text-xl font-bold text-blue-300 flex items-center mb-4 after:content-[''] after:flex-1 after:h-[1px] after:bg-white/10 after:ml-4">
-                        Frequência (Tendência)
-                    </h2>
-                    <div className="flex-1 min-h-[200px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={attendanceTrendData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                <XAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                <YAxis stroke="#94a3b8" tick={{ fill: '#94a3b8' }} axisLine={false} tickLine={false} domain={[0, 100]} />
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-                                />
-                                <Line type="monotone" dataKey="percentage" stroke="#3b82f6" strokeWidth={3} dot={{r: 4, fill: '#3b82f6'}} />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Calendario */}
-                <div className="d-card area-calendario">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-bold capitalize text-slate-200">
-                            {currentDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+                {/* Today's Classes */}
+                <div className="space-y-6">
+                    <Card>
+                        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                            <Calendar className="w-5 h-5 mr-2 text-primary" /> Aulas de Hoje
                         </h3>
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
-                                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors text-white"
-                            >
-                                &lt;
-                            </button>
-                            <button 
-                                onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
-                                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors text-white"
-                            >
-                                &gt;
-                            </button>
+                        <div className="space-y-3">
+                            {todaysClasses.length > 0 ? todaysClasses.map(c => (
+                                <div key={c.id} className="flex items-center p-3 rounded-lg border border-slate-100 bg-slate-50 hover:border-primary/30 transition-colors">
+                                    <div className="bg-white text-primary font-bold px-3 py-1.5 rounded border border-slate-200 text-xs mr-3 shadow-sm">
+                                        {c.startTime}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-bold text-slate-800 truncate">{c.className}</div>
+                                        <div className="text-xs text-slate-500">
+                                            Prof. {users.find(u => u.id === c.professorId)?.name?.split(' ')[0]}
+                                        </div>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="text-center py-6 text-slate-400 text-sm">
+                                    Sem aulas agendadas para hoje.
+                                </div>
+                            )}
                         </div>
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 text-center">
-                        {['D','S','T','Q','Q','S','S'].map(d => (
-                            <div key={d} className="text-xs font-bold text-blue-400 py-2">{d}</div>
-                        ))}
-                        {calendarDays.map((d, i) => (
-                            <div 
-                                key={i} 
-                                className={`
-                                    py-2 text-xs rounded-md
-                                    ${!d.isCurrent ? 'text-slate-600' : 'text-slate-300'}
-                                    ${d.isToday ? 'bg-emerald-500/20 border border-emerald-500/40 text-white font-bold' : 'hover:bg-blue-500/10'}
-                                `}
-                            >
-                                {d.day}
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                    </Card>
 
-                {/* Aulas de Hoje */}
-                <div className="d-card area-aulas">
-                    <h2 className="text-xl font-bold text-blue-300 flex items-center mb-5 after:content-[''] after:flex-1 after:h-[1px] after:bg-white/10 after:ml-4">
-                        Aulas de Hoje
-                    </h2>
-                    <div className="space-y-3">
-                        {todaysClasses.length > 0 ? todaysClasses.map(c => (
-                            <div key={c.id} className="flex items-center p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                                <div className="bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold mr-3">
-                                    {c.startTime}
+                    {/* Belt Distribution Mini Chart */}
+                    <Card>
+                        <h3 className="text-lg font-bold text-slate-800 mb-4">Alunos por Faixa</h3>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                            {beltData.map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-sm">
+                                    <div className="flex items-center">
+                                        <span 
+                                            className="w-3 h-3 rounded-full mr-2 shadow-sm border border-black/10" 
+                                            style={{ backgroundColor: item.color }}
+                                        ></span>
+                                        <span className="text-slate-600">{item.name}</span>
+                                    </div>
+                                    <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-xs">
+                                        {item.value}
+                                    </span>
                                 </div>
-                                <div>
-                                    <div className="text-sm font-bold text-slate-200">{c.className}</div>
-                                    <div className="text-xs text-slate-500">Prof. {users.find(u => u.id === c.professorId)?.name?.split(' ')[0]}</div>
-                                </div>
-                            </div>
-                        )) : (
-                            <p className="text-slate-500 text-center text-sm py-4">Sem aulas hoje.</p>
-                        )}
-                    </div>
-                </div>
-
-                {/* Professores / Turmas */}
-                <div className="d-card area-turmas">
-                    <h2 className="text-xl font-bold text-blue-300 flex items-center mb-5 after:content-[''] after:flex-1 after:h-[1px] after:bg-white/10 after:ml-4">
-                        Professores Ativos
-                    </h2>
-                    <div className="space-y-3">
-                        {users.filter(u => u.role !== 'student').slice(0, 3).map(p => (
-                            <div key={p.id} className="flex items-center p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-400 flex items-center justify-center text-white font-bold mr-3 border border-white/10">
-                                    {p.name.charAt(0)}
-                                </div>
-                                <div>
-                                    <div className="text-sm font-bold text-slate-200">{p.name}</div>
-                                    <div className="text-xs text-slate-500 capitalize">{p.role.replace('_', ' ')}</div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div className="area-footer text-center text-slate-500 text-sm border-t border-white/10 pt-5 mt-5">
-                    <p>Dashboard Administrativo - Sistema de Gestão Acadêmica</p>
+                            ))}
+                        </div>
+                    </Card>
                 </div>
             </div>
 
-            {/* Modals */}
             <PaymentModal 
                 isOpen={!!paymentStudent} 
                 onClose={() => setPaymentStudent(null)} 
