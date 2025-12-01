@@ -9,8 +9,9 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Award, ChevronLeft, ChevronRight 
+    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard 
 } from 'lucide-react';
+import { StudentDashboard } from './StudentDashboard';
 
 interface DashboardProps {
   user: User;
@@ -57,8 +58,10 @@ const DayDetailsModal: React.FC<{
     date: Date;
     schedules: ClassSchedule[];
     users: User[];
+    students: Student[];
     onClose: () => void;
-}> = ({ date, schedules, users, onClose }) => {
+    onOpenDashboard: (student: Student) => void;
+}> = ({ date, schedules, users, students, onClose, onOpenDashboard }) => {
     const dayOfWeek = DAYS_OF_WEEK_MAP[date.getDay()];
     const daysSchedules = schedules
         .filter(s => s.dayOfWeek === dayOfWeek)
@@ -66,18 +69,59 @@ const DayDetailsModal: React.FC<{
 
     return (
         <Modal isOpen={true} onClose={onClose} title={`Aulas de ${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}`}>
-            <div className="space-y-3">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
                 {daysSchedules.length > 0 ? (
                     daysSchedules.map(schedule => {
                         const professor = users.find(u => u.id === schedule.professorId);
+                        const enrolledStudents = schedule.studentIds?.map(id => students.find(s => s.id === id)).filter((s): s is Student => !!s) || [];
+
                         return (
-                            <div key={schedule.id} className="p-3 border border-slate-100 rounded-lg bg-slate-50 flex justify-between items-center transition-colors hover:bg-slate-100">
-                                <div>
-                                    <div className="font-bold text-slate-800">{schedule.className}</div>
-                                    <div className="text-xs text-slate-500">Prof. {professor?.name || 'N/A'}</div>
+                            <div key={schedule.id} className="bg-slate-50 border border-slate-100 rounded-lg overflow-hidden">
+                                {/* Header da Turma */}
+                                <div className="p-3 bg-white border-b border-slate-100 flex justify-between items-center shadow-sm">
+                                    <div>
+                                        <div className="font-bold text-slate-800">{schedule.className}</div>
+                                        <div className="text-xs text-slate-500">Prof. {professor?.name || 'N/A'}</div>
+                                    </div>
+                                    <div className="bg-slate-100 px-2 py-1 rounded text-xs font-semibold text-slate-700">
+                                        {schedule.startTime} - {schedule.endTime}
+                                    </div>
                                 </div>
-                                <div className="bg-white px-2 py-1 rounded border border-slate-200 text-xs font-semibold text-slate-700 shadow-sm">
-                                    {schedule.startTime} - {schedule.endTime}
+
+                                {/* Lista de Alunos */}
+                                <div className="p-3">
+                                    <div className="text-xs font-semibold text-slate-400 uppercase mb-2 flex items-center">
+                                        <Users className="w-3 h-3 mr-1" />
+                                        Alunos Matriculados ({enrolledStudents.length})
+                                    </div>
+                                    {enrolledStudents.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {enrolledStudents.map(student => (
+                                                <div key={student.id} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-slate-100">
+                                                    <div className="flex items-center">
+                                                        <img 
+                                                            src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
+                                                            alt={student.name} 
+                                                            className="w-6 h-6 rounded-full mr-2 object-cover"
+                                                        />
+                                                        <span className="text-slate-700 font-medium">{student.name}</span>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => onOpenDashboard(student)}
+                                                        className="text-xs flex items-center bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded transition-colors border border-blue-200"
+                                                        title="Abrir Dashboard do Aluno"
+                                                    >
+                                                        <LayoutDashboard className="w-3 h-3 mr-1" />
+                                                        Dash
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-xs text-slate-400 italic text-center py-2">
+                                            Nenhum aluno vinculado a esta turma.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -96,7 +140,12 @@ const DayDetailsModal: React.FC<{
 };
 
 // --- Calendar Widget ---
-const CalendarWidget: React.FC<{ schedules: ClassSchedule[]; users: User[] }> = ({ schedules, users }) => {
+const CalendarWidget: React.FC<{ 
+    schedules: ClassSchedule[]; 
+    users: User[]; 
+    students: Student[];
+    onOpenDashboard: (student: Student) => void;
+}> = ({ schedules, users, students, onOpenDashboard }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
@@ -171,7 +220,9 @@ const CalendarWidget: React.FC<{ schedules: ClassSchedule[]; users: User[] }> = 
                     date={selectedDate} 
                     schedules={schedules} 
                     users={users} 
+                    students={students}
                     onClose={() => setSelectedDate(null)} 
+                    onOpenDashboard={onOpenDashboard}
                 />
             )}
         </Card>
@@ -184,9 +235,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     schedules, 
     graduations, 
     updateStudentPayment,
-    attendanceRecords
+    attendanceRecords,
+    themeSettings
 }) => {
     const [paymentStudent, setPaymentStudent] = useState<Student | null>(null);
+    const [dashboardStudent, setDashboardStudent] = useState<Student | null>(null);
 
     // --- Statistics Calculations ---
     const activeStudents = students.filter(s => s.status !== 'blocked' && s.status !== 'pending');
@@ -442,7 +495,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 {/* Calendar & Belt Distribution */}
                 <div className="space-y-6">
                     {/* Replaced 'Today's Classes' List with Calendar Widget */}
-                    <CalendarWidget schedules={schedules} users={users} />
+                    <CalendarWidget 
+                        schedules={schedules} 
+                        users={users} 
+                        students={students}
+                        onOpenDashboard={(student) => setDashboardStudent(student)} 
+                    />
 
                     {/* Belt Distribution Mini Chart */}
                     <Card>
@@ -473,6 +531,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 student={paymentStudent} 
                 onConfirm={handleConfirmPayment} 
             />
+
+            {/* Dashboard Student Modal */}
+            {dashboardStudent && (
+                <Modal 
+                    isOpen={!!dashboardStudent} 
+                    onClose={() => setDashboardStudent(null)} 
+                    title={`Dashboard de ${dashboardStudent.name}`}
+                    size="4xl"
+                >
+                    <StudentDashboard 
+                        student={dashboardStudent} 
+                        students={students} 
+                        graduations={graduations} 
+                        schedules={schedules} 
+                        themeSettings={themeSettings} 
+                        updateStudentPayment={updateStudentPayment} 
+                    />
+                </Modal>
+            )}
         </div>
     );
 };
