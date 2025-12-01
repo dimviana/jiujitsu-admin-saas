@@ -32,9 +32,17 @@ const generatePixPayload = (
     name: string, 
     city: string, 
     amount: number, 
-    txid: string
+    txid: string // Not used in this version to ensure compatibility (forced to ***)
 ): string => {
-    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    // Normalization: Remove accents, special chars, keep only A-Z, 0-9 and Space
+    const normalize = (str: string) => {
+        return str
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-zA-Z0-9 ]/g, "")
+            .toUpperCase();
+    };
+
     const formatField = (id: string, value: string) => {
         const len = value.length.toString().padStart(2, '0');
         return `${id}${len}${value}`;
@@ -44,7 +52,10 @@ const generatePixPayload = (
     const safeName = normalize(name).substring(0, 25); 
     const safeCity = normalize(city).substring(0, 15) || 'BRASILIA';
     const safeAmount = amount.toFixed(2);
-    const safeTxid = txid.replace(/[^a-zA-Z0-9]/g, '').substring(0, 25) || '***';
+    
+    // IMPORTANT: For static QRs, using '***' as txid ensures maximum compatibility with all banks.
+    // Specific IDs often fail if not strictly formatted or if the bank expects dynamic QR logic.
+    const safeTxid = '***'; 
 
     const gui = formatField('00', 'BR.GOV.BCB.PIX');
     const chave = formatField('01', safeKey);
@@ -80,21 +91,7 @@ const generatePixPayload = (
 const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProceedToUpload: () => void; themeSettings: ThemeSettings }> = ({ student, onClose, onProceedToUpload, themeSettings }) => {
     const pixCodeRef = useRef<HTMLInputElement>(null);
     const [copySuccess, setCopySuccess] = useState('');
-    const [countdown, setCountdown] = useState(300); 
-
-    useEffect(() => {
-        if (countdown > 0) {
-            const timer = setInterval(() => {
-                setCountdown(prev => prev - 1);
-            }, 1000);
-            return () => clearInterval(timer);
-        }
-    }, [countdown]);
     
-    const isExpired = countdown === 0;
-    const minutes = String(Math.floor(countdown / 60)).padStart(2, '0');
-    const seconds = String(countdown % 60).padStart(2, '0');
-
     const brCode = useMemo(() => {
         const activePixKey = themeSettings.efiEnabled ? themeSettings.efiPixKey : themeSettings.pixKey;
 
@@ -102,16 +99,12 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
             return null;
         }
         
-        const cleanId = student.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8); 
-        const timestamp = Date.now().toString().slice(-6); 
-        const rawTxid = `JJ${cleanId}${timestamp}`;
-
         return generatePixPayload(
             activePixKey,
             themeSettings.pixHolderName,
             "SAAS", 
             themeSettings.monthlyFeeAmount,
-            rawTxid
+            "" // Placeholder
         );
     }, [themeSettings, student]);
 
@@ -142,33 +135,26 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
     return (
         <Modal isOpen={true} onClose={onClose} title="Pagamento via PIX">
             <div className="space-y-4 text-center">
-                 {isExpired ? (
-                    <div className="flex flex-col items-center justify-center p-8">
-                        <h3 className="text-xl font-bold text-slate-800">Código PIX Expirado</h3>
-                        <Button onClick={onClose} className="mt-6">Fechar</Button>
-                    </div>
-                ) : (
-                    <>
-                        <div className="bg-amber-100 text-amber-800 font-bold p-3 rounded-lg">
-                            Este código expira em: {minutes}:{seconds}
-                        </div>
-                        <p className="text-slate-600">Pague a mensalidade no valor de <span className="font-bold">{themeSettings.monthlyFeeAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>.</p>
-                        
-                        <div className="flex justify-center my-4">
-                            <img src={qrCodeUrl} alt="PIX QR Code" className="border-4 border-slate-200 rounded-lg"/>
-                        </div>
+                <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-sm">
+                    Escaneie o QR Code abaixo com o aplicativo do seu banco ou copie o código "Pix Copia e Cola".
+                </div>
+                <p className="text-slate-600">Valor da Mensalidade: <span className="font-bold text-lg text-slate-800">{themeSettings.monthlyFeeAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
+                
+                <div className="flex justify-center my-4">
+                    <img src={qrCodeUrl} alt="PIX QR Code" className="border-4 border-slate-200 rounded-lg shadow-sm"/>
+                </div>
 
-                        <div className="space-y-1 text-left">
-                            <div className="flex gap-2">
-                                <Input readOnly value={brCode} ref={pixCodeRef} />
-                                <Button onClick={handleCopy} variant="secondary">{copySuccess || 'Copiar'}</Button>
-                            </div>
-                        </div>
-                         <div className="mt-6 pt-6 border-t border-slate-200 flex flex-col items-center">
-                             <Button onClick={onProceedToUpload}>Anexar Comprovante</Button>
-                         </div>
-                    </>
-                )}
+                <div className="space-y-2 text-left">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Código Pix Copia e Cola</label>
+                    <div className="flex gap-2">
+                        <Input readOnly value={brCode} ref={pixCodeRef} />
+                        <Button onClick={handleCopy} variant="secondary">{copySuccess || 'Copiar'}</Button>
+                    </div>
+                </div>
+                    <div className="mt-6 pt-6 border-t border-slate-200 flex flex-col items-center">
+                        <p className="text-sm text-slate-500 mb-3">Após realizar o pagamento, envie o comprovante.</p>
+                        <Button onClick={onProceedToUpload} className="w-full sm:w-auto">Já paguei, enviar Comprovante</Button>
+                    </div>
             </div>
         </Modal>
     );
@@ -502,21 +488,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     const shouldShowPaymentButton = useMemo(() => {
         if (!studentData) return false;
         if (studentData.paymentStatus === 'scholarship') return false;
-        if (studentData.paymentStatus !== 'unpaid') return false;
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const dueDateDay = studentData.paymentDueDateDay;
-        const dueDateThisMonth = new Date(today.getFullYear(), today.getMonth(), dueDateDay);
-        const isOverdue = today > dueDateThisMonth;
-        let upcomingDueDate = new Date(today.getFullYear(), today.getMonth(), dueDateDay);
-        if (today.getDate() > dueDateDay) {
-            upcomingDueDate.setMonth(upcomingDueDate.getMonth() + 1);
-        }
-        const timeDiff = upcomingDueDate.getTime() - today.getTime();
-        const daysUntilDue = Math.ceil(timeDiff / (1000 * 3600 * 24));
-        const isReminderPeriod = daysUntilDue <= 5;
-        return isOverdue || isReminderPeriod;
+        // Always show the button if payment is unpaid, regardless of the due date, to allow early payments.
+        return studentData.paymentStatus === 'unpaid';
     }, [studentData]);
 
     const handleConfirmPayment = async () => {
@@ -600,8 +573,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard icon={<Medal/>} title="Graduação Atual" color="#8B5CF6" value={graduation.name} />
                 <Card className="p-5">
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center">
+                    <div className="flex flex-col h-full justify-between">
+                        <div className="flex items-center mb-3">
                             <div className={`p-3 rounded-lg mr-4`} style={{ backgroundColor: `${statusInfo.color}1A`}}>
                                 <div style={{ color: statusInfo.color }}><DollarSign/></div>
                             </div>
@@ -616,15 +589,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                 )}
                             </div>
                         </div>
+                        
                         {shouldShowPaymentButton && !studentProp && !paymentSuccess && (
-                             <div className="flex flex-col gap-2">
-                                <Button size="sm" onClick={() => setPaymentModalState('pix')}>
-                                    <IconPix className="w-4 h-4 mr-2" />
+                             <div className="grid grid-cols-2 gap-2 mt-2">
+                                <Button size="sm" onClick={() => setPaymentModalState('pix')} className="bg-green-600 hover:bg-green-700 text-white border-none flex-1 justify-center">
+                                    <IconPix className="w-4 h-4 mr-1" />
                                     PIX
                                 </Button>
                                 {themeSettings.creditCardEnabled !== false && (
-                                    <Button size="sm" variant="secondary" onClick={() => setPaymentModalState('card')}>
-                                        <CreditCard className="w-4 h-4 mr-2" />
+                                    <Button size="sm" variant="secondary" onClick={() => setPaymentModalState('card')} className="flex-1 justify-center">
+                                        <CreditCard className="w-4 h-4 mr-1" />
                                         Cartão
                                     </Button>
                                 )}
