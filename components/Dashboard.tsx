@@ -274,7 +274,7 @@ const FinancialCalendarWidget: React.FC<{
         <Card className="flex flex-col">
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
                 <h3 className="text-lg font-bold text-slate-800 flex items-center">
-                    <FileText className="w-5 h-5 mr-2 text-green-600" /> Pagamentos (Comprovantes)
+                    <FileText className="w-5 h-5 mr-2 text-green-600" /> Pagamentos
                 </h3>
                 <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
                     <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600">
