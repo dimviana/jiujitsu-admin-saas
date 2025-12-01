@@ -3,7 +3,7 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
     PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts';
-import { Student, User, ClassSchedule, Graduation, ThemeSettings, AttendanceRecord, PaymentHistory } from '../types';
+import { Student, User, ClassSchedule, Graduation, ThemeSettings, AttendanceRecord } from '../types';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
@@ -204,8 +204,8 @@ const PaymentProofsModal: React.FC<{
                                 </div>
                             </div>
                             <button 
-                                className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full border border-blue-100 hover:bg-blue-100 transition-colors"
-                                title="Visualizar Comprovante"
+                                className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full border border-blue-100 hover:bg-blue-100 transition-colors cursor-default"
+                                title="Comprovante Anexado"
                             >
                                 <Paperclip className="w-3 h-3" />
                                 Comprovante
