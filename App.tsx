@@ -48,7 +48,7 @@ const AppContent: React.FC = () => {
       // Logged in logic
       return (
           <Layout user={user} onLogout={() => { logout(); setPage('home'); }} onNavigate={(p) => setPage(p as Page)} currentPage={page}>
-            {/* Event Popup triggers on layout load if user is logged in */}
+            {/* Event Popup is mounted here to ensure it checks for events as soon as the authenticated layout loads */}
             <EventPopup />
             
             {page === 'dashboard' && (

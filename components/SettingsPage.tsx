@@ -22,7 +22,6 @@ const SelectAudienceModal: React.FC<SelectAudienceModalProps> = ({ isOpen, onClo
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(currentSelection));
 
     // Combine Students and Users (Staff) into one list
-    // If General Admin, show everyone. If Academy Admin, filter by academy.
     const audienceList = useMemo(() => {
         let filteredUsers = users.filter(u => u.role !== 'student');
         let filteredStudents = students;
@@ -73,17 +72,17 @@ const SelectAudienceModal: React.FC<SelectAudienceModalProps> = ({ isOpen, onClo
                     />
                 </div>
 
-                <div className="max-h-[60vh] overflow-y-auto border border-slate-200 rounded-lg custom-scrollbar">
-                    <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center">
+                <div className="max-h-[50vh] overflow-y-auto border border-slate-200 rounded-lg custom-scrollbar">
+                    <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center sticky top-0 z-10">
                         <button onClick={handleSelectAll} className="flex items-center text-sm font-semibold text-slate-600">
                             {selectedIds.size === audienceList.length && audienceList.length > 0 ? <CheckSquare className="w-4 h-4 mr-2" /> : <Square className="w-4 h-4 mr-2" />}
                             Selecionar Todos
                         </button>
                         <span className="ml-auto text-xs text-slate-500">{selectedIds.size} selecionados</span>
                     </div>
-                    {audienceList.map(item => (
+                    {audienceList.length > 0 ? audienceList.map(item => (
                         <div key={item.id} className={`flex items-center p-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 cursor-pointer ${selectedIds.has(item.id) ? 'bg-amber-50' : ''}`} onClick={() => toggleId(item.id)}>
-                            <div className={`w-5 h-5 rounded border mr-3 flex items-center justify-center ${selectedIds.has(item.id) ? 'bg-primary border-primary text-white' : 'border-slate-300'}`}>
+                            <div className={`w-5 h-5 rounded border mr-3 flex items-center justify-center transition-colors ${selectedIds.has(item.id) ? 'bg-primary border-primary text-white' : 'border-slate-300'}`}>
                                 {selectedIds.has(item.id) && <span className="text-xs">✓</span>}
                             </div>
                             <div>
@@ -91,7 +90,9 @@ const SelectAudienceModal: React.FC<SelectAudienceModalProps> = ({ isOpen, onClo
                                 <p className="text-xs text-slate-500">{item.type}</p>
                             </div>
                         </div>
-                    ))}
+                    )) : (
+                        <div className="p-4 text-center text-slate-500">Nenhum membro encontrado.</div>
+                    )}
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
@@ -136,7 +137,6 @@ const SettingsPage: React.FC = () => {
 
     // --- Event Handlers ---
     const handleOpenEventModal = (event: Partial<SystemEvent> = {}) => {
-        // Default dates
         const now = new Date();
         const nextWeek = new Date();
         nextWeek.setDate(now.getDate() + 7);
@@ -149,7 +149,7 @@ const SettingsPage: React.FC = () => {
             active: true,
             targetAudience: [],
             ...event,
-            // Convert existing ISO string to input format if editing
+            // Format dates for input datetime-local: YYYY-MM-DDTHH:mm
             startDate: event.startDate ? new Date(event.startDate).toISOString().slice(0, 16) : now.toISOString().slice(0, 16),
             endDate: event.endDate ? new Date(event.endDate).toISOString().slice(0, 16) : nextWeek.toISOString().slice(0, 16)
         });
@@ -158,7 +158,7 @@ const SettingsPage: React.FC = () => {
 
     const handleSaveEvent = async () => {
         if (!currentEvent.title || !currentEvent.startDate || !currentEvent.endDate) {
-            alert("Preencha os campos obrigatórios.");
+            alert("Preencha o título e as datas do evento.");
             return;
         }
         await saveEvent(currentEvent as any);
@@ -175,7 +175,6 @@ const SettingsPage: React.FC = () => {
         }
     };
 
-    // --- Tabs UI ---
     const tabs = [
         { id: 'geral', label: 'Geral' },
         { id: 'cores', label: 'Cores' },
@@ -205,7 +204,7 @@ const SettingsPage: React.FC = () => {
             <Card>
                 {activeTab === 'eventos' ? (
                     <div>
-                        <div className="flex justify-between items-center mb-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                             <div>
                                 <h2 className="text-xl font-bold text-slate-800">Gerenciar Eventos (Popups)</h2>
                                 <p className="text-sm text-slate-500">Crie avisos e eventos que aparecem para os alunos ao logar.</p>
@@ -216,8 +215,8 @@ const SettingsPage: React.FC = () => {
                         <div className="space-y-4">
                             {events.length === 0 && <p className="text-slate-500 text-center py-8">Nenhum evento criado.</p>}
                             {events.map(event => (
-                                <div key={event.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                                    <div className="flex items-center gap-4">
+                                <div key={event.id} className="flex flex-col sm:flex-row items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg gap-4">
+                                    <div className="flex items-center gap-4 w-full">
                                         <div className="w-16 h-16 bg-slate-200 rounded-lg overflow-hidden flex-shrink-0">
                                             {event.imageUrl ? (
                                                 <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
@@ -225,22 +224,25 @@ const SettingsPage: React.FC = () => {
                                                 <div className="flex items-center justify-center h-full text-slate-400"><ImageIcon className="w-6 h-6"/></div>
                                             )}
                                         </div>
-                                        <div>
-                                            <h3 className="font-bold text-slate-800">{event.title}</h3>
-                                            <p className="text-xs text-slate-500 flex items-center gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-bold text-slate-800 truncate">{event.title}</h3>
+                                            <p className="text-xs text-slate-500 flex items-center gap-2 mb-1">
                                                 <Calendar className="w-3 h-3"/> {new Date(event.startDate).toLocaleDateString()} - {new Date(event.endDate).toLocaleDateString()}
                                             </p>
-                                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${event.active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>
-                                                {event.active ? 'Ativo' : 'Inativo'}
-                                            </span>
-                                            <span className="ml-2 text-[10px] text-slate-500">
-                                                {event.targetAudience && event.targetAudience.length > 0 
-                                                    ? `${event.targetAudience.length} destinatários` 
-                                                    : 'Todos'}
-                                            </span>
+                                            <div className="flex flex-wrap gap-2">
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-full ${event.active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>
+                                                    {event.active ? 'Ativo' : 'Inativo'}
+                                                </span>
+                                                <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-100 flex items-center">
+                                                    <Users className="w-3 h-3 mr-1" />
+                                                    {event.targetAudience && event.targetAudience.length > 0 
+                                                        ? `${event.targetAudience.length} destinatários` 
+                                                        : 'Todos'}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                                         <Button size="sm" variant="secondary" onClick={() => toggleEventStatus(event.id, !event.active)}>{event.active ? 'Desativar' : 'Ativar'}</Button>
                                         <Button size="sm" variant="secondary" onClick={() => handleOpenEventModal(event)}><Edit className="w-4 h-4"/></Button>
                                         <Button size="sm" variant="danger" onClick={() => { if(window.confirm('Excluir evento?')) deleteEvent(event.id) }}><Trash2 className="w-4 h-4"/></Button>
@@ -287,12 +289,12 @@ const SettingsPage: React.FC = () => {
                                     <Input label="Dias Lembrete (Antes)" name="reminderDaysBeforeDue" type="number" value={settings.reminderDaysBeforeDue} onChange={handleChange} />
                                     <Input label="Dias Atraso (Depois)" name="overdueDaysAfterDue" type="number" value={settings.overdueDaysAfterDue} onChange={handleChange} />
                                 </div>
-                                <h3 className="font-bold pt-4">Mercado Pago</h3>
+                                <h3 className="font-bold pt-4 text-slate-800">Mercado Pago</h3>
                                 <Input label="Access Token" name="mercadoPagoAccessToken" value={settings.mercadoPagoAccessToken || ''} onChange={handleChange} type="password" />
                                 <Input label="Public Key" name="mercadoPagoPublicKey" value={settings.mercadoPagoPublicKey || ''} onChange={handleChange} />
                                 <div className="flex items-center gap-2">
-                                    <input type="checkbox" name="creditCardEnabled" checked={settings.creditCardEnabled} onChange={handleChange} />
-                                    <label>Habilitar Pagamento com Cartão</label>
+                                    <input type="checkbox" name="creditCardEnabled" checked={settings.creditCardEnabled} onChange={handleChange} id="ccEnabled" className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"/>
+                                    <label htmlFor="ccEnabled" className="text-sm font-medium text-gray-700">Habilitar Pagamento com Cartão</label>
                                 </div>
                                 <Input label="Taxa Adicional Cartão (R$)" name="creditCardSurcharge" type="number" value={settings.creditCardSurcharge || 0} onChange={handleChange} />
                             </div>
@@ -301,15 +303,15 @@ const SettingsPage: React.FC = () => {
                         {activeTab === 'conteudo' && (
                             <div className="space-y-4">
                                 <p className="text-xs text-slate-500">Cole aqui o código HTML para as seções da página pública.</p>
-                                <div><label>Hero HTML</label><textarea name="heroHtml" value={settings.heroHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
-                                <div><label>Sobre HTML</label><textarea name="aboutHtml" value={settings.aboutHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
-                                <div><label>Contato (Texto Simples)</label><textarea name="contactHtml" value={settings.contactHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
+                                <div><label className="block text-sm font-medium mb-1">Hero HTML</label><textarea name="heroHtml" value={settings.heroHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
+                                <div><label className="block text-sm font-medium mb-1">Sobre HTML</label><textarea name="aboutHtml" value={settings.aboutHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
+                                <div><label className="block text-sm font-medium mb-1">Contato (Texto Simples)</label><textarea name="contactHtml" value={settings.contactHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
                             </div>
                         )}
 
                         {activeTab === 'midia' && (
                             <div className="space-y-4">
-                                <div className="flex items-center gap-4">
+                                <div className="flex flex-col gap-2">
                                     <label className="flex items-center"><input type="checkbox" name="publicPageEnabled" checked={settings.publicPageEnabled} onChange={handleChange} className="mr-2"/> Página Pública</label>
                                     <label className="flex items-center"><input type="checkbox" name="registrationEnabled" checked={settings.registrationEnabled} onChange={handleChange} className="mr-2"/> Cadastro Academia</label>
                                     <label className="flex items-center"><input type="checkbox" name="socialLoginEnabled" checked={settings.socialLoginEnabled} onChange={handleChange} className="mr-2"/> Login Social</label>
@@ -340,39 +342,42 @@ const SettingsPage: React.FC = () => {
 
             {/* Event Edit Modal */}
             <Modal isOpen={isEventModalOpen} onClose={() => setIsEventModalOpen(false)} title="Editor de Evento" size="4xl">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-h-[80vh] overflow-y-auto pr-2">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-h-[75vh] overflow-y-auto pr-2 custom-scrollbar">
                     <div className="space-y-4">
-                        <Input label="Título do Evento" value={currentEvent.title || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, title: e.target.value }))} placeholder="Ex: Seminário de Verão" />
+                        <Input label="Título do Evento" value={currentEvent.title || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, title: e.target.value }))} placeholder="Ex: Seminário de Verão" required />
                         <div className="grid grid-cols-2 gap-4">
-                            <Input label="Início Exibição" type="datetime-local" value={currentEvent.startDate || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, startDate: e.target.value }))} />
-                            <Input label="Fim Exibição" type="datetime-local" value={currentEvent.endDate || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, endDate: e.target.value }))} />
+                            <Input label="Início Exibição" type="datetime-local" value={currentEvent.startDate || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, startDate: e.target.value }))} required />
+                            <Input label="Fim Exibição" type="datetime-local" value={currentEvent.endDate || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, endDate: e.target.value }))} required />
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1">Descrição</label>
-                            <textarea className="w-full border rounded-lg p-2 h-32" value={currentEvent.description || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, description: e.target.value }))} placeholder="Detalhes do evento..."></textarea>
+                            <textarea className="w-full border border-slate-200 rounded-lg p-2 h-32 focus:ring-primary focus:border-primary outline-none" value={currentEvent.description || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, description: e.target.value }))} placeholder="Detalhes do evento..."></textarea>
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1">Imagem Principal</label>
                             <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'imageUrl')} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-amber-600"/>
-                            {currentEvent.imageUrl && <img src={currentEvent.imageUrl} alt="Preview" className="mt-2 h-20 object-contain border rounded" />}
+                            {currentEvent.imageUrl && <img src={currentEvent.imageUrl} alt="Preview" className="mt-2 h-32 object-contain border rounded bg-slate-50" />}
                         </div>
                     </div>
                     <div className="space-y-4">
                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                            <h3 className="font-bold text-sm mb-2">Rodapé do Popup</h3>
+                            <h3 className="font-bold text-sm mb-2 text-slate-700">Rodapé do Popup</h3>
                             <div className="flex gap-4 mb-2">
-                                <label className="flex items-center text-sm"><input type="radio" name="footerType" checked={currentEvent.footerType === 'text'} onChange={() => setCurrentEvent(prev => ({...prev, footerType: 'text'}))} className="mr-2"/> Texto</label>
-                                <label className="flex items-center text-sm"><input type="radio" name="footerType" checked={currentEvent.footerType === 'image'} onChange={() => setCurrentEvent(prev => ({...prev, footerType: 'image'}))} className="mr-2"/> Imagem</label>
+                                <label className="flex items-center text-sm cursor-pointer"><input type="radio" name="footerType" checked={currentEvent.footerType === 'text'} onChange={() => setCurrentEvent(prev => ({...prev, footerType: 'text'}))} className="mr-2"/> Texto</label>
+                                <label className="flex items-center text-sm cursor-pointer"><input type="radio" name="footerType" checked={currentEvent.footerType === 'image'} onChange={() => setCurrentEvent(prev => ({...prev, footerType: 'image'}))} className="mr-2"/> Imagem</label>
                             </div>
                             {currentEvent.footerType === 'text' ? (
                                 <Input label="Texto do Rodapé" value={currentEvent.footerContent || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, footerContent: e.target.value }))} />
                             ) : (
-                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'footerContent')} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-amber-600"/>
+                                <div>
+                                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'footerContent')} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-amber-600"/>
+                                    {currentEvent.footerContent && <img src={currentEvent.footerContent} alt="Footer Preview" className="mt-2 h-16 object-contain" />}
+                                </div>
                             )}
                         </div>
 
                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                            <h3 className="font-bold text-sm mb-2">Público Alvo</h3>
+                            <h3 className="font-bold text-sm mb-2 text-slate-700">Público Alvo</h3>
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-slate-600">
                                     {currentEvent.targetAudience && currentEvent.targetAudience.length > 0 
@@ -387,7 +392,7 @@ const SettingsPage: React.FC = () => {
 
                         <div>
                             <label className="block text-sm font-medium mb-1 text-purple-600">HTML Override (Avançado)</label>
-                            <textarea className="w-full border border-purple-200 rounded-lg p-2 h-32 bg-purple-50 font-mono text-xs" value={currentEvent.htmlContent || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, htmlContent: e.target.value }))} placeholder="<h1>Meu Popup Personalizado</h1>..."></textarea>
+                            <textarea className="w-full border border-purple-200 rounded-lg p-2 h-32 bg-purple-50 font-mono text-xs focus:ring-purple-500 focus:border-purple-500 outline-none" value={currentEvent.htmlContent || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, htmlContent: e.target.value }))} placeholder="<h1>Meu Popup Personalizado</h1>..."></textarea>
                             <p className="text-[10px] text-slate-500 mt-1">Se preenchido, substitui todo o layout padrão do popup.</p>
                         </div>
                     </div>
