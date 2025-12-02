@@ -606,39 +606,79 @@ app.post('/api/events/:id/status', async (req, res) => { try { await pool.query(
 // --- FJJPE Status Check Endpoint ---
 app.post('/api/fjjpe/check', async (req, res) => {
     const { id, cpf } = req.body;
-    if (!id || !cpf) return res.status(400).json({ message: 'ID and CPF required' });
+
+    if (!id || id === '0000') {
+        return res.json({ status: 'missing', message: 'Sem FJJPE' });
+    }
 
     try {
         const cleanCpf = cpf.replace(/\D/g, '');
+        
+        // 1. Prepare POST data
         const params = new URLSearchParams();
         params.append('id', id);
         params.append('cpf', cleanCpf);
-        params.append('ok', 'Acessar'); // Simulates button click
+        params.append('ok', 'Acessar '); // Exact button text from HTML
 
-        const response = await fetch('https://fjjpe.com.br/fjjpe/login.php', {
+        // 2. Perform POST request to verify user (login)
+        // 'redirect: manual' allows us to inspect headers and handle the redirect logic ourselves
+        const loginResponse = await fetch('https://fjjpe.com.br/fjjpe/verifica_usuario.php', {
             method: 'POST',
             body: params,
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            redirect: 'manual'
+        });
+
+        // 3. Extract Session Cookie
+        const rawCookies = loginResponse.headers.get('set-cookie');
+        const locationHeader = loginResponse.headers.get('location');
+
+        // Logic Check:
+        // If it redirects to 'index.php', it usually means login failed.
+        if (locationHeader && locationHeader.includes('index.php')) {
+             return res.json({ status: 'inactive', message: 'Inativo na FJJPE' });
+        }
+
+        // If it redirects (302) to another page (likely 'atualiza_atleta_res.php' or similar)
+        // OR if we just proceed to check the profile page using the cookie.
+        let targetUrl = 'https://fjjpe.com.br/fjjpe/atualiza_atleta_res.php';
+        
+        if (locationHeader && !locationHeader.includes('index.php')) {
+             // Use the redirect target if it's not index.php
+             if (locationHeader.startsWith('http')) {
+                 targetUrl = locationHeader;
+             } else {
+                 targetUrl = `https://fjjpe.com.br/fjjpe/${locationHeader}`;
+             }
+        }
+
+        // 4. Fetch the profile page with the session cookie
+        const profileResponse = await fetch(targetUrl, {
+            method: 'GET',
+            headers: {
+                'Cookie': rawCookies || '',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
         });
 
-        if (!response.ok) {
-            throw new Error(`External site returned ${response.status}`);
+        const html = await profileResponse.text();
+
+        // 5. Analyze HTML for "CADASTRO ATIVO" button
+        const isActive = html.includes('CADASTRO ATIVO');
+
+        if (isActive) {
+            return res.json({ status: 'active', message: 'Ativo na FJJPE' });
+        } else {
+            return res.json({ status: 'inactive', message: 'Inativo na FJJPE' });
         }
 
-        const text = await response.text();
-        
-        // Simple check for the specific success button/text
-        // <button type="button" class="btn btn-success">CADASTRO ATIVO</button>
-        const isActive = text.includes('CADASTRO ATIVO');
-        
-        res.json({ active: isActive });
     } catch (e) {
         console.error("FJJPE Check Error:", e);
-        // We return active: false but include error message for debug if needed
-        res.json({ active: false, error: e.message });
+        // Default to inactive/error state if connection fails
+        res.json({ status: 'inactive', error: e.message, message: 'Inativo na FJJPE' });
     }
 });
 

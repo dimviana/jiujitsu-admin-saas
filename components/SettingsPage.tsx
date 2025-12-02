@@ -5,7 +5,7 @@ import Card from './ui/Card';
 import Input from './ui/Input';
 import Button from './ui/Button';
 import { ThemeSettings, SystemEvent } from '../types';
-import { Image as ImageIcon, Calendar, Trash2, Edit, Search, CheckSquare, Square, Users, ShieldCheck, AlertTriangle, Loader } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Trash2, Edit, Search, CheckSquare, Square, Users, ShieldCheck, AlertTriangle, Loader, XCircle } from 'lucide-react';
 import Modal from './ui/Modal';
 
 // --- Sub-Component: Audience Selection Modal ---
@@ -119,7 +119,8 @@ const SettingsPage: React.FC = () => {
     // FJJPE Test State
     const [testFjjpeId, setTestFjjpeId] = useState('');
     const [testFjjpeCpf, setTestFjjpeCpf] = useState('');
-    const [testFjjpeResult, setTestFjjpeResult] = useState<'idle' | 'loading' | 'active' | 'inactive' | 'error'>('idle');
+    const [testFjjpeStatus, setTestFjjpeStatus] = useState<'idle' | 'loading' | 'active' | 'inactive' | 'missing' | 'error'>('idle');
+    const [testFjjpeMessage, setTestFjjpeMessage] = useState('');
 
     useEffect(() => {
         setSettings(themeSettings);
@@ -186,7 +187,7 @@ const SettingsPage: React.FC = () => {
             alert("Preencha o ID e o CPF.");
             return;
         }
-        setTestFjjpeResult('loading');
+        setTestFjjpeStatus('loading');
         try {
             const response = await fetch('/api/fjjpe/check', {
                 method: 'POST',
@@ -194,9 +195,11 @@ const SettingsPage: React.FC = () => {
                 body: JSON.stringify({ id: testFjjpeId, cpf: testFjjpeCpf })
             });
             const data = await response.json();
-            setTestFjjpeResult(data.active ? 'active' : 'inactive');
+            setTestFjjpeStatus(data.status);
+            setTestFjjpeMessage(data.message);
         } catch (error) {
-            setTestFjjpeResult('error');
+            setTestFjjpeStatus('error');
+            setTestFjjpeMessage('Erro ao conectar com servidor.');
         }
     };
 
@@ -360,22 +363,27 @@ const SettingsPage: React.FC = () => {
                                             <Input label="CPF (Somente Números)" value={testFjjpeCpf} onChange={(e) => setTestFjjpeCpf(e.target.value)} placeholder="Ex: 08323306478" />
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            <Button type="button" onClick={handleTestFjjpe} disabled={testFjjpeResult === 'loading'}>
-                                                {testFjjpeResult === 'loading' ? <><Loader className="w-4 h-4 animate-spin mr-2"/> Verificando...</> : 'Testar Integração'}
+                                            <Button type="button" onClick={handleTestFjjpe} disabled={testFjjpeStatus === 'loading'}>
+                                                {testFjjpeStatus === 'loading' ? <><Loader className="w-4 h-4 animate-spin mr-2"/> Verificando...</> : 'Testar Integração'}
                                             </Button>
                                             
-                                            {testFjjpeResult === 'active' && (
+                                            {testFjjpeStatus === 'active' && (
                                                 <span className="flex items-center text-green-600 font-bold bg-green-100 px-3 py-1.5 rounded-lg border border-green-200">
-                                                    <ShieldCheck className="w-5 h-5 mr-2" /> CADASTRO ATIVO
+                                                    <ShieldCheck className="w-5 h-5 mr-2" /> {testFjjpeMessage}
                                                 </span>
                                             )}
-                                            {testFjjpeResult === 'inactive' && (
+                                            {testFjjpeStatus === 'inactive' && (
                                                 <span className="flex items-center text-red-600 font-bold bg-red-100 px-3 py-1.5 rounded-lg border border-red-200">
-                                                    <AlertTriangle className="w-5 h-5 mr-2" /> INATIVO / NÃO ENCONTRADO
+                                                    <XCircle className="w-5 h-5 mr-2" /> {testFjjpeMessage}
                                                 </span>
                                             )}
-                                            {testFjjpeResult === 'error' && (
-                                                <span className="text-red-500 text-sm">Erro ao conectar com servidor.</span>
+                                            {testFjjpeStatus === 'missing' && (
+                                                <span className="flex items-center text-amber-600 font-bold bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200">
+                                                    <AlertTriangle className="w-5 h-5 mr-2" /> {testFjjpeMessage}
+                                                </span>
+                                            )}
+                                            {testFjjpeStatus === 'error' && (
+                                                <span className="text-red-500 text-sm">{testFjjpeMessage}</span>
                                             )}
                                         </div>
                                     </div>

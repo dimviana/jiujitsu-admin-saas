@@ -480,6 +480,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     const [paymentModalState, setPaymentModalState] = useState<'closed' | 'pix' | 'card' | 'upload'>('closed');
     const [paymentSuccess, setPaymentSuccess] = useState(false);
     const [fjjpeStatus, setFjjpeStatus] = useState<'loading' | 'active' | 'inactive' | 'missing'>('loading');
+    const [fjjpeMessage, setFjjpeMessage] = useState('Verificando...');
 
     const studentDataFromContext = useMemo(() => students.find(s => s.id === user?.studentId), [students, user]);
     const studentData = studentProp || studentDataFromContext;
@@ -516,6 +517,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         const checkFjjpe = async () => {
             if (!studentData.fjjpe_registration || studentData.fjjpe_registration === '0000') {
                 setFjjpeStatus('missing');
+                setFjjpeMessage('Sem FJJPE');
                 return;
             }
 
@@ -527,10 +529,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     body: JSON.stringify({ id: studentData.fjjpe_registration, cpf: studentData.cpf })
                 });
                 const data = await response.json();
-                setFjjpeStatus(data.active ? 'active' : 'inactive');
+                setFjjpeStatus(data.status); // 'active', 'inactive', 'missing'
+                setFjjpeMessage(data.message);
             } catch (error) {
                 console.error('Failed to check FJJPE status:', error);
-                setFjjpeStatus('inactive'); // Assume inactive/error state
+                setFjjpeStatus('inactive');
+                setFjjpeMessage('Inativo na FJJPE');
             }
         };
 
@@ -709,9 +713,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                 fjjpeStatus === 'inactive' ? 'text-red-600' :
                                 'text-amber-600'
                             }`}>
-                                {fjjpeStatus === 'active' ? 'Ativo na FJJPE' :
-                                 fjjpeStatus === 'inactive' ? 'Inativo na FJJPE' :
-                                 'Sem FJJPE'}
+                                {fjjpeMessage}
                             </p>
                         )}
                     </div>
