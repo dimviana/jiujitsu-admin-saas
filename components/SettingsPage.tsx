@@ -1,5 +1,5 @@
 
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from './ui/Card';
 import Input from './ui/Input';
@@ -22,10 +22,21 @@ const SelectAudienceModal: React.FC<SelectAudienceModalProps> = ({ isOpen, onClo
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(currentSelection));
 
     // Combine Students and Users (Staff) into one list
-    const audienceList = [
-        ...users.filter(u => u.role !== 'student' && u.academyId === user?.academyId).map(u => ({ id: u.id, name: u.name, type: 'Staff (' + u.role + ')' })),
-        ...students.filter(s => s.academyId === user?.academyId).map(s => ({ id: s.id, name: s.name, type: 'Aluno' }))
-    ].filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    // If General Admin, show everyone. If Academy Admin, filter by academy.
+    const audienceList = useMemo(() => {
+        let filteredUsers = users.filter(u => u.role !== 'student');
+        let filteredStudents = students;
+
+        if (user?.role !== 'general_admin') {
+            filteredUsers = filteredUsers.filter(u => u.academyId === user?.academyId);
+            filteredStudents = filteredStudents.filter(s => s.academyId === user?.academyId);
+        }
+
+        return [
+            ...filteredUsers.map(u => ({ id: u.id, name: u.name, type: `Staff (${u.role})` })),
+            ...filteredStudents.map(s => ({ id: s.id, name: s.name, type: 'Aluno' }))
+        ].filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [users, students, user, searchTerm]);
 
     const toggleId = (id: string) => {
         const newSet = new Set(selectedIds);
