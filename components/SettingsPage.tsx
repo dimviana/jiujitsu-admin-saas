@@ -5,7 +5,7 @@ import Card from './ui/Card';
 import Input from './ui/Input';
 import Button from './ui/Button';
 import { ThemeSettings, SystemEvent } from '../types';
-import { Image as ImageIcon, Calendar, Trash2, Edit, Search, CheckSquare, Square, Users } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Trash2, Edit, Search, CheckSquare, Square, Users, ShieldCheck, AlertTriangle, Loader } from 'lucide-react';
 import Modal from './ui/Modal';
 
 // --- Sub-Component: Audience Selection Modal ---
@@ -116,6 +116,11 @@ const SettingsPage: React.FC = () => {
     const [currentEvent, setCurrentEvent] = useState<Partial<SystemEvent>>({});
     const [isAudienceModalOpen, setIsAudienceModalOpen] = useState(false);
 
+    // FJJPE Test State
+    const [testFjjpeId, setTestFjjpeId] = useState('');
+    const [testFjjpeCpf, setTestFjjpeCpf] = useState('');
+    const [testFjjpeResult, setTestFjjpeResult] = useState<'idle' | 'loading' | 'active' | 'inactive' | 'error'>('idle');
+
     useEffect(() => {
         setSettings(themeSettings);
     }, [themeSettings]);
@@ -172,6 +177,26 @@ const SettingsPage: React.FC = () => {
                 setCurrentEvent(prev => ({ ...prev, [field]: reader.result as string }));
             };
             reader.readAsDataURL(e.target.files[0]);
+        }
+    };
+
+    // --- FJJPE Test Handler ---
+    const handleTestFjjpe = async () => {
+        if (!testFjjpeId || !testFjjpeCpf) {
+            alert("Preencha o ID e o CPF.");
+            return;
+        }
+        setTestFjjpeResult('loading');
+        try {
+            const response = await fetch('/api/fjjpe/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: testFjjpeId, cpf: testFjjpeCpf })
+            });
+            const data = await response.json();
+            setTestFjjpeResult(data.active ? 'active' : 'inactive');
+        } catch (error) {
+            setTestFjjpeResult('error');
         }
     };
 
@@ -321,6 +346,39 @@ const SettingsPage: React.FC = () => {
                                     <label className="block text-sm font-medium mb-1">Template Mensagem WhatsApp</label>
                                     <textarea name="whatsappMessageTemplate" value={settings.whatsappMessageTemplate || ''} onChange={handleChange} className="w-full border rounded p-2" placeholder="Olá {nome}, tudo bem?" />
                                     <p className="text-xs text-slate-500">Variáveis: {'{nome}'}, {'{aluno}'}</p>
+                                </div>
+
+                                <div className="border-t border-slate-200 pt-6 mt-6">
+                                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                                        <ShieldCheck className="w-5 h-5 mr-2 text-primary" />
+                                        Teste de Integração FJJPE
+                                    </h3>
+                                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
+                                        <p className="text-sm text-slate-600">Teste manualmente o status de um aluno no site da FJJPE.</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input label="Número de Registro" value={testFjjpeId} onChange={(e) => setTestFjjpeId(e.target.value)} placeholder="Ex: 6278" />
+                                            <Input label="CPF (Somente Números)" value={testFjjpeCpf} onChange={(e) => setTestFjjpeCpf(e.target.value)} placeholder="Ex: 08323306478" />
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <Button type="button" onClick={handleTestFjjpe} disabled={testFjjpeResult === 'loading'}>
+                                                {testFjjpeResult === 'loading' ? <><Loader className="w-4 h-4 animate-spin mr-2"/> Verificando...</> : 'Testar Integração'}
+                                            </Button>
+                                            
+                                            {testFjjpeResult === 'active' && (
+                                                <span className="flex items-center text-green-600 font-bold bg-green-100 px-3 py-1.5 rounded-lg border border-green-200">
+                                                    <ShieldCheck className="w-5 h-5 mr-2" /> CADASTRO ATIVO
+                                                </span>
+                                            )}
+                                            {testFjjpeResult === 'inactive' && (
+                                                <span className="flex items-center text-red-600 font-bold bg-red-100 px-3 py-1.5 rounded-lg border border-red-200">
+                                                    <AlertTriangle className="w-5 h-5 mr-2" /> INATIVO / NÃO ENCONTRADO
+                                                </span>
+                                            )}
+                                            {testFjjpeResult === 'error' && (
+                                                <span className="text-red-500 text-sm">Erro ao conectar com servidor.</span>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
