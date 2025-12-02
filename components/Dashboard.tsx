@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { 
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -9,7 +10,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail, FileText, Paperclip, Eye, Check, X
+    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail, FileText, Paperclip, Eye, Check, X, AlertTriangle
 } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 
@@ -618,6 +619,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return count;
     }, [activeStudents, graduations]);
 
+    // Missing FJJPE Students
+    const studentsWithoutFJJPE = useMemo(() => {
+        return activeStudents.filter(s => !s.fjjpe_registration || s.fjjpe_registration === '0000');
+    }, [activeStudents]);
+
     // --- Chart Data ---
 
     // 1. Belt Distribution
@@ -793,54 +799,84 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {/* Bottom Lists & Widgets */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                {/* Pending Payments List */}
-                <Card className="lg:col-span-1">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-bold text-slate-800">Pagamentos Pendentes</h3>
-                        <Button size="sm" variant="secondary">Ver Todos</Button>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-slate-100 text-xs uppercase text-slate-500">
-                                    <th className="py-2 px-1 font-semibold">Aluno</th>
-                                    <th className="py-2 px-1 font-semibold">Dia</th>
-                                    <th className="py-2 px-1 font-semibold text-right">Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-sm">
-                                {overdueStudents.length > 0 ? overdueStudents.map(s => (
-                                    <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                                        <td className="py-3 px-1">
-                                            <div className="flex items-center">
-                                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center mr-3 text-xs font-bold text-slate-600 overflow-hidden">
-                                                    {s.imageUrl ? <img src={s.imageUrl} className="w-full h-full object-cover" /> : s.name.charAt(0)}
+                <div className="lg:col-span-1 space-y-6">
+                    {/* Pending Payments List */}
+                    <Card>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold text-slate-800">Pagamentos Pendentes</h3>
+                            <Button size="sm" variant="secondary">Ver Todos</Button>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-slate-100 text-xs uppercase text-slate-500">
+                                        <th className="py-2 px-1 font-semibold">Aluno</th>
+                                        <th className="py-2 px-1 font-semibold">Dia</th>
+                                        <th className="py-2 px-1 font-semibold text-right">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="text-sm">
+                                    {overdueStudents.length > 0 ? overdueStudents.map(s => (
+                                        <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                                            <td className="py-3 px-1">
+                                                <div className="flex items-center">
+                                                    <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center mr-3 text-xs font-bold text-slate-600 overflow-hidden">
+                                                        {s.imageUrl ? <img src={s.imageUrl} className="w-full h-full object-cover" /> : s.name.charAt(0)}
+                                                    </div>
+                                                    <span className="font-medium text-slate-700 truncate w-20 sm:w-auto">{s.name.split(' ')[0]}</span>
                                                 </div>
-                                                <span className="font-medium text-slate-700 truncate w-20 sm:w-auto">{s.name.split(' ')[0]}</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-1 text-slate-500">{s.paymentDueDateDay}</td>
-                                        <td className="py-3 px-1 text-right">
-                                            <button 
-                                                onClick={() => setPaymentStudent(s)}
-                                                className="text-xs bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 px-3 py-1.5 rounded-full font-medium transition-colors"
-                                            >
-                                                Pagar
-                                            </button>
-                                        </td>
-                                    </tr>
-                                )) : (
-                                    <tr>
-                                        <td colSpan={3} className="py-8 text-center text-slate-400">
-                                            <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                                            Nenhuma pendência.
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </Card>
+                                            </td>
+                                            <td className="py-3 px-1 text-slate-500">{s.paymentDueDateDay}</td>
+                                            <td className="py-3 px-1 text-right">
+                                                <button 
+                                                    onClick={() => setPaymentStudent(s)}
+                                                    className="text-xs bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 px-3 py-1.5 rounded-full font-medium transition-colors"
+                                                >
+                                                    Pagar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={3} className="py-8 text-center text-slate-400">
+                                                <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                                                Nenhuma pendência.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
+
+                    {/* Students without FJJPE Widget */}
+                    <Card>
+                        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                            <AlertTriangle className="w-5 h-5 text-amber-500 mr-2" />
+                            Alunos sem FJJPE
+                        </h3>
+                        <div className="max-h-60 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                            {studentsWithoutFJJPE.length > 0 ? studentsWithoutFJJPE.map(s => (
+                                <div key={s.id} className="flex justify-between items-center p-2 bg-slate-50 rounded border border-slate-100">
+                                    <div className="flex items-center">
+                                        <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center mr-2 text-xs overflow-hidden">
+                                            {s.imageUrl ? <img src={s.imageUrl} className="w-full h-full object-cover" /> : s.name.charAt(0)}
+                                        </div>
+                                        <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">{s.name}</span>
+                                    </div>
+                                    <button 
+                                        onClick={() => setDashboardStudent(s)}
+                                        className="text-xs text-amber-600 hover:text-amber-800"
+                                    >
+                                        Ver
+                                    </button>
+                                </div>
+                            )) : (
+                                <p className="text-slate-400 text-center text-sm py-4">Todos os alunos possuem registro.</p>
+                            )}
+                        </div>
+                    </Card>
+                </div>
 
                 {/* Calendar, Belt Distribution & Payment Calendar */}
                 <div className="lg:col-span-2 space-y-6">

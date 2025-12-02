@@ -6,7 +6,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import StudentAttendanceChart from './charts/StudentAttendanceChart';
-import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap, HeartHandshake, PartyPopper } from 'lucide-react';
+import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap, HeartHandshake, PartyPopper, AlertTriangle, ShieldCheck, XCircle } from 'lucide-react';
 import { initMercadoPago } from '@mercadopago/sdk-react';
 import { AppContext } from '../context/AppContext';
 
@@ -479,6 +479,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 }) => {
     const [paymentModalState, setPaymentModalState] = useState<'closed' | 'pix' | 'card' | 'upload'>('closed');
     const [paymentSuccess, setPaymentSuccess] = useState(false);
+    const [fjjpeStatus, setFjjpeStatus] = useState<'loading' | 'active' | 'inactive' | 'missing'>('loading');
 
     const studentDataFromContext = useMemo(() => students.find(s => s.id === user?.studentId), [students, user]);
     const studentData = studentProp || studentDataFromContext;
@@ -508,6 +509,34 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         return `${timeRemaining} meses`;
     }, [graduation, nextGraduation, trainingMonths, studentData]);
     
+    // --- FJJPE Status Logic ---
+    useEffect(() => {
+        if (!studentData) return;
+
+        const checkFjjpe = async () => {
+            if (!studentData.fjjpe_registration || studentData.fjjpe_registration === '0000') {
+                setFjjpeStatus('missing');
+                return;
+            }
+
+            setFjjpeStatus('loading');
+            try {
+                const response = await fetch('/api/fjjpe/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: studentData.fjjpe_registration, cpf: studentData.cpf })
+                });
+                const data = await response.json();
+                setFjjpeStatus(data.active ? 'active' : 'inactive');
+            } catch (error) {
+                console.error('Failed to check FJJPE status:', error);
+                setFjjpeStatus('inactive'); // Assume inactive/error state
+            }
+        };
+
+        checkFjjpe();
+    }, [studentData]);
+
     const studentSchedules = useMemo(() => {
       if (!studentData) return [];
       const today = new Date();
@@ -655,6 +684,38 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </Card>
                 <StatCard icon={<Calendar/>} title="Tempo de Treino" color="#3B82F6" value={`${Math.floor(trainingMonths/12)}a ${trainingMonths%12}m`} />
                 <StatCard icon={<Award/>} title="Próxima Graduação" color="#F59E0B" value={timeToNextGrad} />
+                
+                {/* FJJPE Status Widget */}
+                <Card className="flex items-center p-5">
+                    <div className={`p-3 rounded-lg mr-4 ${
+                        fjjpeStatus === 'active' ? 'bg-green-100 text-green-600' :
+                        fjjpeStatus === 'inactive' ? 'bg-red-100 text-red-600' :
+                        'bg-amber-100 text-amber-600'
+                    }`}>
+                        {fjjpeStatus === 'active' ? <ShieldCheck className="w-6 h-6" /> :
+                         fjjpeStatus === 'inactive' ? <XCircle className="w-6 h-6" /> :
+                         <AlertTriangle className="w-6 h-6" />}
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-slate-500">Status FJJPE</p>
+                        {fjjpeStatus === 'loading' ? (
+                            <div className="flex items-center gap-2">
+                                <Loader className="w-4 h-4 animate-spin text-slate-400" />
+                                <span className="text-slate-400 text-sm">Verificando...</span>
+                            </div>
+                        ) : (
+                            <p className={`text-xl font-bold ${
+                                fjjpeStatus === 'active' ? 'text-green-600' :
+                                fjjpeStatus === 'inactive' ? 'text-red-600' :
+                                'text-amber-600'
+                            }`}>
+                                {fjjpeStatus === 'active' ? 'Ativo na FJJPE' :
+                                 fjjpeStatus === 'inactive' ? 'Inativo na FJJPE' :
+                                 'Sem FJJPE'}
+                            </p>
+                        )}
+                    </div>
+                </Card>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

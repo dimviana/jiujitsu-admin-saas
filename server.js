@@ -603,6 +603,44 @@ app.post('/api/events', async (req, res) => {
 app.delete('/api/events/:id', deleteHandler('events'));
 app.post('/api/events/:id/status', async (req, res) => { try { await pool.query('UPDATE events SET active = ? WHERE id = ?', [req.body.active ? 1 : 0, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); } });
 
+// --- FJJPE Status Check Endpoint ---
+app.post('/api/fjjpe/check', async (req, res) => {
+    const { id, cpf } = req.body;
+    if (!id || !cpf) return res.status(400).json({ message: 'ID and CPF required' });
+
+    try {
+        const cleanCpf = cpf.replace(/\D/g, '');
+        const params = new URLSearchParams();
+        params.append('id', id);
+        params.append('cpf', cleanCpf);
+        params.append('ok', 'Acessar'); // Simulates button click
+
+        const response = await fetch('https://fjjpe.com.br/fjjpe/login.php', {
+            method: 'POST',
+            body: params,
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`External site returned ${response.status}`);
+        }
+
+        const text = await response.text();
+        
+        // Simple check for the specific success button/text
+        // <button type="button" class="btn btn-success">CADASTRO ATIVO</button>
+        const isActive = text.includes('CADASTRO ATIVO');
+        
+        res.json({ active: isActive });
+    } catch (e) {
+        console.error("FJJPE Check Error:", e);
+        // We return active: false but include error message for debug if needed
+        res.json({ active: false, error: e.message });
+    }
+});
 
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'dist', 'index.html')); });
 app.listen(PORT, () => { console.log(`Server running on port ${PORT}`); });
