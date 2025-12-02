@@ -7,11 +7,12 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import { StudentDashboard } from './StudentDashboard';
-import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, MessageCircle, HeartHandshake, ChevronLeft, ChevronRight, Filter, ArrowUpCircle } from 'lucide-react';
+import { Award as IconAward, FileText, Baby, Briefcase, Paperclip, MessageCircle, HeartHandshake, ChevronLeft, ChevronRight, Filter, ArrowUpCircle, ListChecks } from 'lucide-react';
 import { PhotoUploadModal } from './ui/PhotoUploadModal';
 import { generateCertificate } from '../services/certificateService';
 import { ConfirmationModal } from './ui/ConfirmationModal';
 import { DocumentModal } from './ui/DocumentModal';
+import { GraduationListModal } from './GraduationListModal';
 
 const validateCPF = (cpf: string): boolean => {
     if (typeof cpf !== 'string') return false;
@@ -373,6 +374,9 @@ const StudentsPage: React.FC = () => {
     const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
     const [studentForDocuments, setStudentForDocuments] = useState<Student | null>(null);
 
+    // Graduation List Modal State
+    const [isGraduationListModalOpen, setIsGraduationListModalOpen] = useState(false);
+
     // Reset pagination when filter changes
     useEffect(() => {
         setCurrentPage(1);
@@ -726,6 +730,10 @@ const StudentsPage: React.FC = () => {
                             ))}
                         </select>
                     </div>
+                    <Button variant="secondary" onClick={() => setIsGraduationListModalOpen(true)}>
+                        <ListChecks className="w-4 h-4 mr-2" />
+                        Lista de Graduação
+                    </Button>
                     <Button onClick={() => handleOpenModal({})}>Adicionar Aluno</Button>
                 </div>
             </div>
@@ -1046,6 +1054,13 @@ const StudentsPage: React.FC = () => {
                     onSave={handleSavePhoto}
                     currentImage={studentForPhoto.imageUrl}
                     title="Atualizar Foto de Perfil"
+                />
+            )}
+
+            {isGraduationListModalOpen && (
+                <GraduationListModal 
+                    isOpen={isGraduationListModalOpen}
+                    onClose={() => setIsGraduationListModalOpen(false)}
                 />
             )}
 
