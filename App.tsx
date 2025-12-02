@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, useEffect } from 'react';
 import { AppProvider, AppContext } from './context/AppContext';
 import { Layout } from './components/Layout';
@@ -17,6 +18,7 @@ import AcademiesPage from './components/AcademiesPage'; // New Import
 import { SCHEDULES } from './constants'; // Fallback
 import Notification from './components/ui/Notification';
 import ProfilePage from './components/ProfilePage';
+import { EventPopup } from './components/EventPopup';
 
 type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'settings' | 'profile' | 'academies'; // New Page
 
@@ -46,6 +48,9 @@ const AppContent: React.FC = () => {
       // Logged in logic
       return (
           <Layout user={user} onLogout={() => { logout(); setPage('home'); }} onNavigate={(p) => setPage(p as Page)} currentPage={page}>
+            {/* Event Popup triggers on layout load if user is logged in */}
+            <EventPopup />
+            
             {page === 'dashboard' && (
                 user.role === 'student' ? (
                     <StudentDashboard 

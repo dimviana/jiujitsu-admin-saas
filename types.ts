@@ -1,3 +1,4 @@
+
 export type Role = 'general_admin' | 'academy_admin' | 'student';
 
 export type DayOfWeek = 'Domingo' | 'Segunda-feira' | 'Terça-feira' | 'Quarta-feira' | 'Quinta-feira' | 'Sexta-feira' | 'Sábado';
@@ -42,7 +43,7 @@ export interface ThemeSettings {
   mercadoPagoAccessToken?: string;
   mercadoPagoPublicKey?: string;
   creditCardEnabled?: boolean;
-  creditCardSurcharge?: number; // Novo campo: Acréscimo em Reais
+  creditCardSurcharge?: number;
 
   efiClientId?: string;
   efiClientSecret?: string;
@@ -77,7 +78,22 @@ export interface ThemeSettings {
 
   // App Settings
   appName?: string;
-  appIcon?: string; // Base64
+  appIcon?: string;
+}
+
+export interface SystemEvent {
+    id: string;
+    academyId?: string;
+    title: string;
+    description: string;
+    imageUrl?: string;
+    footerType: 'text' | 'image';
+    footerContent?: string;
+    htmlContent?: string;
+    startDate: string;
+    endDate: string;
+    active: boolean;
+    targetAudience?: string[]; // List of user IDs (students or admins) who can see this event
 }
 
 export interface Academy {
@@ -89,8 +105,8 @@ export interface Academy {
   professorId?: string;
   imageUrl?: string;
   email: string;
-  password?: string; // In real app, never expose this on frontend
-  settings?: Partial<ThemeSettings>; // JSON override for specific academy settings
+  password?: string;
+  settings?: Partial<ThemeSettings>;
   status?: 'pending' | 'active' | 'rejected' | 'blocked';
   allowStudentRegistration?: boolean;
 }
@@ -113,15 +129,15 @@ export interface Graduation {
   id: string;
   name: string;
   color: string;
-  color2?: string; // Middle color for gradient
-  color3?: string; // End color for gradient
+  color2?: string;
+  color3?: string;
   minTimeInMonths: number;
   rank: number;
   type: 'adult' | 'kids';
   minAge?: number;
   maxAge?: number;
-  gradientAngle?: number; // 0-360 degrees
-  gradientHardness?: number; // 0-100% (transição suave vs dura)
+  gradientAngle?: number;
+  gradientHardness?: number;
 }
 
 export interface PaymentHistory {
@@ -135,7 +151,7 @@ export interface StudentDocument {
     id: string;
     name: string;
     type: 'pdf' | 'image';
-    url: string; // Base64 or URL
+    url: string;
     uploadDate: string;
 }
 
@@ -157,7 +173,7 @@ export interface Student {
   imageUrl?: string;
   stripes: number;
   isCompetitor: boolean;
-  medals?: any; // JSON string or object
+  medals?: any;
   paymentHistory?: PaymentHistory[];
   lastCompetition?: string;
   password?: string;

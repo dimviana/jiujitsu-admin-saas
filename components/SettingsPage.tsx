@@ -1,616 +1,322 @@
-import React, { useContext, useState, FormEvent, useEffect, useRef } from 'react';
-import { AppContext } from '../context/AppContext';
-import Card from '../components/ui/Card';
-import Input from '../components/ui/Input';
-import Button from '../components/ui/Button';
-import { Smartphone, Upload, Download } from 'lucide-react';
 
-const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }> = ({ label, id, ...props }) => (
-    <div>
-        <label htmlFor={id} className="block text-sm font-medium text-[var(--theme-text-primary)]/80 mb-1">{label}</label>
-        <textarea
-            id={id}
-            rows={6}
-            className="w-full bg-[var(--theme-bg)] border border-[var(--theme-text-primary)]/20 text-[var(--theme-text-primary)] rounded-md px-3 py-2 focus:ring-[var(--theme-accent)] focus:border-[var(--theme-accent)] transition duration-150 ease-in-out font-mono text-sm"
-            {...props}
-        />
-    </div>
-);
+import React, { useState, useContext, useEffect, useRef } from 'react';
+import { AppContext } from '../context/AppContext';
+import Card from './ui/Card';
+import Input from './ui/Input';
+import Button from './ui/Button';
+import { ThemeSettings, SystemEvent, Student, User } from '../types';
+import { Upload, Image as ImageIcon, Calendar, Trash2, Edit, Eye, Search, CheckSquare, Square, Users } from 'lucide-react';
+import Modal from './ui/Modal';
+
+// --- Sub-Component: Audience Selection Modal ---
+interface SelectAudienceModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    currentSelection: string[];
+    onConfirm: (selection: string[]) => void;
+}
+
+const SelectAudienceModal: React.FC<SelectAudienceModalProps> = ({ isOpen, onClose, currentSelection, onConfirm }) => {
+    const { students, users, user } = useContext(AppContext);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(currentSelection));
+
+    // Combine Students and Users (Staff) into one list
+    const audienceList = [
+        ...users.filter(u => u.role !== 'student' && u.academyId === user?.academyId).map(u => ({ id: u.id, name: u.name, type: 'Staff (' + u.role + ')' })),
+        ...students.filter(s => s.academyId === user?.academyId).map(s => ({ id: s.id, name: s.name, type: 'Aluno' }))
+    ].filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const toggleId = (id: string) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedIds(newSet);
+    };
+
+    const handleSelectAll = () => {
+        if (selectedIds.size === audienceList.length) {
+            setSelectedIds(new Set());
+        } else {
+            const allIds = audienceList.map(i => i.id);
+            setSelectedIds(new Set(allIds));
+        }
+    };
+
+    const handleSave = () => {
+        onConfirm(Array.from(selectedIds));
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Quem vai ver este evento?" size="lg">
+            <div className="space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <input
+                        type="text"
+                        placeholder="Buscar por nome..."
+                        className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+
+                <div className="max-h-[60vh] overflow-y-auto border border-slate-200 rounded-lg custom-scrollbar">
+                    <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center">
+                        <button onClick={handleSelectAll} className="flex items-center text-sm font-semibold text-slate-600">
+                            {selectedIds.size === audienceList.length && audienceList.length > 0 ? <CheckSquare className="w-4 h-4 mr-2" /> : <Square className="w-4 h-4 mr-2" />}
+                            Selecionar Todos
+                        </button>
+                        <span className="ml-auto text-xs text-slate-500">{selectedIds.size} selecionados</span>
+                    </div>
+                    {audienceList.map(item => (
+                        <div key={item.id} className={`flex items-center p-3 hover:bg-slate-50 border-b border-slate-50 last:border-0 cursor-pointer ${selectedIds.has(item.id) ? 'bg-amber-50' : ''}`} onClick={() => toggleId(item.id)}>
+                            <div className={`w-5 h-5 rounded border mr-3 flex items-center justify-center ${selectedIds.has(item.id) ? 'bg-primary border-primary text-white' : 'border-slate-300'}`}>
+                                {selectedIds.has(item.id) && <span className="text-xs">✓</span>}
+                            </div>
+                            <div>
+                                <p className="font-medium text-slate-800 text-sm">{item.name}</p>
+                                <p className="text-xs text-slate-500">{item.type}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                    <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleSave}>Confirmar Seleção</Button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+// --- Settings Page ---
 
 const SettingsPage: React.FC = () => {
-    const { themeSettings, setThemeSettings, activityLogs, users, user, academies } = useContext(AppContext);
-    const [settings, setSettings] = useState(themeSettings);
-    const [monthlyFeeInput, setMonthlyFeeInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
-    const [surchargeInput, setSurchargeInput] = useState((themeSettings.creditCardSurcharge || 0).toFixed(2));
-    const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos' | 'mensagens' | 'mobile' | 'app'>('system');
-    const certInputRef = useRef<HTMLInputElement>(null);
-    const appIconInputRef = useRef<HTMLInputElement>(null);
+    const { themeSettings, setThemeSettings, user, events, saveEvent, deleteEvent, toggleEventStatus } = useContext(AppContext);
+    const [activeTab, setActiveTab] = useState<'geral' | 'cores' | 'conteudo' | 'financeiro' | 'midia' | 'direitos' | 'eventos'>('geral');
+    const [settings, setSettings] = useState<ThemeSettings>(themeSettings);
+    
+    // Event State
+    const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+    const [currentEvent, setCurrentEvent] = useState<Partial<SystemEvent>>({});
+    const [isAudienceModalOpen, setIsAudienceModalOpen] = useState(false);
 
-    const isAcademyAdmin = user?.role === 'academy_admin';
-    const currentAcademyName = isAcademyAdmin ? academies.find(a => a.id === user.academyId)?.name : 'Sistema Global';
-
-    // Sync local state when themeSettings from context changes
     useEffect(() => {
         setSettings(themeSettings);
-        setMonthlyFeeInput(themeSettings.monthlyFeeAmount.toFixed(2));
-        setSurchargeInput((themeSettings.creditCardSurcharge || 0).toFixed(2));
     }, [themeSettings]);
 
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
         const checked = (e.target as HTMLInputElement).checked;
         
-        if (name === 'monthlyFeeAmount') {
-            setMonthlyFeeInput(value);
-            const numValue = parseFloat(value);
-            if (!isNaN(numValue)) setSettings(prev => ({ ...prev, [name]: numValue }));
-        } else if (name === 'creditCardSurcharge') {
-            setSurchargeInput(value);
-            const numValue = parseFloat(value);
-            if (!isNaN(numValue)) setSettings(prev => ({ ...prev, [name]: numValue }));
-        } else {
-            setSettings(prev => ({
-                ...prev,
-                [name]: type === 'checkbox' ? checked : (type === 'number' ? parseInt(value) || 0 : value)
-            }));
-        }
-    };
-    
-    const handleFeeBlur = () => {
-        const val = parseFloat(monthlyFeeInput);
-        if (!isNaN(val)) {
-            setMonthlyFeeInput(val.toFixed(2));
-            setSettings(prev => ({ ...prev, monthlyFeeAmount: val }));
-        } else {
-            setMonthlyFeeInput('0.00');
-            setSettings(prev => ({ ...prev, monthlyFeeAmount: 0 }));
-        }
+        setSettings(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
+        }));
     };
 
-    const handleSurchargeBlur = () => {
-        const val = parseFloat(surchargeInput);
-        if (!isNaN(val)) {
-            setSurchargeInput(val.toFixed(2));
-            setSettings(prev => ({ ...prev, creditCardSurcharge: val }));
-        } else {
-            setSurchargeInput('0.00');
-            setSettings(prev => ({ ...prev, creditCardSurcharge: 0 }));
-        }
-    };
-
-    const handleCertUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const base64 = event.target?.result as string;
-                setSettings(prev => ({ ...prev, efiPixCert: base64 }));
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const handleAppIconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const base64 = event.target?.result as string;
-                setSettings(prev => ({ ...prev, appIcon: base64 }));
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-    
-    const handleSubmit = (e: FormEvent) => {
+    const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
         setThemeSettings(settings);
     };
 
+    // --- Event Handlers ---
+    const handleOpenEventModal = (event: Partial<SystemEvent> = {}) => {
+        // Default dates
+        const now = new Date();
+        const nextWeek = new Date();
+        nextWeek.setDate(now.getDate() + 7);
+        
+        setCurrentEvent({
+            title: '',
+            description: '',
+            footerType: 'text',
+            footerContent: '',
+            active: true,
+            targetAudience: [],
+            ...event,
+            // Convert existing ISO string to input format if editing
+            startDate: event.startDate ? new Date(event.startDate).toISOString().slice(0, 16) : now.toISOString().slice(0, 16),
+            endDate: event.endDate ? new Date(event.endDate).toISOString().slice(0, 16) : nextWeek.toISOString().slice(0, 16)
+        });
+        setIsEventModalOpen(true);
+    };
+
+    const handleSaveEvent = async () => {
+        if (!currentEvent.title || !currentEvent.startDate || !currentEvent.endDate) {
+            alert("Preencha os campos obrigatórios.");
+            return;
+        }
+        await saveEvent(currentEvent as any);
+        setIsEventModalOpen(false);
+    };
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'imageUrl' | 'footerContent') => {
+        if (e.target.files && e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setCurrentEvent(prev => ({ ...prev, [field]: reader.result as string }));
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    };
+
+    // --- Tabs UI ---
+    const tabs = [
+        { id: 'geral', label: 'Geral' },
+        { id: 'cores', label: 'Cores' },
+        { id: 'financeiro', label: 'Financeiro' },
+        { id: 'conteudo', label: 'Conteúdo' },
+        { id: 'midia', label: 'Mídia & Integrações' },
+        { id: 'direitos', label: 'Direitos' },
+        { id: 'eventos', label: 'Eventos' }
+    ];
+
     return (
-        <div className="space-y-6 max-w-4xl mx-auto">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-[var(--theme-text-primary)]">Configurações</h1>
-                {isAcademyAdmin && (
-                    <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1 rounded-full border border-amber-200">
-                        Editando: {currentAcademyName}
-                    </span>
-                )}
-            </div>
+        <div className="space-y-6">
+            <h1 className="text-3xl font-bold text-slate-800">Configurações do Sistema</h1>
             
-            <div className="border-b border-[var(--theme-text-primary)]/10 overflow-x-auto">
-                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+            <div className="flex overflow-x-auto border-b border-slate-200">
+                {tabs.map(tab => (
                     <button
-                        onClick={() => setActiveTab('system')}
-                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'system' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
-                        Sistema
+                        {tab.label}
                     </button>
-                    {(user?.role === 'general_admin' || user?.role === 'academy_admin') && (
-                       <>
-                           <button
-                                onClick={() => setActiveTab('pagamentos')}
-                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'pagamentos' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
-                            >
-                                Pagamentos
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('mensagens')}
-                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'mensagens' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
-                            >
-                                Mensagens
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('mobile')}
-                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center ${activeTab === 'mobile' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
-                            >
-                                <Smartphone className="w-4 h-4 mr-2" />
-                                Interface Mobile
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('app')}
-                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center ${activeTab === 'app' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
-                            >
-                                <Download className="w-4 h-4 mr-2" />
-                                APP
-                            </button>
-                       </>
-                    )}
-                    <button
-                        onClick={() => setActiveTab('webpage')}
-                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'webpage' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
-                    >
-                        Página Web
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('activities')}
-                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'activities' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
-                    >
-                        Atividades
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('direitos')}
-                        className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'direitos' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
-                    >
-                        Direitos
-                    </button>
-                </nav>
+                ))}
             </div>
 
-            <Card className="bg-[var(--theme-card-bg)]">
-                {activeTab === 'activities' ? (
-                     <div className="space-y-4">
-                         <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Log de Atividades do Sistema</h2>
-                         <div className="max-h-[600px] overflow-y-auto">
-                            <table className="w-full text-left">
-                                <thead className="sticky top-0 bg-[var(--theme-bg)] border-b border-[var(--theme-text-primary)]/10 z-10">
-                                    <tr>
-                                        <th className="p-3 text-sm font-semibold text-[var(--theme-text-primary)]/80">Usuário</th>
-                                        <th className="p-3 text-sm font-semibold text-[var(--theme-text-primary)]/80">Ação</th>
-                                        <th className="p-3 text-sm font-semibold text-[var(--theme-text-primary)]/80">Detalhes</th>
-                                        <th className="p-3 text-sm font-semibold text-[var(--theme-text-primary)]/80">Data</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {activityLogs.map(log => {
-                                        const actor = users.find(u => u.id === log.actorId);
-                                        return (
-                                            <tr key={log.id} className="border-b border-[var(--theme-bg)] hover:bg-[var(--theme-bg)]">
-                                                <td className="p-3 text-sm text-[var(--theme-text-primary)] font-medium">{actor?.name || 'Usuário Removido'}</td>
-                                                <td className="p-3 text-sm text-[var(--theme-text-primary)]">{log.action}</td>
-                                                <td className="p-3 text-sm text-[var(--theme-text-primary)]/70">{log.details}</td>
-                                                <td className="p-3 text-sm text-[var(--theme-text-primary)]/70 whitespace-nowrap">
-                                                    {new Date(log.timestamp).toLocaleString('pt-BR')}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                         </div>
+            <Card>
+                {activeTab === 'eventos' ? (
+                    <div>
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-800">Gerenciar Eventos (Popups)</h2>
+                                <p className="text-sm text-slate-500">Crie avisos e eventos que aparecem para os alunos ao logar.</p>
+                            </div>
+                            <Button onClick={() => handleOpenEventModal()}>Adicionar Evento</Button>
+                        </div>
+
+                        <div className="space-y-4">
+                            {events.length === 0 && <p className="text-slate-500 text-center py-8">Nenhum evento criado.</p>}
+                            {events.map(event => (
+                                <div key={event.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 bg-slate-200 rounded-lg overflow-hidden flex-shrink-0">
+                                            {event.imageUrl ? (
+                                                <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="flex items-center justify-center h-full text-slate-400"><ImageIcon className="w-6 h-6"/></div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-slate-800">{event.title}</h3>
+                                            <p className="text-xs text-slate-500 flex items-center gap-2">
+                                                <Calendar className="w-3 h-3"/> {new Date(event.startDate).toLocaleDateString()} - {new Date(event.endDate).toLocaleDateString()}
+                                            </p>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${event.active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>
+                                                {event.active ? 'Ativo' : 'Inativo'}
+                                            </span>
+                                            <span className="ml-2 text-[10px] text-slate-500">
+                                                {event.targetAudience && event.targetAudience.length > 0 
+                                                    ? `${event.targetAudience.length} destinatários` 
+                                                    : 'Todos'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button size="sm" variant="secondary" onClick={() => toggleEventStatus(event.id, !event.active)}>{event.active ? 'Desativar' : 'Ativar'}</Button>
+                                        <Button size="sm" variant="secondary" onClick={() => handleOpenEventModal(event)}><Edit className="w-4 h-4"/></Button>
+                                        <Button size="sm" variant="danger" onClick={() => { if(window.confirm('Excluir evento?')) deleteEvent(event.id) }}><Trash2 className="w-4 h-4"/></Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 ) : (
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* ... System Tab (Unchanged) ... */}
-                        {activeTab === 'system' && (
-                            <>
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Identidade Visual</h2>
-                                <Input label="Nome do Sistema" name="systemName" value={settings.systemName} onChange={handleChange} />
-                                <Input label="URL da Logo" name="logoUrl" value={settings.logoUrl} onChange={handleChange} />
-
-                                <h3 className="text-lg font-semibold text-[var(--theme-text-primary)] pt-4">Cores do Sistema</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                                    <Input label="Cor de Destaque (Acentos)" name="primaryColor" type="color" value={settings.primaryColor} onChange={handleChange} />
-                                    <Input label="Cor de Fundo (Página)" name="backgroundColor" type="color" value={settings.backgroundColor} onChange={handleChange} />
-                                    <Input label="Cor de Fundo (Cards)" name="cardBackgroundColor" type="color" value={settings.cardBackgroundColor} onChange={handleChange} />
-                                    <Input label="Cor do Texto Principal" name="secondaryColor" type="color" value={settings.secondaryColor} onChange={handleChange} />
-                                    <Input label="Cor dos Ícones" name="iconColor" type="color" value={settings.iconColor} onChange={handleChange} />
-                                    <Input label="Cor dos Botões" name="buttonColor" type="color" value={settings.buttonColor} onChange={handleChange} />
-                                    <Input label="Cor do Texto dos Botões" name="buttonTextColor" type="color" value={settings.buttonTextColor} onChange={handleChange} />
-                                    <Input label="Cor 1 dos Gráficos" name="chartColor1" type="color" value={settings.chartColor1} onChange={handleChange} />
-                                    <Input label="Cor 2 dos Gráficos" name="chartColor2" type="color" value={settings.chartColor2} onChange={handleChange} />
-                                </div>
-                                
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2 pt-4">Controle de Cobranças</h2>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <Input label="Dias para lembrete (antes do venc.)" name="reminderDaysBeforeDue" type="number" min="0" value={settings.reminderDaysBeforeDue} onChange={handleChange} />
-                                    <Input label="Dias para cobrança (após venc.)" name="overdueDaysAfterDue" type="number" min="0" value={settings.overdueDaysAfterDue} onChange={handleChange} />
-                                </div>
-
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2 pt-4">Controle de Acesso</h2>
-                                {user?.role === 'general_admin' && (
-                                    <div className="flex justify-between items-center p-3 bg-[var(--theme-bg)] rounded-lg mb-2">
-                                        <label htmlFor="registrationEnabled" className="font-medium text-[var(--theme-text-primary)]">Permitir cadastro de novas academias</label>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" id="registrationEnabled" name="registrationEnabled" checked={settings.registrationEnabled} onChange={handleChange} className="sr-only peer" />
-                                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
-                                        </label>
-                                    </div>
-                                )}
-                                <div className="flex justify-between items-center p-3 bg-[var(--theme-bg)] rounded-lg">
-                                    <label htmlFor="studentProfileEditEnabled" className="font-medium text-[var(--theme-text-primary)]">Permitir edição de perfil pelo aluno</label>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="studentProfileEditEnabled" name="studentProfileEditEnabled" checked={settings.studentProfileEditEnabled} onChange={handleChange} className="sr-only peer" />
-                                        <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
-                                    </label>
-                                </div>
-
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2 pt-4">Login Social</h2>
-                                <div className="flex justify-between items-center p-3 bg-[var(--theme-bg)] rounded-lg">
-                                    <label htmlFor="socialLoginEnabled" className="font-medium text-[var(--theme-text-primary)]">Ativar Login com Google & Facebook</label>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="socialLoginEnabled" name="socialLoginEnabled" checked={settings.socialLoginEnabled} onChange={handleChange} className="sr-only peer" />
-                                        <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
-                                    </label>
-                                </div>
-                                {settings.socialLoginEnabled && (
-                                    <div className="space-y-4 pt-2 animate-fade-in-down">
-                                        <Input label="Google Client ID" name="googleClientId" value={settings.googleClientId || ''} onChange={handleChange} placeholder="Cole seu Google Client ID aqui" />
-                                        <Input label="Facebook App ID" name="facebookAppId" value={settings.facebookAppId || ''} onChange={handleChange} placeholder="Cole seu Facebook App ID aqui" />
-                                    </div>
-                                )}
-                            </>
-                        )}
-                        
-                        {activeTab === 'pagamentos' && (
-                            <div className="space-y-6 animate-fade-in-down">
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração Financeira e Gateways</h2>
-                                <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
-                                  {isAcademyAdmin ? 'Configure os dados de recebimento e integrações de pagamento da sua academia.' : 'Configure os dados padrão do sistema.'}
-                                </p>
-                                
-                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
-                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Dados Gerais e PIX (Manual)</h3>
-                                    <Input 
-                                        label="Valor Padrão da Mensalidade (R$)"
-                                        name="monthlyFeeAmount"
-                                        type="number"
-                                        value={monthlyFeeInput} 
-                                        onChange={handleChange}
-                                        onBlur={handleFeeBlur}
-                                        step="0.01"
-                                    />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <Input 
-                                          label="Chave PIX (Manual)" 
-                                          name="pixKey" 
-                                          value={settings.pixKey} 
-                                          onChange={handleChange}
-                                          placeholder="Email, CPF, Telefone..."
-                                        />
-                                        <Input 
-                                          label="Nome do Titular da Chave" 
-                                          name="pixHolderName" 
-                                          value={settings.pixHolderName} 
-                                          onChange={handleChange}
-                                          placeholder="Nome Completo"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Mercado Pago Section */}
-                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="font-semibold text-blue-600 flex items-center">
-                                            Mercado Pago
-                                            <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Cartão de Crédito</span>
-                                        </h3>
-                                        <div className="flex items-center">
-                                            <label htmlFor="creditCardEnabled" className="mr-2 text-sm font-medium text-[var(--theme-text-primary)]">Ativar Cartão</label>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" id="creditCardEnabled" name="creditCardEnabled" checked={settings.creditCardEnabled !== false} onChange={handleChange} className="sr-only peer" />
-                                                <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <p className="text-xs text-[var(--theme-text-primary)]/60">Credenciais para processamento de cartão via Mercado Pago.</p>
-                                    <Input 
-                                        label="Access Token (Produção)" 
-                                        name="mercadoPagoAccessToken" 
-                                        value={settings.mercadoPagoAccessToken || ''} 
-                                        onChange={handleChange}
-                                        placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                                    />
-                                    <Input 
-                                        label="Public Key" 
-                                        name="mercadoPagoPublicKey" 
-                                        value={settings.mercadoPagoPublicKey || ''} 
-                                        onChange={handleChange}
-                                        placeholder="APP_USR-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                                    />
-                                    <Input 
-                                        label="Acréscimo no Cartão (R$)" 
-                                        name="creditCardSurcharge" 
-                                        type="number"
-                                        value={surchargeInput} 
-                                        onChange={handleChange}
-                                        onBlur={handleSurchargeBlur}
-                                        step="0.01"
-                                        placeholder="0.00"
-                                    />
-                                    <p className="text-[10px] text-[var(--theme-text-primary)]/50">Valor fixo adicionado ao total quando pago via cartão de crédito.</p>
-                                </div>
-
-                                {/* EFI Bank Section */}
-                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="font-semibold text-orange-600 flex items-center">
-                                            EFI Bank (Efí)
-                                            <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Boleto / Pix API</span>
-                                        </h3>
-                                        <div className="flex items-center">
-                                            <label htmlFor="efiEnabled" className="mr-2 text-sm font-medium text-[var(--theme-text-primary)]">Ativar Integração EFI</label>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" id="efiEnabled" name="efiEnabled" checked={!!settings.efiEnabled} onChange={handleChange} className="sr-only peer" />
-                                                <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <p className="text-xs text-[var(--theme-text-primary)]/60">Credenciais para emissão automatizada. Quando ativo, substitui a chave PIX manual.</p>
-                                    
-                                    <Input 
-                                        label="Client ID" 
-                                        name="efiClientId" 
-                                        value={settings.efiClientId || ''} 
-                                        onChange={handleChange}
-                                        placeholder="Client_Id_..."
-                                    />
-                                    <Input 
-                                        label="Client Secret" 
-                                        name="efiClientSecret" 
-                                        value={settings.efiClientSecret || ''} 
-                                        onChange={handleChange}
-                                        type="password"
-                                        placeholder="Client_Secret_..."
-                                    />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <Input 
-                                            label="Chave PIX (EFI)" 
-                                            name="efiPixKey" 
-                                            value={settings.efiPixKey || ''} 
-                                            onChange={handleChange}
-                                            placeholder="Chave cadastrada no EFI"
-                                        />
-                                        <div>
-                                            <label className="block text-sm font-medium text-[var(--theme-text-primary)]/80 mb-1">PIX Certificado (Upload)</label>
-                                            <div className="flex items-center gap-2">
-                                                <label className="cursor-pointer bg-[var(--theme-card-bg)] border border-[var(--theme-text-primary)]/20 hover:bg-[var(--theme-bg)] text-[var(--theme-text-primary)] px-4 py-2 rounded-lg flex items-center transition-colors text-sm">
-                                                    <Upload className="w-4 h-4 mr-2" />
-                                                    Selecionar Arquivo
-                                                    <input 
-                                                        type="file" 
-                                                        className="hidden" 
-                                                        ref={certInputRef}
-                                                        onChange={handleCertUpload}
-                                                        accept=".pem,.p12,.crt"
-                                                    />
-                                                </label>
-                                                {settings.efiPixCert && (
-                                                    <span className="text-xs text-green-600 font-medium">Certificado Carregado ✓</span>
-                                                )}
-                                            </div>
-                                            <p className="text-[10px] text-[var(--theme-text-primary)]/50 mt-1">Formatos: .pem, .p12</p>
-                                        </div>
-                                    </div>
+                    <form onSubmit={handleSave} className="space-y-6">
+                        {activeTab === 'geral' && (
+                            <div className="space-y-4">
+                                <Input label="Nome do Sistema / Academia" name="systemName" value={settings.systemName} onChange={handleChange} />
+                                <Input label="URL do Logo" name="logoUrl" value={settings.logoUrl} onChange={handleChange} />
+                                <Input label="Nome do App (PWA)" name="appName" value={settings.appName || ''} onChange={handleChange} placeholder="Nome curto para ícone no celular" />
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Ícone do App (Base64/URL)</label>
+                                    <input type="file" accept="image/*" onChange={(e) => {
+                                        if(e.target.files?.[0]) {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => setSettings(prev => ({...prev, appIcon: reader.result as string}));
+                                            reader.readAsDataURL(e.target.files[0]);
+                                        }
+                                    }} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-amber-600"/>
                                 </div>
                             </div>
                         )}
 
-                        {activeTab === 'app' && (
-                            <div className="space-y-6 animate-fade-in-down">
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração do App Mobile</h2>
-                                <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
-                                  Personalize o aplicativo que será instalado nos celulares dos alunos (Android/iOS PWA).
-                                </p>
-
-                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
-                                    <Input 
-                                        label="Nome do App" 
-                                        name="appName" 
-                                        value={settings.appName || settings.systemName} 
-                                        onChange={handleChange}
-                                        placeholder="Ex: Minha Academia"
-                                    />
-                                    
-                                    <div className="flex flex-col md:flex-row gap-6 items-start">
-                                        <div className="flex-1 w-full">
-                                            <label className="block text-sm font-medium text-[var(--theme-text-primary)]/80 mb-2">Ícone do App</label>
-                                            <div className="flex items-center gap-4">
-                                                <label className="cursor-pointer bg-[var(--theme-card-bg)] border border-[var(--theme-text-primary)]/20 hover:bg-[var(--theme-bg)] text-[var(--theme-text-primary)] px-4 py-2 rounded-lg flex items-center transition-colors text-sm shadow-sm">
-                                                    <Upload className="w-4 h-4 mr-2" />
-                                                    Carregar Ícone
-                                                    <input 
-                                                        type="file" 
-                                                        className="hidden" 
-                                                        ref={appIconInputRef}
-                                                        onChange={handleAppIconUpload}
-                                                        accept="image/png,image/jpeg"
-                                                    />
-                                                </label>
-                                                <p className="text-[10px] text-[var(--theme-text-primary)]/50">Recomendado: PNG Quadrado (512x512px)</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-col items-center">
-                                            <label className="block text-xs font-medium text-[var(--theme-text-primary)]/60 mb-2">Pré-visualização</label>
-                                            <div className="w-24 h-24 rounded-[22%] overflow-hidden bg-slate-900 flex items-center justify-center shadow-lg border border-slate-200">
-                                                {settings.appIcon ? (
-                                                    <img src={settings.appIcon} alt="App Icon" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div className="text-white text-xs text-center p-2">Sem Ícone</div>
-                                                )}
-                                            </div>
-                                            <span className="text-xs mt-2 font-medium">{settings.appName || settings.systemName}</span>
-                                        </div>
-                                    </div>
-                                </div>
+                        {activeTab === 'cores' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <Input label="Cor Primária" name="primaryColor" type="color" value={settings.primaryColor} onChange={handleChange} />
+                                <Input label="Cor Secundária" name="secondaryColor" type="color" value={settings.secondaryColor} onChange={handleChange} />
+                                <Input label="Cor de Fundo" name="backgroundColor" type="color" value={settings.backgroundColor} onChange={handleChange} />
+                                <Input label="Cor dos Cards" name="cardBackgroundColor" type="color" value={settings.cardBackgroundColor} onChange={handleChange} />
                             </div>
                         )}
 
-                        {/* ... (other tabs: mensagens, mobile, webpage, direitos unchanged) ... */}
-                        
-                        {activeTab === 'mensagens' && (
-                            <div className="space-y-6 animate-fade-in-down">
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração de Mensagens</h2>
-                                <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
-                                  Personalize as mensagens automáticas enviadas via WhatsApp.
-                                </p>
-                                
-                                <div className="space-y-4">
-                                    <Textarea 
-                                        label="Template de Mensagem WhatsApp" 
-                                        name="whatsappMessageTemplate" 
-                                        value={settings.whatsappMessageTemplate || ''} 
-                                        onChange={handleChange} 
-                                        placeholder="Olá {nome}, tudo bem?"
-                                    />
-                                    <div className="bg-[var(--theme-bg)] p-3 rounded text-xs text-[var(--theme-text-primary)]/70 border border-[var(--theme-text-primary)]/10">
-                                        <strong>Variáveis disponíveis:</strong>
-                                        <ul className="list-disc list-inside mt-1 space-y-1">
-                                            <li><code>{'{nome}'}</code>: Nome da pessoa com quem você está falando (Responsável se menor de idade, ou o próprio aluno).</li>
-                                            <li><code>{'{aluno}'}</code>: Nome do aluno (Útil quando falando com o responsável).</li>
-                                        </ul>
-                                    </div>
+                        {activeTab === 'financeiro' && (
+                            <div className="space-y-4">
+                                <Input label="Chave PIX" name="pixKey" value={settings.pixKey} onChange={handleChange} />
+                                <Input label="Nome do Titular PIX" name="pixHolderName" value={settings.pixHolderName} onChange={handleChange} />
+                                <Input label="Valor Mensalidade Padrão" name="monthlyFeeAmount" type="number" value={settings.monthlyFeeAmount} onChange={handleChange} />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Input label="Dias Lembrete (Antes)" name="reminderDaysBeforeDue" type="number" value={settings.reminderDaysBeforeDue} onChange={handleChange} />
+                                    <Input label="Dias Atraso (Depois)" name="overdueDaysAfterDue" type="number" value={settings.overdueDaysAfterDue} onChange={handleChange} />
                                 </div>
+                                <h3 className="font-bold pt-4">Mercado Pago</h3>
+                                <Input label="Access Token" name="mercadoPagoAccessToken" value={settings.mercadoPagoAccessToken || ''} onChange={handleChange} type="password" />
+                                <Input label="Public Key" name="mercadoPagoPublicKey" value={settings.mercadoPagoPublicKey || ''} onChange={handleChange} />
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" name="creditCardEnabled" checked={settings.creditCardEnabled} onChange={handleChange} />
+                                    <label>Habilitar Pagamento com Cartão</label>
+                                </div>
+                                <Input label="Taxa Adicional Cartão (R$)" name="creditCardSurcharge" type="number" value={settings.creditCardSurcharge || 0} onChange={handleChange} />
                             </div>
                         )}
 
-                        {activeTab === 'mobile' && (
-                            <div className="space-y-6 animate-fade-in-down">
-                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Interface Mobile (Barra Inferior)</h2>
-                                <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
-                                  Ajuste a aparência e os botões da barra de navegação no celular.
-                                </p>
-
-                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <label htmlFor="mobileNavVisible" className="font-semibold text-[var(--theme-text-primary)]">Exibir Barra de Menu</label>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" id="mobileNavVisible" name="mobileNavVisible" checked={settings.mobileNavVisible !== false} onChange={handleChange} className="sr-only peer" />
-                                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
-                                        </label>
-                                    </div>
-                                    <p className="text-xs text-[var(--theme-text-primary)]/60 -mt-2">Desative para ocultar completamente o menu inferior em dispositivos móveis.</p>
-                                </div>
-
-                                <div className={`bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4 transition-opacity ${settings.mobileNavVisible === false ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Itens do Menu</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="flex items-center">
-                                            <input type="checkbox" id="mobileNavShowDashboard" name="mobileNavShowDashboard" checked={settings.mobileNavShowDashboard} onChange={handleChange} className="w-4 h-4 text-[var(--theme-accent)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--theme-accent)]" />
-                                            <label htmlFor="mobileNavShowDashboard" className="ml-2 text-sm font-medium text-[var(--theme-text-primary)]">Início (Dashboard)</label>
-                                        </div>
-                                        <div className="flex items-center">
-                                            <input type="checkbox" id="mobileNavShowSchedule" name="mobileNavShowSchedule" checked={settings.mobileNavShowSchedule} onChange={handleChange} className="w-4 h-4 text-[var(--theme-accent)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--theme-accent)]" />
-                                            <label htmlFor="mobileNavShowSchedule" className="ml-2 text-sm font-medium text-[var(--theme-text-primary)]">Horários</label>
-                                        </div>
-                                        <div className="flex items-center">
-                                            <input type="checkbox" id="mobileNavShowStudents" name="mobileNavShowStudents" checked={settings.mobileNavShowStudents} onChange={handleChange} className="w-4 h-4 text-[var(--theme-accent)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--theme-accent)]" />
-                                            <label htmlFor="mobileNavShowStudents" className="ml-2 text-sm font-medium text-[var(--theme-text-primary)]">Alunos</label>
-                                        </div>
-                                        <div className="flex items-center">
-                                            <input type="checkbox" id="mobileNavShowProfile" name="mobileNavShowProfile" checked={settings.mobileNavShowProfile} onChange={handleChange} className="w-4 h-4 text-[var(--theme-accent)] bg-gray-100 border-gray-300 rounded focus:ring-[var(--theme-accent)]" />
-                                            <label htmlFor="mobileNavShowProfile" className="ml-2 text-sm font-medium text-[var(--theme-text-primary)]">Perfil (Meus Dados)</label>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className={`bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4 transition-opacity ${settings.mobileNavVisible === false ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Cores</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <Input label="Cor de Fundo da Barra" name="mobileNavBgColor" type="color" value={settings.mobileNavBgColor} onChange={handleChange} />
-                                        <Input label="Cor Ícone Ativo" name="mobileNavActiveColor" type="color" value={settings.mobileNavActiveColor} onChange={handleChange} />
-                                        <Input label="Cor Ícone Inativo" name="mobileNavInactiveColor" type="color" value={settings.mobileNavInactiveColor} onChange={handleChange} />
-                                    </div>
-                                </div>
-
-                                <div className={`bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4 transition-opacity ${settings.mobileNavVisible === false ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    <h3 className="font-semibold text-[var(--theme-text-primary)]">Dimensões e Estilo</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <Input label="Altura da Barra (px)" name="mobileNavHeight" type="number" value={settings.mobileNavHeight} onChange={handleChange} />
-                                        <Input label="Tamanho do Ícone (px)" name="mobileNavIconSize" type="number" value={settings.mobileNavIconSize} onChange={handleChange} />
-                                        <Input label="Arredondamento dos Cantos (px)" name="mobileNavBorderRadius" type="number" value={settings.mobileNavBorderRadius} onChange={handleChange} />
-                                        <Input label="Distância do Fim da Tela (px)" name="mobileNavBottomMargin" type="number" value={settings.mobileNavBottomMargin} onChange={handleChange} />
-                                    </div>
-                                    <div className="flex justify-between items-center p-3 bg-white rounded-lg mt-2 border border-slate-200">
-                                        <label htmlFor="mobileNavFloating" className="font-medium text-[var(--theme-text-primary)]">Modo Flutuante (Floating)</label>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" id="mobileNavFloating" name="mobileNavFloating" checked={settings.mobileNavFloating} onChange={handleChange} className="sr-only peer" />
-                                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
-                                        </label>
-                                    </div>
-                                </div>
+                        {activeTab === 'conteudo' && (
+                            <div className="space-y-4">
+                                <p className="text-xs text-slate-500">Cole aqui o código HTML para as seções da página pública.</p>
+                                <div><label>Hero HTML</label><textarea name="heroHtml" value={settings.heroHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
+                                <div><label>Sobre HTML</label><textarea name="aboutHtml" value={settings.aboutHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
+                                <div><label>Contato (Texto Simples)</label><textarea name="contactHtml" value={settings.contactHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
                             </div>
                         )}
 
-                        {activeTab === 'webpage' && (
-                             <>
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-xl font-bold text-[var(--theme-accent)]">Configurar Página Web Pública</h2>
-                                    <div className="flex items-center">
-                                        <label htmlFor="publicPageEnabled" className="mr-3 text-sm font-medium text-[var(--theme-text-primary)]">Ativar Página</label>
-                                        <label className="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" id="publicPageEnabled" name="publicPageEnabled" checked={settings.publicPageEnabled} onChange={handleChange} className="sr-only peer" />
-                                            <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--theme-accent)]"></div>
-                                        </label>
-                                    </div>
+                        {activeTab === 'midia' && (
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-4">
+                                    <label className="flex items-center"><input type="checkbox" name="publicPageEnabled" checked={settings.publicPageEnabled} onChange={handleChange} className="mr-2"/> Página Pública</label>
+                                    <label className="flex items-center"><input type="checkbox" name="registrationEnabled" checked={settings.registrationEnabled} onChange={handleChange} className="mr-2"/> Cadastro Academia</label>
+                                    <label className="flex items-center"><input type="checkbox" name="socialLoginEnabled" checked={settings.socialLoginEnabled} onChange={handleChange} className="mr-2"/> Login Social</label>
                                 </div>
-                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
-                                     {isAcademyAdmin 
-                                        ? "Personalize a página pública da sua academia. Ela substituirá a página padrão para seus alunos." 
-                                        : "Quando ativada, esta página será a primeira coisa que os visitantes verão antes da tela de login."}
-                                 </p>
-                                 
-                                 <Textarea label="Seção Hero (Banner Principal)" name="heroHtml" value={settings.heroHtml} onChange={handleChange} />
-                                 <Textarea label="Seção 'Quem Somos'" name="aboutHtml" value={settings.aboutHtml} onChange={handleChange} />
-                                 <Textarea label="Seção 'Filiais' (Opcional)" name="branchesHtml" value={settings.branchesHtml} onChange={handleChange} />
-                                 <Textarea label="Rodapé" name="footerHtml" value={settings.footerHtml} onChange={handleChange} />
-                                 <Textarea label="CSS Personalizado" name="customCss" value={settings.customCss || ''} onChange={handleChange} />
-                                 <Textarea label="JavaScript Personalizado" name="customJs" value={settings.customJs || ''} onChange={handleChange} />
-                            </>
+                                <Input label="Google Client ID" name="googleClientId" value={settings.googleClientId || ''} onChange={handleChange} />
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Template Mensagem WhatsApp</label>
+                                    <textarea name="whatsappMessageTemplate" value={settings.whatsappMessageTemplate || ''} onChange={handleChange} className="w-full border rounded p-2" placeholder="Olá {nome}, tudo bem?" />
+                                    <p className="text-xs text-slate-500">Variáveis: {'{nome}'}, {'{aluno}'}</p>
+                                </div>
+                            </div>
                         )}
 
                         {activeTab === 'direitos' && (
                              <div className="space-y-6 animate-fade-in-down">
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Direitos Autorais e Versão</h2>
-                                <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
-                                  Personalize o texto de copyright e a versão exibidos no rodapé do sistema.
-                                </p>
-                                <Input 
-                                  label="Texto de Copyright" 
-                                  name="copyrightText" 
-                                  value={settings.copyrightText || ''} 
-                                  onChange={handleChange}
-                                  placeholder="Ex: © 2024 Sua Empresa"
-                                />
-                                <Input 
-                                  label="Versão do Sistema" 
-                                  name="systemVersion" 
-                                  value={settings.systemVersion || ''} 
-                                  onChange={handleChange}
-                                  placeholder="Ex: 1.0.0"
-                                />
+                                <Input label="Texto de Copyright" name="copyrightText" value={settings.copyrightText || ''} onChange={handleChange} placeholder="Ex: © 2024 Sua Empresa" />
+                                <Input label="Versão do Sistema" name="systemVersion" value={settings.systemVersion || ''} onChange={handleChange} placeholder="Ex: 1.0.0" />
                             </div>
                         )}
                         
@@ -620,6 +326,76 @@ const SettingsPage: React.FC = () => {
                     </form>
                 )}
             </Card>
+
+            {/* Event Edit Modal */}
+            <Modal isOpen={isEventModalOpen} onClose={() => setIsEventModalOpen(false)} title="Editor de Evento" size="4xl">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-h-[80vh] overflow-y-auto pr-2">
+                    <div className="space-y-4">
+                        <Input label="Título do Evento" value={currentEvent.title || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, title: e.target.value }))} placeholder="Ex: Seminário de Verão" />
+                        <div className="grid grid-cols-2 gap-4">
+                            <Input label="Início Exibição" type="datetime-local" value={currentEvent.startDate || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, startDate: e.target.value }))} />
+                            <Input label="Fim Exibição" type="datetime-local" value={currentEvent.endDate || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, endDate: e.target.value }))} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Descrição</label>
+                            <textarea className="w-full border rounded-lg p-2 h-32" value={currentEvent.description || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, description: e.target.value }))} placeholder="Detalhes do evento..."></textarea>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Imagem Principal</label>
+                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'imageUrl')} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-amber-600"/>
+                            {currentEvent.imageUrl && <img src={currentEvent.imageUrl} alt="Preview" className="mt-2 h-20 object-contain border rounded" />}
+                        </div>
+                    </div>
+                    <div className="space-y-4">
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <h3 className="font-bold text-sm mb-2">Rodapé do Popup</h3>
+                            <div className="flex gap-4 mb-2">
+                                <label className="flex items-center text-sm"><input type="radio" name="footerType" checked={currentEvent.footerType === 'text'} onChange={() => setCurrentEvent(prev => ({...prev, footerType: 'text'}))} className="mr-2"/> Texto</label>
+                                <label className="flex items-center text-sm"><input type="radio" name="footerType" checked={currentEvent.footerType === 'image'} onChange={() => setCurrentEvent(prev => ({...prev, footerType: 'image'}))} className="mr-2"/> Imagem</label>
+                            </div>
+                            {currentEvent.footerType === 'text' ? (
+                                <Input label="Texto do Rodapé" value={currentEvent.footerContent || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, footerContent: e.target.value }))} />
+                            ) : (
+                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'footerContent')} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-amber-600"/>
+                            )}
+                        </div>
+
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            <h3 className="font-bold text-sm mb-2">Público Alvo</h3>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-slate-600">
+                                    {currentEvent.targetAudience && currentEvent.targetAudience.length > 0 
+                                        ? `${currentEvent.targetAudience.length} pessoas selecionadas` 
+                                        : 'Todos (Padrão)'}
+                                </span>
+                                <Button size="sm" variant="secondary" onClick={() => setIsAudienceModalOpen(true)}>
+                                    <Users className="w-4 h-4 mr-2" /> Quem vai ver?
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium mb-1 text-purple-600">HTML Override (Avançado)</label>
+                            <textarea className="w-full border border-purple-200 rounded-lg p-2 h-32 bg-purple-50 font-mono text-xs" value={currentEvent.htmlContent || ''} onChange={(e) => setCurrentEvent(prev => ({ ...prev, htmlContent: e.target.value }))} placeholder="<h1>Meu Popup Personalizado</h1>..."></textarea>
+                            <p className="text-[10px] text-slate-500 mt-1">Se preenchido, substitui todo o layout padrão do popup.</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+                    <Button variant="secondary" onClick={() => setIsEventModalOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleSaveEvent}>Salvar Evento</Button>
+                </div>
+            </Modal>
+
+            {/* Audience Selection Modal */}
+            {isAudienceModalOpen && (
+                <SelectAudienceModal 
+                    isOpen={isAudienceModalOpen} 
+                    onClose={() => setIsAudienceModalOpen(false)}
+                    currentSelection={currentEvent.targetAudience || []}
+                    onConfirm={(selection) => setCurrentEvent(prev => ({ ...prev, targetAudience: selection }))}
+                />
+            )}
         </div>
     );
 };

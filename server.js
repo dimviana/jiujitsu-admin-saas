@@ -1,3 +1,4 @@
+
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -65,7 +66,6 @@ const getFriendlyErrorMessage = (statusDetail) => {
 
 // --- API Routes ---
 
-// ... (existing routes unchanged until /api/payments/credit-card) ...
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -238,6 +238,30 @@ app.get('/api/initial-data', async (req, res) => {
         try { await pool.query("SELECT whatsappMessageTemplate FROM theme_settings LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE theme_settings ADD COLUMN whatsappMessageTemplate TEXT"); }
         try { await pool.query("SELECT isSocialProject FROM students LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE students ADD COLUMN isSocialProject BOOLEAN DEFAULT FALSE, ADD COLUMN socialProjectName VARCHAR(255)"); }
         try { await pool.query("SELECT appName FROM theme_settings LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE theme_settings ADD COLUMN appName TEXT, ADD COLUMN appIcon LONGTEXT"); }
+        
+        // --- Migration for Events Table ---
+        await pool.query(`CREATE TABLE IF NOT EXISTS events (
+            id VARCHAR(255) PRIMARY KEY,
+            academyId VARCHAR(255),
+            title TEXT NOT NULL,
+            description TEXT,
+            imageUrl LONGTEXT,
+            footerType VARCHAR(50) DEFAULT 'text',
+            footerContent LONGTEXT,
+            htmlContent LONGTEXT,
+            startDate DATETIME,
+            endDate DATETIME,
+            active BOOLEAN DEFAULT TRUE,
+            FOREIGN KEY (academyId) REFERENCES academies(id)
+        )`);
+
+        await pool.query(`CREATE TABLE IF NOT EXISTS event_recipients (
+            eventId VARCHAR(255),
+            recipientId VARCHAR(255),
+            PRIMARY KEY (eventId, recipientId),
+            FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE
+        )`);
+
         await pool.query(`CREATE TABLE IF NOT EXISTS schedule_students (scheduleId VARCHAR(255), studentId VARCHAR(255), PRIMARY KEY (scheduleId, studentId), FOREIGN KEY (scheduleId) REFERENCES class_schedules(id), FOREIGN KEY (studentId) REFERENCES students(id))`);
 
         const [students] = await pool.query('SELECT * FROM students');
@@ -269,6 +293,16 @@ app.get('/api/initial-data', async (req, res) => {
         const parsedSchedules = schedules.map(s => ({ ...s, assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId), studentIds: enrolledStudents.filter(es => es.scheduleId === s.id).map(es => es.studentId) }));
         const [attendance] = await pool.query('SELECT * FROM attendance_records');
         const [logs] = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100');
+        
+        // Fetch Events and their Recipients
+        const [events] = await pool.query('SELECT * FROM events');
+        const [recipients] = await pool.query('SELECT * FROM event_recipients');
+        const parsedEvents = events.map(e => ({ 
+            ...e, 
+            active: Boolean(e.active),
+            targetAudience: recipients.filter(r => r.eventId === e.id).map(r => r.recipientId)
+        }));
+
         const [settings] = await pool.query('SELECT * FROM theme_settings LIMIT 1');
         let parsedSettings = settings[0] || {};
         parsedSettings = { 
@@ -288,7 +322,7 @@ app.get('/api/initial-data', async (req, res) => {
             creditCardSurcharge: Number(parsedSettings.creditCardSurcharge || 0),
             efiEnabled: Boolean(parsedSettings.efiEnabled),
         };
-        res.json({ students: parsedStudents, users, academies: parsedAcademies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings });
+        res.json({ students: parsedStudents, users, academies: parsedAcademies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings, events: parsedEvents });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error fetching data' });
@@ -521,6 +555,54 @@ app.post('/api/settings', async (req, res) => { const s = req.body; const academ
 app.post('/api/attendance', createHandler('attendance_records'));
 app.post('/api/academies', async (req, res) => { const data = req.body; if (data.settings && typeof data.settings === 'object') data.settings = JSON.stringify(data.settings); const keys = Object.keys(data).map(key => `\`${key}\``); const values = Object.values(data).map(v => v); try { await pool.query(`REPLACE INTO academies (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, values); res.json({ success: true }); } catch (e) { console.error(e); res.status(500).json({ message: e.message }); } });
 app.post('/api/academies/:id/status', async (req, res) => { const { id } = req.params; const { status } = req.body; if (!['active', 'rejected', 'blocked'].includes(status)) return res.status(400).json({ message: 'Invalid status' }); try { await pool.query('UPDATE academies SET status = ? WHERE id = ?', [status, id]); res.json({ success: true }); } catch (error) { console.error("Error updating academy status:", error); res.status(500).json({ message: error.message }); } });
+
+// --- Events API ---
+app.post('/api/events', async (req, res) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const { targetAudience, ...data } = req.body;
+        // Format dates
+        if (data.startDate) data.startDate = new Date(data.startDate).toISOString().slice(0, 19).replace('T', ' ');
+        if (data.endDate) data.endDate = new Date(data.endDate).toISOString().slice(0, 19).replace('T', ' ');
+        if (data.active !== undefined) data.active = data.active ? 1 : 0;
+
+        let eventId = data.id;
+
+        if (eventId) {
+            const updateFields = Object.keys(data).filter(k => k !== 'id').map(key => `\`${key}\` = ?`).join(', ');
+            const updateValues = Object.keys(data).filter(k => k !== 'id').map(k => data[k]);
+            await conn.query(`UPDATE events SET ${updateFields} WHERE id = ?`, [...updateValues, eventId]);
+        } else {
+            eventId = `evt_${Date.now()}`;
+            data.id = eventId;
+            const keys = Object.keys(data).map(key => `\`${key}\``).join(',');
+            const placeholders = Object.keys(data).map(() => '?').join(',');
+            const values = Object.values(data);
+            await conn.query(`INSERT INTO events (${keys}) VALUES (${placeholders})`, values);
+        }
+
+        // Handle Recipients
+        await conn.query('DELETE FROM event_recipients WHERE eventId = ?', [eventId]);
+        if (targetAudience && Array.isArray(targetAudience) && targetAudience.length > 0) {
+            for (const recipientId of targetAudience) {
+                await conn.query('INSERT INTO event_recipients (eventId, recipientId) VALUES (?, ?)', [eventId, recipientId]);
+            }
+        }
+
+        await conn.commit();
+        res.json({ success: true });
+    } catch (e) {
+        await conn.rollback();
+        console.error("Error saving event:", e);
+        res.status(500).json({ message: e.message });
+    } finally {
+        conn.release();
+    }
+});
+app.delete('/api/events/:id', deleteHandler('events'));
+app.post('/api/events/:id/status', async (req, res) => { try { await pool.query('UPDATE events SET active = ? WHERE id = ?', [req.body.active ? 1 : 0, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); } });
+
 
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'dist', 'index.html')); });
 app.listen(PORT, () => { console.log(`Server running on port ${PORT}`); });

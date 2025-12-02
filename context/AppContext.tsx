@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState, useMemo } from 'react';
-import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor } from '../types';
+import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor, SystemEvent } from '../types';
 import { 
   MOCK_THEME, STUDENTS, USERS, ACADEMIES, GRADUATIONS, 
   PROFESSORS, SCHEDULES, ATTENDANCE_RECORDS, ACTIVITY_LOGS 
@@ -15,6 +16,7 @@ interface AppContextType {
     schedules: ClassSchedule[];
     graduations: Graduation[];
     professors: Professor[];
+    events: SystemEvent[]; // New
     themeSettings: ThemeSettings;
     attendanceRecords: AttendanceRecord[];
     activityLogs: ActivityLog[];
@@ -28,7 +30,7 @@ interface AppContextType {
     deleteStudent: (id: string) => Promise<void>;
     updateStudentPayment: (id: string, status: 'paid' | 'unpaid' | 'scholarship') => Promise<void>;
     promoteStudentToInstructor: (studentId: string) => Promise<void>;
-    demoteInstructor: (professorId: string) => Promise<void>; // New function
+    demoteInstructor: (professorId: string) => Promise<void>;
     updateStudentStatus: (id: string, status: 'active' | 'blocked') => Promise<void>;
     setThemeSettings: (settings: ThemeSettings) => void;
     saveSchedule: (schedule: Omit<ClassSchedule, 'id'> & { id?: string }) => Promise<void>;
@@ -41,7 +43,12 @@ interface AppContextType {
     updateGraduationRanks: (items: { id: string, rank: number }[]) => Promise<void>;
     saveAttendanceRecord: (record: Omit<AttendanceRecord, 'id'>) => Promise<void>;
     saveAcademy: (academy: Academy) => Promise<void>;
-    updateAcademyStatus: (id: string, status: 'active' | 'rejected' | 'blocked') => Promise<void>; // New function
+    updateAcademyStatus: (id: string, status: 'active' | 'rejected' | 'blocked') => Promise<void>;
+    
+    // Event Functions
+    saveEvent: (event: Omit<SystemEvent, 'id'> & { id?: string }) => Promise<void>;
+    deleteEvent: (id: string) => Promise<void>;
+    toggleEventStatus: (id: string, active: boolean) => Promise<void>;
 
     login: (email: string, pass: string) => Promise<void>;
     loginGoogle: (credential: string) => Promise<void>;
@@ -69,6 +76,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [allAcademies, setAllAcademies] = useState<Academy[]>([]);
     const [allActivityLogs, setAllActivityLogs] = useState<ActivityLog[]>([]);
+    const [allEvents, setAllEvents] = useState<SystemEvent[]>([]);
 
     const [graduations, setGraduations] = useState<Graduation[]>([]);
     const [globalThemeSettings, setGlobalThemeSettings] = useState<ThemeSettings>(MOCK_THEME);
@@ -91,6 +99,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 setAllSchedules(data.schedules);
                 setAllAttendance(data.attendanceRecords);
                 setAllActivityLogs(data.activityLogs);
+                setAllEvents(data.events || []);
                 if (data.themeSettings && data.themeSettings.id) {
                     setGlobalThemeSettings(data.themeSettings);
                 }
@@ -127,6 +136,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setAllAttendance(ATTENDANCE_RECORDS);
             setAllActivityLogs(ACTIVITY_LOGS);
             setGlobalThemeSettings(MOCK_THEME);
+            setAllEvents([]);
         }
         setLoading(false);
     };
@@ -158,7 +168,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 attendanceRecords: allAttendance,
                 users: allUsers,
                 academies: allAcademies,
-                activityLogs: allActivityLogs
+                activityLogs: allActivityLogs,
+                events: allEvents
             };
         }
 
@@ -166,6 +177,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const professors = allProfessors.filter(p => p.academyId === academyIdToFilter);
         const schedules = allSchedules.filter(s => s.academyId === academyIdToFilter);
         const academies = allAcademies.filter(a => a.id === academyIdToFilter);
+        const events = allEvents.filter(e => e.academyId === academyIdToFilter);
         
         const studentIdsInAcademy = new Set(students.map(s => s.id));
         const attendanceRecords = allAttendance.filter(ar => studentIdsInAcademy.has(ar.studentId));
@@ -182,10 +194,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             attendanceRecords, 
             users, 
             academies, 
-            activityLogs 
+            activityLogs,
+            events
         };
 
-    }, [user, globalAcademyFilter, allStudents, allProfessors, allSchedules, allAttendance, allUsers, allAcademies, allActivityLogs]);
+    }, [user, globalAcademyFilter, allStudents, allProfessors, allSchedules, allAttendance, allUsers, allAcademies, allActivityLogs, allEvents]);
 
     // Apply Theme (CSS Variables) - Always Force Light/Configured Theme
     useEffect(() => {
@@ -335,6 +348,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return handleApiCall(`/api/academies/${id}/status`, 'POST', { status }, `Academia ${action} com sucesso.`);
     };
 
+    // Event Functions
+    const saveEvent = (event: Omit<SystemEvent, 'id'> & { id?: string }) => {
+        // Enforce academy ID for non-general admins
+        const eventData = { ...event };
+        if (user && user.role !== 'general_admin') {
+            eventData.academyId = user.academyId;
+        }
+        return handleApiCall('/api/events', 'POST', eventData, 'Evento salvo com sucesso.');
+    };
+    const deleteEvent = (id: string) => handleApiCall(`/api/events/${id}`, 'DELETE', null, 'Evento excluído com sucesso.');
+    const toggleEventStatus = (id: string, active: boolean) => handleApiCall(`/api/events/${id}/status`, 'POST', { active }, `Evento ${active ? 'ativado' : 'desativado'} com sucesso.`);
+
     return (
         <AppContext.Provider value={{
             user, 
@@ -345,6 +370,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, demoteInstructor, updateStudentStatus, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor, updateProfessorStatus,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord, saveAcademy, updateAcademyStatus,
+            saveEvent, deleteEvent, toggleEventStatus,
             login, loginGoogle, registerAcademy, logout,
             
             users: filteredData.users, 
@@ -354,6 +380,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             professors: filteredData.professors,
             schedules: filteredData.schedules,
             attendanceRecords: filteredData.attendanceRecords,
+            events: filteredData.events
         }}>
             {children}
         </AppContext.Provider>
