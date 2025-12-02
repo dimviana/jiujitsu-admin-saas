@@ -19,6 +19,7 @@ import { SCHEDULES } from './constants'; // Fallback
 import Notification from './components/ui/Notification';
 import ProfilePage from './components/ProfilePage';
 import { EventPopup } from './components/EventPopup';
+import { BirthdayNotifications } from './components/BirthdayNotifications';
 
 type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'settings' | 'profile' | 'academies'; // New Page
 
@@ -48,8 +49,9 @@ const AppContent: React.FC = () => {
       // Logged in logic
       return (
           <Layout user={user} onLogout={() => { logout(); setPage('home'); }} onNavigate={(p) => setPage(p as Page)} currentPage={page}>
-            {/* Event Popup is mounted here to ensure it checks for events as soon as the authenticated layout loads */}
+            {/* Global Popups */}
             <EventPopup />
+            <BirthdayNotifications />
             
             {page === 'dashboard' && (
                 user.role === 'student' ? (

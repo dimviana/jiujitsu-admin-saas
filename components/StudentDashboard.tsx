@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useRef, useEffect, useContext } from 'react';
 import { Student, User, Graduation, ClassSchedule, ThemeSettings, StudentDocument } from '../types';
 import Card from './ui/Card';
@@ -5,7 +6,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import StudentAttendanceChart from './charts/StudentAttendanceChart';
-import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap, HeartHandshake } from 'lucide-react';
+import { Award, Calendar, DollarSign, Medal, Upload, QrCode as IconPix, CreditCard, Loader, CheckCircle, GraduationCap, HeartHandshake, PartyPopper } from 'lucide-react';
 import { initMercadoPago } from '@mercadopago/sdk-react';
 import { AppContext } from '../context/AppContext';
 
@@ -486,6 +487,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     const nextGraduation = useMemo(() => graduations.sort((a,b) => a.rank - b.rank).find(g => g.rank > (graduation?.rank ?? 0)), [graduations, graduation]);
     const { totalMonths: trainingMonths } = calculateTrainingTime(studentData?.firstGraduationDate);
 
+    // Calculate if it's the student's birthday today
+    const isBirthdayToday = useMemo(() => {
+        if (!studentData?.birthDate) return false;
+        const d = new Date(studentData.birthDate);
+        const today = new Date();
+        return d.getUTCDate() === today.getDate() && d.getUTCMonth() === today.getMonth();
+    }, [studentData]);
+
     const timeToNextGrad = useMemo(() => {
         if (!studentData || !graduation || !nextGraduation) return "Parabéns!";
         const age = studentData.birthDate ? calculateAge(studentData.birthDate) : 20;
@@ -596,6 +605,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
             {!studentProp && (
               <div>
+                  {isBirthdayToday && (
+                      <div className="bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white p-3 rounded-lg mb-4 flex items-center justify-center shadow-lg animate-bounce-once">
+                          <PartyPopper className="w-6 h-6 mr-3 animate-pulse" />
+                          <span className="font-bold text-lg">Parabéns! Feliz Aniversário! 🎂🎈</span>
+                          <PartyPopper className="w-6 h-6 ml-3 animate-pulse" />
+                      </div>
+                  )}
                   <h1 className="text-3xl font-bold text-slate-800">Olá, {studentData.name.split(' ')[0]}!</h1>
                   <p className="text-slate-500 mt-1">Aqui está um resumo do seu progresso no Jiu-Jitsu.</p>
               </div>
