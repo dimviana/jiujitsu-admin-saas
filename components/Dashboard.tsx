@@ -9,7 +9,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import { 
     Users, Calendar, TrendingUp, AlertCircle, CheckCircle, 
-    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail, FileText, Paperclip, Eye
+    DollarSign, Award, ChevronLeft, ChevronRight, LayoutDashboard, Phone, Mail, FileText, Paperclip, Eye, Check, X
 } from 'lucide-react';
 import { StudentDashboard } from './StudentDashboard';
 
@@ -386,11 +386,15 @@ const DayDetailsModal: React.FC<{
     students: Student[];
     onClose: () => void;
     onOpenDashboard: (student: Student) => void;
-}> = ({ date, schedules, users, students, onClose, onOpenDashboard }) => {
+    attendanceRecords: AttendanceRecord[];
+}> = ({ date, schedules, users, students, onClose, onOpenDashboard, attendanceRecords }) => {
     const dayOfWeek = DAYS_OF_WEEK_MAP[date.getDay()];
     const daysSchedules = schedules
         .filter(s => s.dayOfWeek === dayOfWeek)
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    
+    // Normalize date string for comparison
+    const dateStr = date.toISOString().split('T')[0];
 
     return (
         <Modal isOpen={true} onClose={onClose} title={`Aulas de ${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}`}>
@@ -421,26 +425,47 @@ const DayDetailsModal: React.FC<{
                                     </div>
                                     {enrolledStudents.length > 0 ? (
                                         <div className="space-y-2">
-                                            {enrolledStudents.map(student => (
-                                                <div key={student.id} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-slate-100">
-                                                    <div className="flex items-center">
-                                                        <img 
-                                                            src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
-                                                            alt={student.name} 
-                                                            className="w-6 h-6 rounded-full mr-2 object-cover"
-                                                        />
-                                                        <span className="text-slate-700 font-medium">{student.name}</span>
+                                            {enrolledStudents.map(student => {
+                                                // Check Attendance Status
+                                                const record = attendanceRecords.find(r => 
+                                                    r.studentId === student.id && 
+                                                    r.scheduleId === schedule.id && 
+                                                    r.date === dateStr
+                                                );
+
+                                                return (
+                                                    <div key={student.id} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-slate-100">
+                                                        <div className="flex items-center">
+                                                            <img 
+                                                                src={student.imageUrl || `https://ui-avatars.com/api/?name=${student.name}`} 
+                                                                alt={student.name} 
+                                                                className="w-6 h-6 rounded-full mr-2 object-cover"
+                                                            />
+                                                            <span className="text-slate-700 font-medium mr-2">{student.name}</span>
+                                                            
+                                                            {/* Attendance Indicators */}
+                                                            {record?.status === 'present' && (
+                                                                <span title="Presente">
+                                                                    <Check className="w-4 h-4 text-green-500" />
+                                                                </span>
+                                                            )}
+                                                            {record?.status === 'absent' && (
+                                                                <span title="Ausente">
+                                                                    <X className="w-4 h-4 text-red-500" />
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => onOpenDashboard(student)}
+                                                            className="text-xs flex items-center bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded transition-colors border border-blue-200"
+                                                            title="Abrir Dashboard do Aluno"
+                                                        >
+                                                            <LayoutDashboard className="w-3 h-3 mr-1" />
+                                                            Dash
+                                                        </button>
                                                     </div>
-                                                    <button 
-                                                        onClick={() => onOpenDashboard(student)}
-                                                        className="text-xs flex items-center bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded transition-colors border border-blue-200"
-                                                        title="Abrir Dashboard do Aluno"
-                                                    >
-                                                        <LayoutDashboard className="w-3 h-3 mr-1" />
-                                                        Dash
-                                                    </button>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     ) : (
                                         <div className="text-xs text-slate-400 italic text-center py-2">
@@ -469,8 +494,9 @@ const CalendarWidget: React.FC<{
     schedules: ClassSchedule[]; 
     users: User[]; 
     students: Student[];
+    attendanceRecords: AttendanceRecord[];
     onOpenDashboard: (student: Student) => void;
-}> = ({ schedules, users, students, onOpenDashboard }) => {
+}> = ({ schedules, users, students, attendanceRecords, onOpenDashboard }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
@@ -548,6 +574,7 @@ const CalendarWidget: React.FC<{
                     students={students}
                     onClose={() => setSelectedDate(null)} 
                     onOpenDashboard={onOpenDashboard}
+                    attendanceRecords={attendanceRecords}
                 />
             )}
         </Card>
@@ -824,6 +851,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             users={users} 
                             students={students}
                             onOpenDashboard={(student) => setDashboardStudent(student)} 
+                            attendanceRecords={attendanceRecords}
                         />
 
                         {/* Financial Calendar Widget */}
