@@ -1,6 +1,6 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { User } from '../types';
-import { Menu, LogOut, Filter } from 'lucide-react';
+import { Menu, LogOut, Filter, Download } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { AppContext } from '../context/AppContext';
 import BottomNav from './BottomNav';
@@ -15,7 +15,73 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavigate, currentPage }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { academies, globalAcademyFilter, setGlobalAcademyFilter } = useContext(AppContext);
+  const { academies, globalAcademyFilter, setGlobalAcademyFilter, themeSettings } = useContext(AppContext);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  // Dynamic Manifest Logic
+  useEffect(() => {
+      // Create a dynamic manifest based on theme settings
+      const dynamicManifest = {
+          name: themeSettings.appName || themeSettings.systemName,
+          short_name: themeSettings.appName || themeSettings.systemName,
+          start_url: "/",
+          display: "standalone",
+          background_color: themeSettings.backgroundColor,
+          theme_color: themeSettings.primaryColor,
+          icons: themeSettings.appIcon ? [
+              {
+                  src: themeSettings.appIcon,
+                  sizes: "512x512",
+                  type: "image/png"
+              }
+          ] : [
+              {
+                  src: "https://tailwindui.com/img/logos/mark.svg?color=amber&shade=500",
+                  sizes: "192x192",
+                  type: "image/svg+xml"
+              }
+          ]
+      };
+
+      const stringManifest = JSON.stringify(dynamicManifest);
+      const blob = new Blob([stringManifest], {type: 'application/json'});
+      const manifestURL = URL.createObjectURL(blob);
+      
+      // Inject into head
+      let link = document.querySelector("link[rel='manifest']") as HTMLLinkElement;
+      if (!link) {
+          link = document.createElement('link');
+          link.rel = 'manifest';
+          document.head.appendChild(link);
+      }
+      link.href = manifestURL;
+
+      return () => {
+          URL.revokeObjectURL(manifestURL);
+      };
+  }, [themeSettings]);
+
+  // PWA Install Prompt Logic
+  useEffect(() => {
+      const handler = (e: Event) => {
+          e.preventDefault();
+          setDeferredPrompt(e);
+          setIsInstallable(true);
+      };
+      window.addEventListener('beforeinstallprompt', handler);
+      return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const choiceResult = await deferredPrompt.userChoice;
+      if (choiceResult.outcome === 'accepted') {
+          setIsInstallable(false);
+      }
+      setDeferredPrompt(null);
+  };
 
   if (!user) {
     return <>{children}</>;
@@ -60,6 +126,17 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
           </div>
 
           <div className="flex items-center space-x-4 ml-auto">
+             {/* Install Button */}
+             {isInstallable && (
+                 <button 
+                    onClick={handleInstallClick}
+                    className="bg-primary hover:bg-primary/90 text-white px-3 py-1.5 rounded-lg text-sm font-medium flex items-center shadow-sm transition-all animate-bounce-once"
+                 >
+                     <Download className="w-4 h-4 mr-2" />
+                     Baixar App
+                 </button>
+             )}
+
              <div className="flex items-center">
                  <img src={user.imageUrl || `https://ui-avatars.com/api/?name=${user.name}`} alt="User" className="w-10 h-10 rounded-full object-cover border-2 border-[var(--theme-bg)]"/>
                  <div className="text-right hidden sm:block ml-3">

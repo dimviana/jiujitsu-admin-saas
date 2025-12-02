@@ -3,7 +3,7 @@ import { AppContext } from '../context/AppContext';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
-import { Smartphone, Upload } from 'lucide-react';
+import { Smartphone, Upload, Download, Tablet } from 'lucide-react';
 
 const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }> = ({ label, id, ...props }) => (
     <div>
@@ -22,8 +22,9 @@ const SettingsPage: React.FC = () => {
     const [settings, setSettings] = useState(themeSettings);
     const [monthlyFeeInput, setMonthlyFeeInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
     const [surchargeInput, setSurchargeInput] = useState((themeSettings.creditCardSurcharge || 0).toFixed(2));
-    const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos' | 'mensagens' | 'mobile'>('system');
+    const [activeTab, setActiveTab] = useState<'system' | 'webpage' | 'activities' | 'pagamentos' | 'direitos' | 'mensagens' | 'mobile' | 'app'>('system');
     const certInputRef = useRef<HTMLInputElement>(null);
+    const appIconInputRef = useRef<HTMLInputElement>(null);
 
     const isAcademyAdmin = user?.role === 'academy_admin';
     const currentAcademyName = isAcademyAdmin ? academies.find(a => a.id === user.academyId)?.name : 'Sistema Global';
@@ -84,8 +85,19 @@ const SettingsPage: React.FC = () => {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const base64 = event.target?.result as string;
-                // Store base64 content
                 setSettings(prev => ({ ...prev, efiPixCert: base64 }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleAppIconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const base64 = event.target?.result as string;
+                setSettings(prev => ({ ...prev, appIcon: base64 }));
             };
             reader.readAsDataURL(file);
         }
@@ -135,6 +147,13 @@ const SettingsPage: React.FC = () => {
                             >
                                 <Smartphone className="w-4 h-4 mr-2" />
                                 Interface Mobile
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('app')}
+                                className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center ${activeTab === 'app' ? 'border-[var(--theme-accent)] text-[var(--theme-accent)]' : 'border-transparent text-[var(--theme-text-primary)]/60 hover:text-[var(--theme-text-primary)]/80 hover:border-gray-300'}`}
+                            >
+                                <Download className="w-4 h-4 mr-2" />
+                                APP
                             </button>
                        </>
                     )}
@@ -398,10 +417,61 @@ const SettingsPage: React.FC = () => {
                             </div>
                         )}
 
-                        {/* ... (other tabs unchanged) ... */}
+                        {activeTab === 'app' && (
+                            <div className="space-y-6 animate-fade-in-down">
+                                <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração do App Mobile</h2>
+                                <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
+                                  Personalize o aplicativo que será instalado nos celulares dos alunos (Android/iOS PWA).
+                                </p>
+
+                                <div className="bg-[var(--theme-bg)]/50 p-4 rounded-lg border border-[var(--theme-text-primary)]/5 space-y-4">
+                                    <Input 
+                                        label="Nome do App" 
+                                        name="appName" 
+                                        value={settings.appName || settings.systemName} 
+                                        onChange={handleChange}
+                                        placeholder="Ex: Minha Academia"
+                                    />
+                                    
+                                    <div className="flex flex-col md:flex-row gap-6 items-start">
+                                        <div className="flex-1 w-full">
+                                            <label className="block text-sm font-medium text-[var(--theme-text-primary)]/80 mb-2">Ícone do App</label>
+                                            <div className="flex items-center gap-4">
+                                                <label className="cursor-pointer bg-[var(--theme-card-bg)] border border-[var(--theme-text-primary)]/20 hover:bg-[var(--theme-bg)] text-[var(--theme-text-primary)] px-4 py-2 rounded-lg flex items-center transition-colors text-sm shadow-sm">
+                                                    <Upload className="w-4 h-4 mr-2" />
+                                                    Carregar Ícone
+                                                    <input 
+                                                        type="file" 
+                                                        className="hidden" 
+                                                        ref={appIconInputRef}
+                                                        onChange={handleAppIconUpload}
+                                                        accept="image/png,image/jpeg"
+                                                    />
+                                                </label>
+                                                <p className="text-[10px] text-[var(--theme-text-primary)]/50">Recomendado: PNG Quadrado (512x512px)</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col items-center">
+                                            <label className="block text-xs font-medium text-[var(--theme-text-primary)]/60 mb-2">Pré-visualização</label>
+                                            <div className="w-24 h-24 rounded-[22%] overflow-hidden bg-slate-900 flex items-center justify-center shadow-lg border border-slate-200">
+                                                {settings.appIcon ? (
+                                                    <img src={settings.appIcon} alt="App Icon" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="text-white text-xs text-center p-2">Sem Ícone</div>
+                                                )}
+                                            </div>
+                                            <span className="text-xs mt-2 font-medium">{settings.appName || settings.systemName}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ... (other tabs: mensagens, mobile, webpage, direitos unchanged) ... */}
+                        
                         {activeTab === 'mensagens' && (
                             <div className="space-y-6 animate-fade-in-down">
-                                {/* ... existing messages settings ... */}
                                 <h2 className="text-xl font-bold text-[var(--theme-accent)] border-b border-[var(--theme-text-primary)]/10 pb-2">Configuração de Mensagens</h2>
                                 <p className="text-sm text-[var(--theme-text-primary)]/70 -mt-4">
                                   Personalize as mensagens automáticas enviadas via WhatsApp.

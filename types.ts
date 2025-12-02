@@ -74,6 +74,10 @@ export interface ThemeSettings {
   mobileNavBorderRadius?: number;
   mobileNavBottomMargin?: number;
   mobileNavFloating?: boolean;
+
+  // App Settings
+  appName?: string;
+  appIcon?: string; // Base64
 }
 
 export interface Academy {
