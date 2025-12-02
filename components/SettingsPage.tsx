@@ -1,11 +1,11 @@
 
-import React, { useState, useContext, useEffect, useRef } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import Card from './ui/Card';
 import Input from './ui/Input';
 import Button from './ui/Button';
-import { ThemeSettings, SystemEvent, Student, User } from '../types';
-import { Upload, Image as ImageIcon, Calendar, Trash2, Edit, Eye, Search, CheckSquare, Square, Users } from 'lucide-react';
+import { ThemeSettings, SystemEvent } from '../types';
+import { Image as ImageIcon, Calendar, Trash2, Edit, Search, CheckSquare, Square, Users } from 'lucide-react';
 import Modal from './ui/Modal';
 
 // --- Sub-Component: Audience Selection Modal ---
@@ -95,7 +95,7 @@ const SelectAudienceModal: React.FC<SelectAudienceModalProps> = ({ isOpen, onClo
 // --- Settings Page ---
 
 const SettingsPage: React.FC = () => {
-    const { themeSettings, setThemeSettings, user, events, saveEvent, deleteEvent, toggleEventStatus } = useContext(AppContext);
+    const { themeSettings, setThemeSettings, events, saveEvent, deleteEvent, toggleEventStatus } = useContext(AppContext);
     const [activeTab, setActiveTab] = useState<'geral' | 'cores' | 'conteudo' | 'financeiro' | 'midia' | 'direitos' | 'eventos'>('geral');
     const [settings, setSettings] = useState<ThemeSettings>(themeSettings);
     
