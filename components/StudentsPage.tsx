@@ -1,4 +1,3 @@
-
 import React, { useState, useContext, FormEvent, useMemo, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Student, Graduation } from '../types';

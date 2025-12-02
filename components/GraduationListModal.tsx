@@ -1,7 +1,6 @@
-
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { Student, Graduation } from '../types';
+import { Student } from '../types';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
 import { Filter, FileDown, CheckSquare, Square } from 'lucide-react';

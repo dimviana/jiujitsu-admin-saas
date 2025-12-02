@@ -1,6 +1,5 @@
-
 import jsPDF from 'jspdf';
-import { Student, Graduation, Academy } from '../types';
+import { Graduation } from '../types';
 
 interface GraduationReportItem {
     studentName: string;
