@@ -21,7 +21,8 @@
     "react-dom": "^18.2.0",
     "recharts": "^2.12.2",
     "jspdf": "^2.5.1",
-    "@mercadopago/sdk-react": "^0.0.19"
+    "@mercadopago/sdk-react": "^0.0.19",
+    "compression": "^1.7.4"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",

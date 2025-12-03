@@ -1,31 +1,41 @@
 
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, Suspense, lazy } from 'react';
 import { AppProvider, AppContext } from './context/AppContext';
 import { Layout } from './components/Layout';
-import { Dashboard } from './components/Dashboard';
-import { StudentDashboard } from './components/StudentDashboard';
-import StudentsPage from './components/StudentsPage';
-import { PublicPage } from './components/PublicPage';
-import { Financial } from './components/Financial';
-import { AICoach } from './components/AICoach';
-import SettingsPage from './components/SettingsPage';
-import SchedulesPage from './components/SchedulesPage';
-import ProfessorsPage from './components/ProfessorsPage';
-import GraduationsPage from './components/GraduationsPage';
-import AttendancePage from './components/AttendancePage';
-import Login from './components/Login';
-import AcademiesPage from './components/AcademiesPage'; // New Import
-import { SCHEDULES } from './constants'; // Fallback
-import Notification from './components/ui/Notification';
-import ProfilePage from './components/ProfilePage';
+// Components that are always needed or very light can remain static
 import { EventPopup } from './components/EventPopup';
 import { BirthdayNotifications } from './components/BirthdayNotifications';
+import Notification from './components/ui/Notification';
+import { Loader } from 'lucide-react';
 
-type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'settings' | 'profile' | 'academies'; // New Page
+// Lazy Load Pages
+const Dashboard = lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
+const StudentDashboard = lazy(() => import('./components/StudentDashboard').then(module => ({ default: module.StudentDashboard })));
+const StudentsPage = lazy(() => import('./components/StudentsPage'));
+const PublicPage = lazy(() => import('./components/PublicPage').then(module => ({ default: module.PublicPage })));
+const Financial = lazy(() => import('./components/Financial').then(module => ({ default: module.Financial })));
+const AICoach = lazy(() => import('./components/AICoach').then(module => ({ default: module.AICoach })));
+const SettingsPage = lazy(() => import('./components/SettingsPage'));
+const SchedulesPage = lazy(() => import('./components/SchedulesPage'));
+const ProfessorsPage = lazy(() => import('./components/ProfessorsPage'));
+const GraduationsPage = lazy(() => import('./components/GraduationsPage'));
+const AttendancePage = lazy(() => import('./components/AttendancePage'));
+const Login = lazy(() => import('./components/Login'));
+const AcademiesPage = lazy(() => import('./components/AcademiesPage'));
+const ProfilePage = lazy(() => import('./components/ProfilePage'));
+
+import { SCHEDULES } from './constants'; // Fallback
+
+type Page = 'home' | 'login' | 'dashboard' | 'students' | 'professors' | 'financial' | 'schedule' | 'attendance' | 'graduation' | 'ai-coach' | 'settings' | 'profile' | 'academies'; 
+
+const PageLoader = () => (
+    <div className="h-full flex items-center justify-center p-10">
+        <Loader className="w-8 h-8 animate-spin text-amber-500" />
+    </div>
+);
 
 const AppContent: React.FC = () => {
   const [page, setPage] = useState<Page>('home');
-  // FIX: Destructure `attendanceRecords` from context to pass to Dashboard.
   const { user, themeSettings, students, users, schedules, graduations, updateStudentPayment, logout, notification, setNotification, attendanceRecords } = useContext(AppContext);
 
   // Redirecionar para dashboard após login
@@ -39,12 +49,12 @@ const AppContent: React.FC = () => {
       // Not logged in logic
       if (!user) {
           if (page === 'login') {
-              return <Login />;
+              return <Suspense fallback={<PageLoader />}><Login /></Suspense>;
           }
           if (themeSettings.publicPageEnabled) {
-             return <PublicPage settings={themeSettings} schedules={schedules.length ? schedules : SCHEDULES} onLoginClick={() => setPage('login')} />;
+             return <Suspense fallback={<PageLoader />}><PublicPage settings={themeSettings} schedules={schedules.length ? schedules : SCHEDULES} onLoginClick={() => setPage('login')} /></Suspense>;
           }
-          return <Login />;
+          return <Suspense fallback={<PageLoader />}><Login /></Suspense>;
       }
       // Logged in logic
       return (
@@ -53,40 +63,41 @@ const AppContent: React.FC = () => {
             <EventPopup />
             <BirthdayNotifications />
             
-            {page === 'dashboard' && (
-                user.role === 'student' ? (
-                    <StudentDashboard 
-                        user={user}
-                        students={students} 
-                        graduations={graduations} 
-                        schedules={schedules} 
-                        themeSettings={themeSettings} 
-                        updateStudentPayment={updateStudentPayment} 
-                    />
-                ) : (
-                    <Dashboard 
-                        user={user} 
-                        students={students} 
-                        users={users} 
-                        schedules={schedules} 
-                        graduations={graduations}
-                        themeSettings={themeSettings}
-                        updateStudentPayment={updateStudentPayment}
-                        // FIX: Pass the required `attendanceRecords` prop to Dashboard.
-                        attendanceRecords={attendanceRecords}
-                    />
-                )
-            )}
-            {page === 'students' && <StudentsPage />}
-            {page === 'professors' && <ProfessorsPage />}
-            {page === 'academies' && <AcademiesPage />} 
-            {page === 'financial' && <Financial />}
-            {page === 'schedule' && <SchedulesPage />}
-            {page === 'attendance' && <AttendancePage />}
-            {page === 'graduation' && <GraduationsPage />}
-            {page === 'ai-coach' && <AICoach students={students} />}
-            {page === 'settings' && <SettingsPage />}
-            {page === 'profile' && <ProfilePage />}
+            <Suspense fallback={<PageLoader />}>
+                {page === 'dashboard' && (
+                    user.role === 'student' ? (
+                        <StudentDashboard 
+                            user={user}
+                            students={students} 
+                            graduations={graduations} 
+                            schedules={schedules} 
+                            themeSettings={themeSettings} 
+                            updateStudentPayment={updateStudentPayment} 
+                        />
+                    ) : (
+                        <Dashboard 
+                            user={user} 
+                            students={students} 
+                            users={users} 
+                            schedules={schedules} 
+                            graduations={graduations}
+                            themeSettings={themeSettings}
+                            updateStudentPayment={updateStudentPayment}
+                            attendanceRecords={attendanceRecords}
+                        />
+                    )
+                )}
+                {page === 'students' && <StudentsPage />}
+                {page === 'professors' && <ProfessorsPage />}
+                {page === 'academies' && <AcademiesPage />} 
+                {page === 'financial' && <Financial />}
+                {page === 'schedule' && <SchedulesPage />}
+                {page === 'attendance' && <AttendancePage />}
+                {page === 'graduation' && <GraduationsPage />}
+                {page === 'ai-coach' && <AICoach students={students} />}
+                {page === 'settings' && <SettingsPage />}
+                {page === 'profile' && <ProfilePage />}
+            </Suspense>
           </Layout>
       );
   }
