@@ -42,6 +42,8 @@ export interface ThemeSettings {
   // Payment Gateways
   mercadoPagoAccessToken?: string;
   mercadoPagoPublicKey?: string;
+  mercadoPagoClientId?: string;
+  mercadoPagoClientSecret?: string;
   creditCardEnabled?: boolean;
   creditCardSurcharge?: number;
 

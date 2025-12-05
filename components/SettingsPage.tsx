@@ -320,7 +320,13 @@ const SettingsPage: React.FC = () => {
                                 <h3 className="font-bold pt-4 text-slate-800">Mercado Pago</h3>
                                 <Input label="Access Token" name="mercadoPagoAccessToken" value={settings.mercadoPagoAccessToken || ''} onChange={handleChange} type="password" />
                                 <Input label="Public Key" name="mercadoPagoPublicKey" value={settings.mercadoPagoPublicKey || ''} onChange={handleChange} />
-                                <div className="flex items-center gap-2">
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Input label="Client ID" name="mercadoPagoClientId" value={settings.mercadoPagoClientId || ''} onChange={handleChange} />
+                                    <Input label="Client Secret" name="mercadoPagoClientSecret" value={settings.mercadoPagoClientSecret || ''} onChange={handleChange} type="password" />
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-2">
                                     <input type="checkbox" name="creditCardEnabled" checked={settings.creditCardEnabled} onChange={handleChange} id="ccEnabled" className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"/>
                                     <label htmlFor="ccEnabled" className="text-sm font-medium text-gray-700">Habilitar Pagamento com Cartão</label>
                                 </div>
