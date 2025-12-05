@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor, SystemEvent } from '../types';
+import { Student, User, Academy, Graduation, ClassSchedule, ThemeSettings, AttendanceRecord, ActivityLog, Professor, SystemEvent, Expense } from '../types';
 import { 
   MOCK_THEME, STUDENTS, USERS, ACADEMIES, GRADUATIONS, 
   PROFESSORS, SCHEDULES, ATTENDANCE_RECORDS, ACTIVITY_LOGS 
@@ -16,7 +16,8 @@ interface AppContextType {
     schedules: ClassSchedule[];
     graduations: Graduation[];
     professors: Professor[];
-    events: SystemEvent[]; // New
+    events: SystemEvent[];
+    expenses: Expense[];
     themeSettings: ThemeSettings;
     attendanceRecords: AttendanceRecord[];
     activityLogs: ActivityLog[];
@@ -50,6 +51,9 @@ interface AppContextType {
     deleteEvent: (id: string) => Promise<void>;
     toggleEventStatus: (id: string, active: boolean) => Promise<void>;
 
+    // Expense Functions
+    saveExpense: (expense: Omit<Expense, 'id'> & { id?: string }) => Promise<void>;
+
     login: (email: string, pass: string) => Promise<void>;
     loginGoogle: (credential: string) => Promise<void>;
     registerAcademy: (data: any) => Promise<{ success: boolean; message?: string }>;
@@ -77,6 +81,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [allAcademies, setAllAcademies] = useState<Academy[]>([]);
     const [allActivityLogs, setAllActivityLogs] = useState<ActivityLog[]>([]);
     const [allEvents, setAllEvents] = useState<SystemEvent[]>([]);
+    const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
 
     const [graduations, setGraduations] = useState<Graduation[]>([]);
     const [globalThemeSettings, setGlobalThemeSettings] = useState<ThemeSettings>(MOCK_THEME);
@@ -100,6 +105,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 setAllAttendance(data.attendanceRecords);
                 setAllActivityLogs(data.activityLogs);
                 setAllEvents(data.events || []);
+                setAllExpenses(data.expenses || []);
                 if (data.themeSettings && data.themeSettings.id) {
                     setGlobalThemeSettings(data.themeSettings);
                 }
@@ -137,6 +143,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setAllActivityLogs(ACTIVITY_LOGS);
             setGlobalThemeSettings(MOCK_THEME);
             setAllEvents([]);
+            setAllExpenses([]);
         }
         setLoading(false);
     };
@@ -169,7 +176,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 users: allUsers,
                 academies: allAcademies,
                 activityLogs: allActivityLogs,
-                events: allEvents
+                events: allEvents,
+                expenses: allExpenses
             };
         }
 
@@ -178,6 +186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const schedules = allSchedules.filter(s => s.academyId === academyIdToFilter);
         const academies = allAcademies.filter(a => a.id === academyIdToFilter);
         const events = allEvents.filter(e => e.academyId === academyIdToFilter);
+        const expenses = allExpenses.filter(e => e.academyId === academyIdToFilter);
         
         const studentIdsInAcademy = new Set(students.map(s => s.id));
         const attendanceRecords = allAttendance.filter(ar => studentIdsInAcademy.has(ar.studentId));
@@ -195,10 +204,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             users, 
             academies, 
             activityLogs,
-            events
+            events,
+            expenses
         };
 
-    }, [user, globalAcademyFilter, allStudents, allProfessors, allSchedules, allAttendance, allUsers, allAcademies, allActivityLogs, allEvents]);
+    }, [user, globalAcademyFilter, allStudents, allProfessors, allSchedules, allAttendance, allUsers, allAcademies, allActivityLogs, allEvents, allExpenses]);
 
     // Apply Theme (CSS Variables) - Always Force Light/Configured Theme
     useEffect(() => {
@@ -360,6 +370,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const deleteEvent = (id: string) => handleApiCall(`/api/events/${id}`, 'DELETE', null, 'Evento excluído com sucesso.');
     const toggleEventStatus = (id: string, active: boolean) => handleApiCall(`/api/events/${id}/status`, 'POST', { active }, `Evento ${active ? 'ativado' : 'desativado'} com sucesso.`);
 
+    // Expense Functions
+    const saveExpense = (expense: Omit<Expense, 'id'> & { id?: string }) => {
+        const expenseData = { ...expense };
+        if (user && user.role !== 'general_admin') {
+            expenseData.academyId = user.academyId;
+        } else if (!expenseData.academyId && user?.role === 'academy_admin') {
+             expenseData.academyId = user.academyId;
+        }
+        
+        if (!expenseData.id) {
+            expenseData.id = `exp_${Date.now()}`;
+        }
+
+        return handleApiCall('/api/expenses', 'POST', expenseData, 'Despesa registrada com sucesso.');
+    };
+
     return (
         <AppContext.Provider value={{
             user, 
@@ -371,6 +397,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor, updateProfessorStatus,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord, saveAcademy, updateAcademyStatus,
             saveEvent, deleteEvent, toggleEventStatus,
+            saveExpense,
             login, loginGoogle, registerAcademy, logout,
             
             users: filteredData.users, 
@@ -380,7 +407,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             professors: filteredData.professors,
             schedules: filteredData.schedules,
             attendanceRecords: filteredData.attendanceRecords,
-            events: filteredData.events
+            events: filteredData.events,
+            expenses: filteredData.expenses
         }}>
             {children}
         </AppContext.Provider>

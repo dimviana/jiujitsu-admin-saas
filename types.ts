@@ -149,6 +149,14 @@ export interface PaymentHistory {
     amount: number;
 }
 
+export interface Expense {
+    id: string;
+    academyId: string;
+    description: string;
+    amount: number;
+    date: string;
+}
+
 export interface StudentDocument {
     id: string;
     name: string;

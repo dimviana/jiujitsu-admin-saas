@@ -299,6 +299,16 @@ if (isProduction && cluster.isPrimary) {
 
             await pool.query(`CREATE TABLE IF NOT EXISTS schedule_students (scheduleId VARCHAR(255), studentId VARCHAR(255), PRIMARY KEY (scheduleId, studentId), FOREIGN KEY (scheduleId) REFERENCES class_schedules(id), FOREIGN KEY (studentId) REFERENCES students(id))`);
 
+            // --- Migration for Expenses Table ---
+            await pool.query(`CREATE TABLE IF NOT EXISTS expenses (
+                id VARCHAR(255) PRIMARY KEY,
+                academyId VARCHAR(255),
+                description TEXT,
+                amount REAL,
+                date DATE,
+                FOREIGN KEY (academyId) REFERENCES academies(id)
+            )`);
+
             const [students] = await pool.query('SELECT * FROM students');
             const parsedStudents = students.map(s => ({ 
                 ...s, 
@@ -328,6 +338,7 @@ if (isProduction && cluster.isPrimary) {
             const parsedSchedules = schedules.map(s => ({ ...s, assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId), studentIds: enrolledStudents.filter(es => es.scheduleId === s.id).map(es => es.studentId) }));
             const [attendance] = await pool.query('SELECT * FROM attendance_records');
             const [logs] = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100');
+            const [expenses] = await pool.query('SELECT * FROM expenses');
             
             // Fetch Events and their Recipients
             const [events] = await pool.query('SELECT * FROM events');
@@ -357,7 +368,7 @@ if (isProduction && cluster.isPrimary) {
                 creditCardSurcharge: Number(parsedSettings.creditCardSurcharge || 0),
                 efiEnabled: Boolean(parsedSettings.efiEnabled),
             };
-            res.json({ students: parsedStudents, users, academies: parsedAcademies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings, events: parsedEvents });
+            res.json({ students: parsedStudents, users, academies: parsedAcademies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings, events: parsedEvents, expenses });
         } catch (error) {
             console.error(error);
             res.status(500).json({ message: 'Error fetching data' });
@@ -637,6 +648,9 @@ if (isProduction && cluster.isPrimary) {
     });
     app.delete('/api/events/:id', deleteHandler('events'));
     app.post('/api/events/:id/status', async (req, res) => { try { await pool.query('UPDATE events SET active = ? WHERE id = ?', [req.body.active ? 1 : 0, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); } });
+
+    // --- Expenses API ---
+    app.post('/api/expenses', createHandler('expenses'));
 
     // --- FJJPE Status Check Endpoint ---
     app.post('/api/fjjpe/check', async (req, res) => {

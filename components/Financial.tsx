@@ -1,9 +1,8 @@
 
-
 import React, { useState, useMemo, useContext, useEffect } from 'react';
-import { Student } from '../types';
-import { Users, DollarSign, Upload, MessageSquareWarning, FileText, GraduationCap } from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { Student, Expense } from '../types';
+import { Users, DollarSign, Upload, MessageSquareWarning, FileText, GraduationCap, TrendingDown, Plus, X } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis } from 'recharts';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -58,6 +57,60 @@ const FinancialStatusChart: React.FC<{ paidCount: number; unpaidCount: number; s
                         <span className="text-sm text-slate-600">{d.name} ({d.value})</span>
                     </div>
                 ))}
+            </div>
+        </Card>
+    );
+};
+
+const ExpensesChart: React.FC<{ expenses: Expense[] }> = ({ expenses }) => {
+    const data = useMemo(() => {
+        const today = new Date();
+        const last6Months = [];
+        const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const monthKey = d.toISOString().slice(0, 7); // YYYY-MM
+            last6Months.push({
+                name: monthNames[d.getMonth()],
+                key: monthKey,
+                amount: 0
+            });
+        }
+
+        expenses.forEach(exp => {
+            const expMonth = exp.date.slice(0, 7);
+            const monthData = last6Months.find(m => m.key === expMonth);
+            if (monthData) {
+                monthData.amount += exp.amount;
+            }
+        });
+
+        return last6Months;
+    }, [expenses]);
+
+    const totalExpenses = expenses.reduce((acc, curr) => acc + curr.amount, 0);
+
+    return (
+        <Card className="h-full min-h-[300px]">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-slate-800">Despesas (Últimos 6 Meses)</h3>
+                <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">Total: {totalExpenses.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            </div>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} tickFormatter={(value) => `R$${value}`} />
+                        <Tooltip 
+                            cursor={{fill: '#f1f5f9'}}
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                            formatter={(value: number) => [value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 'Valor']}
+                        />
+                        <Bar dataKey="amount" fill="#f87171" radius={[4, 4, 0, 0]} barSize={40} />
+                    </BarChart>
+                </ResponsiveContainer>
             </div>
         </Card>
     );
@@ -156,6 +209,56 @@ const UploadProofModal: React.FC<{ student: Student; onClose: () => void, onConf
     );
 };
 
+const ExpenseModal: React.FC<{ isOpen: boolean; onClose: () => void; onSave: (data: any) => Promise<void> }> = ({ isOpen, onClose, onSave }) => {
+    const [formData, setFormData] = useState({ description: '', amount: '', date: new Date().toISOString().split('T')[0] });
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        await onSave({
+            description: formData.description,
+            amount: parseFloat(formData.amount),
+            date: formData.date
+        });
+        setLoading(false);
+        onClose();
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Cadastrar Despesa">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <Input 
+                    label="Descrição" 
+                    value={formData.description} 
+                    onChange={(e) => setFormData({...formData, description: e.target.value})} 
+                    required 
+                    placeholder="Ex: Aluguel, Luz, Equipamentos"
+                />
+                <Input 
+                    label="Valor (R$)" 
+                    type="number" 
+                    step="0.01" 
+                    value={formData.amount} 
+                    onChange={(e) => setFormData({...formData, amount: e.target.value})} 
+                    required 
+                />
+                <Input 
+                    label="Data" 
+                    type="date" 
+                    value={formData.date} 
+                    onChange={(e) => setFormData({...formData, date: e.target.value})} 
+                    required 
+                />
+                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                    <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
+                    <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : 'Salvar Despesa'}</Button>
+                </div>
+            </form>
+        </Modal>
+    );
+}
+
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; color: string }> = ({ title, value, icon, color }) => (
     <Card className="flex items-center">
         <div className={`p-3 rounded-lg mr-4 text-white shadow-sm`} style={{ backgroundColor: color }}>
@@ -203,7 +306,7 @@ const ReminderModal: React.FC<{
 );
 
 export const Financial: React.FC = () => {
-    const { students, graduations, themeSettings, setThemeSettings, updateStudentPayment } = useContext(AppContext);
+    const { students, graduations, themeSettings, setThemeSettings, updateStudentPayment, expenses, saveExpense } = useContext(AppContext);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [updatedCard, setUpdatedCard] = useState<string | null>(null);
@@ -212,6 +315,7 @@ export const Financial: React.FC = () => {
     const [feeAmount, setFeeAmount] = useState(themeSettings.monthlyFeeAmount);
     const [feeAmountInput, setFeeAmountInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
     const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+    const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
 
     const { paidStudents, unpaidStudents, scholarshipStudents, totalRevenue } = useMemo(() => {
         const paid = students.filter(s => s.paymentStatus === 'paid');
@@ -416,7 +520,11 @@ export const Financial: React.FC = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-4">
                 <h1 className="text-3xl font-bold text-slate-800">Controle Financeiro</h1>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                    <Button variant="danger" onClick={() => setIsExpenseModalOpen(true)}>
+                        <TrendingDown className="w-4 h-4 mr-2" />
+                        Lançar Despesa
+                    </Button>
                     <Button variant="secondary" onClick={handleExportPDF}>
                         <FileText className="w-4 h-4 mr-2" />
                         Exportar Relatório
@@ -452,9 +560,12 @@ export const Financial: React.FC = () => {
                 />
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
                     <FinancialStatusChart paidCount={paidStudents} unpaidCount={unpaidStudents} scholarshipCount={scholarshipStudents} />
+                </div>
+                <div>
+                    <ExpensesChart expenses={expenses} />
                 </div>
             </div>
             
@@ -596,6 +707,12 @@ export const Financial: React.FC = () => {
                 onClose={() => setIsReminderModalOpen(false)}
                 students={remindersToSend}
                 onSendAll={handleSendAllReminders}
+            />
+
+            <ExpenseModal 
+                isOpen={isExpenseModalOpen}
+                onClose={() => setIsExpenseModalOpen(false)}
+                onSave={saveExpense}
             />
         </div>
     );
