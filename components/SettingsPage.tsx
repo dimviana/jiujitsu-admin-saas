@@ -128,11 +128,17 @@ const SettingsPage: React.FC = () => {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
-        const checked = (e.target as HTMLInputElement).checked;
+        
+        let finalValue: any = value;
+        if (type === 'checkbox') {
+             finalValue = (e.target as HTMLInputElement).checked;
+        } else if (type === 'number') {
+             finalValue = value === '' ? 0 : parseFloat(value);
+        }
         
         setSettings(prev => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : value
+            [name]: finalValue
         }));
     };
 

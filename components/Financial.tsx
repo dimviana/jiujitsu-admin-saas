@@ -312,8 +312,11 @@ export const Financial: React.FC = () => {
     const [updatedCard, setUpdatedCard] = useState<string | null>(null);
     const [isValuesModalOpen, setIsValuesModalOpen] = useState(false);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-    const [feeAmount, setFeeAmount] = useState(themeSettings.monthlyFeeAmount);
-    const [feeAmountInput, setFeeAmountInput] = useState(themeSettings.monthlyFeeAmount.toFixed(2));
+    
+    // Safely initialize with a number fallback
+    const [feeAmount, setFeeAmount] = useState(Number(themeSettings.monthlyFeeAmount) || 0);
+    const [feeAmountInput, setFeeAmountInput] = useState((Number(themeSettings.monthlyFeeAmount) || 0).toFixed(2));
+    
     const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
 
@@ -321,7 +324,7 @@ export const Financial: React.FC = () => {
         const paid = students.filter(s => s.paymentStatus === 'paid');
         const unpaid = students.filter(s => s.paymentStatus === 'unpaid');
         const scholarship = students.filter(s => s.paymentStatus === 'scholarship');
-        const revenue = paid.length * themeSettings.monthlyFeeAmount;
+        const revenue = paid.length * (Number(themeSettings.monthlyFeeAmount) || 0);
         return {
             paidStudents: paid.length,
             unpaidStudents: unpaid.length,
@@ -377,9 +380,11 @@ export const Financial: React.FC = () => {
         }
     }, [remindersToSend]);
     
+    // Safety update when theme settings change
     useEffect(() => {
-        setFeeAmount(themeSettings.monthlyFeeAmount);
-        setFeeAmountInput(themeSettings.monthlyFeeAmount.toFixed(2));
+        const val = Number(themeSettings.monthlyFeeAmount) || 0;
+        setFeeAmount(val);
+        setFeeAmountInput(val.toFixed(2));
     }, [themeSettings]);
 
     const handleSaveFeeAmount = () => {

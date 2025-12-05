@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, useEffect } from 'react';
 import { User } from '../types';
 import { Menu, LogOut, Filter, Download } from 'lucide-react';
@@ -25,7 +26,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onNavi
       const dynamicManifest = {
           name: themeSettings.appName || themeSettings.systemName,
           short_name: themeSettings.appName || themeSettings.systemName,
-          start_url: "/",
+          start_url: window.location.href, // Absolute URL to current page prevents "invalid URL" warnings
           display: "standalone",
           background_color: themeSettings.backgroundColor,
           theme_color: themeSettings.primaryColor,
