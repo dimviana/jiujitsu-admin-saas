@@ -374,9 +374,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saveExpense = (expense: Omit<Expense, 'id'> & { id?: string }) => {
         const expenseData = { ...expense };
         if (user && user.role !== 'general_admin') {
-            expenseData.academyId = user.academyId;
+            expenseData.academyId = user.academyId || '';
         } else if (!expenseData.academyId && user?.role === 'academy_admin') {
-             expenseData.academyId = user.academyId;
+             expenseData.academyId = user.academyId || '';
         }
         
         if (!expenseData.id) {
