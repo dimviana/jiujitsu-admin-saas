@@ -1,9 +1,10 @@
+
 import React, { useContext, useState, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { Student } from '../types';
 import Modal from './ui/Modal';
 import Button from './ui/Button';
-import { Filter, FileDown, CheckSquare, Square } from 'lucide-react';
+import { Filter, FileDown, CheckSquare, Square, ArrowUp, ArrowDown } from 'lucide-react';
 import { generateGraduationReport } from '../services/graduationReportService';
 
 interface GraduationListModalProps {
@@ -30,19 +31,42 @@ export const GraduationListModal: React.FC<GraduationListModalProps> = ({ isOpen
     
     const [filterBeltId, setFilterBeltId] = useState<string>('all');
     const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
     
     // State to hold temporary changes for the report (stripes, next belt)
     const [reportConfig, setReportConfig] = useState<Record<string, { stripes: number, nextBeltId: string | '' }>>({});
 
-    // Filter students
+    // Filter and Sort students
     const filteredStudents = useMemo(() => {
         let list = students.filter(s => s.status === 'active');
         if (filterBeltId !== 'all') {
             list = list.filter(s => s.beltId === filterBeltId);
         }
-        // Sort by Name
-        return list.sort((a, b) => a.name.localeCompare(b.name));
-    }, [students, filterBeltId]);
+        
+        return list.sort((a, b) => {
+            const beltA = graduations.find(g => g.id === a.beltId);
+            const beltB = graduations.find(g => g.id === b.beltId);
+            
+            const rankA = beltA?.rank || 0;
+            const rankB = beltB?.rank || 0;
+
+            // Sort by Rank
+            if (rankA !== rankB) {
+                return sortOrder === 'asc' ? rankA - rankB : rankB - rankA;
+            }
+            
+            // Sort by Stripes
+            const stripesA = a.stripes || 0;
+            const stripesB = b.stripes || 0;
+            
+            if (stripesA !== stripesB) {
+                 return sortOrder === 'asc' ? stripesA - stripesB : stripesB - stripesA;
+            }
+
+            // Sort by Name (Alphabetical always asc for consistency within same rank/stripes)
+            return a.name.localeCompare(b.name);
+        });
+    }, [students, filterBeltId, graduations, sortOrder]);
 
     // Initialize report config when students change
     useMemo(() => {
@@ -133,7 +157,7 @@ export const GraduationListModal: React.FC<GraduationListModalProps> = ({ isOpen
         <Modal isOpen={isOpen} onClose={onClose} title="Lista de Graduação" size="4xl">
             <div className="space-y-4">
                 {/* Filters */}
-                <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200 flex-wrap">
                     <Filter className="w-5 h-5 text-slate-500" />
                     <select 
                         value={filterBeltId}
@@ -145,7 +169,17 @@ export const GraduationListModal: React.FC<GraduationListModalProps> = ({ isOpen
                             <option key={g.id} value={g.id}>{g.name} ({g.type === 'kids' ? 'Kids' : 'Adulto'})</option>
                         ))}
                     </select>
-                    <span className="text-sm text-slate-500 ml-auto">
+                    
+                    <button 
+                        onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                        className="flex items-center gap-1 bg-white border border-slate-300 text-slate-700 rounded-md px-3 py-1.5 text-sm hover:bg-slate-50 transition-colors"
+                        title={sortOrder === 'asc' ? "Ordenação: Menor para Maior Graduação" : "Ordenação: Maior para Menor Graduação"}
+                    >
+                        {sortOrder === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
+                        <span className="hidden sm:inline">{sortOrder === 'asc' ? 'Crescente' : 'Decrescente'}</span>
+                    </button>
+
+                    <span className="text-sm text-slate-500 ml-auto w-full sm:w-auto text-right">
                         {filteredStudents.length} alunos encontrados
                     </span>
                 </div>
@@ -188,7 +222,7 @@ export const GraduationListModal: React.FC<GraduationListModalProps> = ({ isOpen
                                             {currentBelt && (
                                                 <div className="flex items-center">
                                                     <span className="w-3 h-3 rounded-full mr-2 border border-slate-300" style={{ backgroundColor: currentBelt.color }}></span>
-                                                    {currentBelt.name}
+                                                    {currentBelt.name} <span className="ml-1 text-slate-400 text-xs">({student.stripes}º)</span>
                                                 </div>
                                             )}
                                         </td>
