@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-react': ['react', 'react-dom'],
             'vendor-charts': ['recharts'],
             'vendor-utils': ['jspdf', '@mercadopago/sdk-react', 'lucide-react'],
           }
