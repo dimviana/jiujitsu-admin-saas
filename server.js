@@ -309,7 +309,43 @@ if (isProduction && cluster.isPrimary) {
                 FOREIGN KEY (academyId) REFERENCES academies(id)
             )`);
 
-            const [students] = await pool.query('SELECT * FROM students');
+            // PERFORMANCE: Execute queries in parallel using Promise.all to reduce Time To First Byte (TTFB)
+            const [
+                [students],
+                [payments],
+                [users],
+                [academies],
+                [graduations],
+                [professors],
+                [schedules],
+                [assistants],
+                [enrolledStudents],
+                [attendance],
+                [logs],
+                [expenses],
+                [events],
+                [recipients],
+                [settings]
+            ] = await Promise.all([
+                pool.query('SELECT * FROM students'),
+                // Optimize: Limit payment history fetch if table grows too large in future
+                pool.query('SELECT * FROM payment_history WHERE date >= DATE_SUB(NOW(), INTERVAL 1 YEAR)'), 
+                pool.query('SELECT * FROM users'),
+                pool.query('SELECT * FROM academies'),
+                pool.query('SELECT * FROM graduations'),
+                pool.query('SELECT * FROM professors'),
+                pool.query('SELECT * FROM class_schedules'),
+                pool.query('SELECT * FROM schedule_assistants'),
+                pool.query('SELECT * FROM schedule_students'),
+                // Optimize: Limit attendance to last 12 months for initial load
+                pool.query('SELECT * FROM attendance_records WHERE date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)'),
+                pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 50'), // Reduced from 100 to 50
+                pool.query('SELECT * FROM expenses WHERE date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)'),
+                pool.query('SELECT * FROM events'),
+                pool.query('SELECT * FROM event_recipients'),
+                pool.query('SELECT * FROM theme_settings LIMIT 1')
+            ]);
+
             const parsedStudents = students.map(s => ({ 
                 ...s, 
                 isCompetitor: Boolean(s.isCompetitor),
@@ -319,37 +355,26 @@ if (isProduction && cluster.isPrimary) {
                 documents: s.documents ? JSON.parse(s.documents) : [],
                 status: s.status || 'active'
             }));
-            const [payments] = await pool.query('SELECT * FROM payment_history');
+            
+            // Map payments in memory (faster than multiple SQL joins for this scale)
             parsedStudents.forEach(s => { s.paymentHistory = payments.filter(p => p.studentId === s.id); });
-            const [users] = await pool.query('SELECT * FROM users');
-            const [academies] = await pool.query('SELECT * FROM academies');
+            
             const parsedAcademies = academies.map(a => ({
                 ...a,
                 settings: a.settings ? JSON.parse(a.settings) : {},
                 status: a.status || 'active',
                 allowStudentRegistration: a.allowStudentRegistration === 1 || a.allowStudentRegistration === true
             }));
-            const [graduations] = await pool.query('SELECT * FROM graduations');
-            const [professors] = await pool.query('SELECT * FROM professors');
-            const parsedProfessors = professors.map(p => ({ ...p, isInstructor: Boolean(p.isInstructor), status: p.status || 'active' }));
-            const [schedules] = await pool.query('SELECT * FROM class_schedules');
-            const [assistants] = await pool.query('SELECT * FROM schedule_assistants');
-            const [enrolledStudents] = await pool.query('SELECT * FROM schedule_students');
-            const parsedSchedules = schedules.map(s => ({ ...s, assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId), studentIds: enrolledStudents.filter(es => es.scheduleId === s.id).map(es => es.studentId) }));
-            const [attendance] = await pool.query('SELECT * FROM attendance_records');
-            const [logs] = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 100');
-            const [expenses] = await pool.query('SELECT * FROM expenses');
             
-            // Fetch Events and their Recipients
-            const [events] = await pool.query('SELECT * FROM events');
-            const [recipients] = await pool.query('SELECT * FROM event_recipients');
+            const parsedProfessors = professors.map(p => ({ ...p, isInstructor: Boolean(p.isInstructor), status: p.status || 'active' }));
+            const parsedSchedules = schedules.map(s => ({ ...s, assistantIds: assistants.filter(a => a.scheduleId === s.id).map(a => a.assistantId), studentIds: enrolledStudents.filter(es => es.scheduleId === s.id).map(es => es.studentId) }));
+            
             const parsedEvents = events.map(e => ({ 
                 ...e, 
                 active: Boolean(e.active),
                 targetAudience: recipients.filter(r => r.eventId === e.id).map(r => r.recipientId)
             }));
 
-            const [settings] = await pool.query('SELECT * FROM theme_settings LIMIT 1');
             let parsedSettings = settings[0] || {};
             parsedSettings = { 
                 ...parsedSettings, 
@@ -368,6 +393,7 @@ if (isProduction && cluster.isPrimary) {
                 creditCardSurcharge: Number(parsedSettings.creditCardSurcharge || 0),
                 efiEnabled: Boolean(parsedSettings.efiEnabled),
             };
+            
             res.json({ students: parsedStudents, users, academies: parsedAcademies, graduations, professors: parsedProfessors, schedules: parsedSchedules, attendanceRecords: attendance, activityLogs: logs, themeSettings: parsedSettings, events: parsedEvents, expenses });
         } catch (error) {
             console.error(error);

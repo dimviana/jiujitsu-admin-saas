@@ -85,12 +85,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const [graduations, setGraduations] = useState<Graduation[]>([]);
     const [globalThemeSettings, setGlobalThemeSettings] = useState<ThemeSettings>(MOCK_THEME);
+    
+    // Loading State: True initially to show spinner, false after first data load to allow background updates
     const [loading, setLoading] = useState(true);
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
+
     const [notification, setNotification] = useState<NotificationType | null>(null);
     const [globalAcademyFilter, setGlobalAcademyFilter] = useState('all');
 
-    const refreshData = async () => {
-        setLoading(true);
+    const refreshData = async (background = false) => {
+        if (!background) setLoading(true);
+        
         try {
             // First load data
             const res = await fetch('/api/initial-data');
@@ -110,18 +115,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     setGlobalThemeSettings(data.themeSettings);
                 }
 
-                // Trigger auto promotion check in background
-                if (user && user.role !== 'student') {
+                // Trigger auto promotion check in background (only once per session or explicit refresh)
+                if (user && user.role !== 'student' && !background) {
                     fetch('/api/students/auto-promote-stripes', { method: 'POST' })
                         .then(res => res.json())
                         .then(res => {
                             if (res.success && res.message && !res.message.startsWith('0')) {
                                 setNotification({ message: 'Graduações Automáticas', details: res.message, type: 'success' });
-                                // Refresh to show new stripes
-                                fetch('/api/initial-data').then(r => r.json()).then(d => {
-                                    setAllStudents(d.students);
-                                    setAllActivityLogs(d.activityLogs);
-                                });
+                                // Refresh silently to show new stripes
+                                refreshData(true);
                             }
                         })
                         .catch(err => console.error("Auto promote error", err));
@@ -144,8 +146,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setGlobalThemeSettings(MOCK_THEME);
             setAllEvents([]);
             setAllExpenses([]);
+        } finally {
+            setLoading(false);
+            setIsInitialLoad(false);
         }
-        setLoading(false);
     };
 
     useEffect(() => {
@@ -230,7 +234,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const handleLoginSuccess = async (userData: User) => {
         localStorage.setItem('jiujitsu-user', JSON.stringify(userData));
         setUser(userData);
-        await refreshData();
+        await refreshData(false); // Trigger full refresh on login
         setNotification({ message: `Bem-vindo, ${userData.name.split(' ')[0]}!`, details: 'Login realizado com sucesso.', type: 'success' });
     };
     
@@ -319,7 +323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 throw new Error(errData.message || 'Erro na requisição');
             }
             setNotification({ message: 'Sucesso!', details: successMessage, type: 'success' });
-            await refreshData();
+            await refreshData(true); // Background refresh
         } catch (e: any) {
              console.error(`Error in ${endpoint}:`, e);
              setNotification({ message: 'Erro', details: e.message || 'Ocorreu um erro ao processar sua solicitação.', type: 'error' });
