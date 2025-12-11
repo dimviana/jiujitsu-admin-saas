@@ -88,7 +88,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     // Loading State: True initially to show spinner, false after first data load to allow background updates
     const [loading, setLoading] = useState(true);
-    const [isInitialLoad, setIsInitialLoad] = useState(true);
 
     const [notification, setNotification] = useState<NotificationType | null>(null);
     const [globalAcademyFilter, setGlobalAcademyFilter] = useState('all');
@@ -148,7 +147,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setAllExpenses([]);
         } finally {
             setLoading(false);
-            setIsInitialLoad(false);
         }
     };
 
