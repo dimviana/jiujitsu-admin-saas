@@ -52,7 +52,10 @@ const generatePixPayload = (
     const safeKey = key.trim();
     const safeName = normalize(name).substring(0, 25); 
     const safeCity = normalize(city).substring(0, 15) || 'BRASILIA';
-    const safeAmount = amount.toFixed(2);
+    
+    // Ensure amount is a number before calling toFixed
+    const numericAmount = Number(amount) || 0;
+    const safeAmount = numericAmount.toFixed(2);
     
     // IMPORTANT: For static QRs, using '***' as txid ensures maximum compatibility with all banks.
     const safeTxid = '***'; 
@@ -99,11 +102,14 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
             return null;
         }
         
+        // Ensure strictly number
+        const amount = Number(themeSettings.monthlyFeeAmount) || 0;
+
         return generatePixPayload(
             activePixKey,
             themeSettings.pixHolderName,
             "SAAS", 
-            themeSettings.monthlyFeeAmount
+            amount
         );
     }, [themeSettings, student]);
 
@@ -130,6 +136,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
     }
     
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(brCode)}`;
+    const displayAmount = Number(themeSettings.monthlyFeeAmount) || 0;
 
     return (
         <Modal isOpen={true} onClose={onClose} title="Pagamento via PIX">
@@ -137,7 +144,7 @@ const PixPaymentModal: React.FC<{ student: Student; onClose: () => void; onProce
                 <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-sm">
                     Escaneie o QR Code abaixo com o aplicativo do seu banco ou copie o código "Pix Copia e Cola".
                 </div>
-                <p className="text-slate-600">Valor da Mensalidade: <span className="font-bold text-lg text-slate-800">{themeSettings.monthlyFeeAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
+                <p className="text-slate-600">Valor da Mensalidade: <span className="font-bold text-lg text-slate-800">{displayAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
                 
                 <div className="flex justify-center my-4">
                     <img src={qrCodeUrl} alt="PIX QR Code" className="border-4 border-slate-200 rounded-lg shadow-sm"/>
@@ -189,7 +196,10 @@ const CreditCardModal: React.FC<CreditCardModalProps> = ({ student, onClose, onC
         }
     }, [publicKey]);
 
-    const total = amount + surcharge;
+    // Ensure numeric operations
+    const numericAmount = Number(amount) || 0;
+    const numericSurcharge = Number(surcharge) || 0;
+    const total = numericAmount + numericSurcharge;
 
     const handleFormatCardNumber = (e: React.ChangeEvent<HTMLInputElement>) => {
         let val = e.target.value.replace(/\D/g, '');
@@ -255,7 +265,7 @@ const CreditCardModal: React.FC<CreditCardModalProps> = ({ student, onClose, onC
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     studentId: student.id,
-                    amount,
+                    amount: numericAmount, // Use numeric amount
                     token: tokenResponse.id,
                     paymentMethodId: getPaymentMethodId(cleanCardNumber),
                     installments: 1,
@@ -288,12 +298,12 @@ const CreditCardModal: React.FC<CreditCardModalProps> = ({ student, onClose, onC
                 <div className="bg-slate-50 p-4 rounded-lg mb-4 text-center border border-slate-100">
                     <div className="flex justify-between items-center text-sm text-slate-500 mb-1">
                         <span>Mensalidade:</span>
-                        <span>{amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        <span>{numericAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                     </div>
-                    {surcharge > 0 && (
+                    {numericSurcharge > 0 && (
                         <div className="flex justify-between items-center text-sm text-slate-500 mb-2 border-b border-slate-200 pb-2">
                             <span>Taxa de Cartão:</span>
-                            <span>+ {surcharge.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                            <span>+ {numericSurcharge.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                         </div>
                     )}
                     <div className="flex justify-between items-center font-bold text-slate-800 text-lg">
@@ -621,8 +631,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             {paymentModalState === 'card' && (
                 <CreditCardModal 
                     student={studentData}
-                    amount={themeSettings.monthlyFeeAmount}
-                    surcharge={themeSettings.creditCardSurcharge || 0}
+                    amount={Number(themeSettings.monthlyFeeAmount) || 0}
+                    surcharge={Number(themeSettings.creditCardSurcharge) || 0}
                     publicKey={themeSettings.mercadoPagoPublicKey || ''}
                     onClose={() => setPaymentModalState('closed')}
                     onConfirm={handleConfirmPayment}
@@ -789,3 +799,4 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
     );
 };
+    
