@@ -27,7 +27,6 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Middleware
 app.use(cors());
-// Performance: Gzip Compression
 app.use(compression());
 
 // Increase payload limit
@@ -57,7 +56,8 @@ const pool = mysql.createPool({
     connectionLimit: 10,
     queueLimit: 0,
     enableKeepAlive: true,
-    keepAliveInitialDelay: 0
+    keepAliveInitialDelay: 0,
+    connectTimeout: 10000 // 10s timeout to prevent hanging
 });
 
 // Test DB Connection on Startup
@@ -179,8 +179,21 @@ app.get('/api/public-data', async (req, res) => {
             schedules: publicSchedules
         });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error fetching public data' });
+        console.error("Public Data Error (Serving Fallback):", error.message);
+        // Fallback JSON to prevent 502/500 crash on frontend
+        res.json({
+            themeSettings: {
+                systemName: 'Sistema Temporariamente Indisponível',
+                publicPageEnabled: true,
+                heroHtml: '<div class="p-10 text-center"><h1>Manutenção</h1><p>Estamos atualizando o sistema. Volte em breve.</p></div>',
+                aboutHtml: '',
+                contactHtml: '',
+                backgroundColor: '#f8fafc',
+                primaryColor: '#f59e0b',
+                secondaryColor: '#1e293b'
+            },
+            schedules: []
+        });
     }
 });
 
@@ -264,6 +277,8 @@ app.post('/api/login', async (req, res) => {
         res.status(status).json({ message: error.message || 'Server error' });
     }
 });
+
+// ... (Other routes like /api/register, /api/initial-data etc kept as is, just ensuring server structure is valid)
 
 app.post('/api/register', async (req, res) => {
     const conn = await pool.getConnection();
@@ -649,6 +664,12 @@ app.get('*', (req, res) => {
     } else {
         res.status(404).send('Build not found. Please run "npm run build".');
     }
+});
+
+// Global Error Handler for Express Routes
+app.use((err, req, res, next) => {
+    console.error('Express Error:', err);
+    res.status(500).json({ message: 'Internal Server Error' });
 });
 
 app.listen(PORT, () => {
