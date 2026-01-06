@@ -16,6 +16,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Global Error Handler for Uncaught Exceptions to prevent crash
+process.on('uncaughtException', (err) => {
+    console.error('CRITICAL ERROR (Uncaught Exception):', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('CRITICAL ERROR (Unhandled Rejection):', reason);
+});
+
 // Middleware
 app.use(cors());
 // Performance: Gzip Compression
@@ -320,7 +329,6 @@ app.post('/api/register-student', async (req, res) => {
 // --- INITIAL DATA ENDPOINT ---
 app.get('/api/initial-data', async (req, res) => {
     try {
-        // ... (All schema migrations kept same as previous) ...
         try { await pool.query("SELECT mobileNavShowDashboard FROM theme_settings LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE theme_settings ADD COLUMN mobileNavShowDashboard BOOLEAN DEFAULT TRUE, ADD COLUMN mobileNavShowSchedule BOOLEAN DEFAULT TRUE, ADD COLUMN mobileNavShowStudents BOOLEAN DEFAULT TRUE, ADD COLUMN mobileNavShowProfile BOOLEAN DEFAULT TRUE, ADD COLUMN mobileNavBgColor VARCHAR(50) DEFAULT '#ffffff', ADD COLUMN mobileNavActiveColor VARCHAR(50) DEFAULT '#f59e0b', ADD COLUMN mobileNavInactiveColor VARCHAR(50) DEFAULT '#94a3b8', ADD COLUMN mobileNavHeight INTEGER DEFAULT 60, ADD COLUMN mobileNavIconSize INTEGER DEFAULT 24, ADD COLUMN mobileNavBorderRadius INTEGER DEFAULT 0, ADD COLUMN mobileNavBottomMargin INTEGER DEFAULT 0, ADD COLUMN mobileNavFloating BOOLEAN DEFAULT FALSE"); }
         try { await pool.query("SELECT mobileNavVisible FROM theme_settings LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE theme_settings ADD COLUMN mobileNavVisible BOOLEAN DEFAULT TRUE"); }
         try { await pool.query("SELECT creditCardEnabled FROM theme_settings LIMIT 1"); } catch (e) { await pool.query("ALTER TABLE theme_settings ADD COLUMN creditCardEnabled BOOLEAN DEFAULT TRUE, ADD COLUMN efiEnabled BOOLEAN DEFAULT FALSE, ADD COLUMN efiPixKey VARCHAR(255), ADD COLUMN efiPixCert LONGTEXT"); }
@@ -464,7 +472,6 @@ const deleteHandler = (table) => async (req, res) => {
     }
 };
 
-// ... (Other handlers like auto-promote, payments, etc., same as before but without cluster imports) ...
 app.post('/api/students/auto-promote-stripes', async (req, res) => {
     const conn = await pool.getConnection();
     try {
@@ -504,7 +511,6 @@ app.post('/api/students/auto-promote-stripes', async (req, res) => {
 });
 
 app.post('/api/payments/credit-card', async (req, res) => {
-    // ... Logic kept same as before ...
     const { studentId, amount, token, paymentMethodId, installments, payer } = req.body;
     const conn = await pool.getConnection();
     try {

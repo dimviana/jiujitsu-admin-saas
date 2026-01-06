@@ -62,6 +62,21 @@ interface AppContextType {
 
 export const AppContext = React.createContext<AppContextType>({} as AppContextType);
 
+// Helper to safely parse JSON response
+const safeJson = async (res: Response) => {
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+        return await res.json();
+    }
+    // If not JSON (likely HTML error from Nginx/Vite), throw readable error
+    if (!res.ok) {
+        const text = await res.text();
+        console.error(`Non-JSON Error Response (${res.status}):`, text.substring(0, 200)); // Log part of HTML for debug
+        throw new Error(`Erro no Servidor (${res.status}). Tente novamente mais tarde.`);
+    }
+    return null;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(() => {
         try {
@@ -86,72 +101,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [graduations, setGraduations] = useState<Graduation[]>([]);
     const [globalThemeSettings, setGlobalThemeSettings] = useState<ThemeSettings>(MOCK_THEME);
     
-    // Loading State: True initially to show spinner, false after first data load to allow background updates
     const [loading, setLoading] = useState(true);
-
     const [notification, setNotification] = useState<NotificationType | null>(null);
     const [globalAcademyFilter, setGlobalAcademyFilter] = useState('all');
 
     const refreshData = async (forceFullLoad = false) => {
         setLoading(true);
-        
         try {
-            // Optimization: If no user is logged in, fetch ONLY public data (Settings & Schedules)
-            // This massively improves public page load time by avoiding heavy DB queries.
             const currentUser = localStorage.getItem('jiujitsu-user');
             
             if (!currentUser && !forceFullLoad) {
                 const res = await fetch('/api/public-data');
                 if (res.ok) {
-                    const data = await res.json();
-                    if (data.themeSettings) setGlobalThemeSettings(data.themeSettings);
-                    if (data.schedules) setAllSchedules(data.schedules);
-                    // Clear other sensitive data to ensure safety
-                    setAllStudents([]);
-                    setAllUsers([]);
-                    setAllAcademies([]);
-                    setAllAttendance([]);
-                    setAllActivityLogs([]);
-                    setAllExpenses([]);
+                    const data = await safeJson(res);
+                    if (data) {
+                        if (data.themeSettings) setGlobalThemeSettings(data.themeSettings);
+                        if (data.schedules) setAllSchedules(data.schedules);
+                        setAllStudents([]);
+                        setAllUsers([]);
+                        setAllAcademies([]);
+                        setAllAttendance([]);
+                        setAllActivityLogs([]);
+                        setAllExpenses([]);
+                    }
                 }
             } else {
-                // Authenticated or Forced: Fetch Full Data
                 const res = await fetch('/api/initial-data');
                 if (res.ok) {
-                    const data = await res.json();
-                    setAllStudents(data.students);
-                    setAllUsers(data.users);
-                    setAllAcademies(data.academies);
-                    setGraduations(data.graduations);
-                    setAllProfessors(data.professors);
-                    setAllSchedules(data.schedules);
-                    setAllAttendance(data.attendanceRecords);
-                    setAllActivityLogs(data.activityLogs);
-                    setAllEvents(data.events || []);
-                    setAllExpenses(data.expenses || []);
-                    if (data.themeSettings && data.themeSettings.id) {
-                        setGlobalThemeSettings(data.themeSettings);
-                    }
+                    const data = await safeJson(res);
+                    if (data) {
+                        setAllStudents(data.students);
+                        setAllUsers(data.users);
+                        setAllAcademies(data.academies);
+                        setGraduations(data.graduations);
+                        setAllProfessors(data.professors);
+                        setAllSchedules(data.schedules);
+                        setAllAttendance(data.attendanceRecords);
+                        setAllActivityLogs(data.activityLogs);
+                        setAllEvents(data.events || []);
+                        setAllExpenses(data.expenses || []);
+                        if (data.themeSettings && data.themeSettings.id) {
+                            setGlobalThemeSettings(data.themeSettings);
+                        }
 
-                    // Trigger auto promotion check in background (only once per session or explicit refresh)
-                    if (user && user.role !== 'student' && !forceFullLoad) {
-                        fetch('/api/students/auto-promote-stripes', { method: 'POST' })
-                            .then(res => res.json())
-                            .then(res => {
-                                if (res.success && res.message && !res.message.startsWith('0')) {
-                                    setNotification({ message: 'Graduações Automáticas', details: res.message, type: 'success' });
-                                    // Refresh silently to show new stripes (call recursively with forceFullLoad=true but handle silent update? simpler to just leave it for next refresh)
-                                }
-                            })
-                            .catch(err => console.error("Auto promote error", err));
+                        if (user && user.role !== 'student' && !forceFullLoad) {
+                            // Non-critical background call, catch silently
+                            fetch('/api/students/auto-promote-stripes', { method: 'POST' }).catch(() => {});
+                        }
                     }
                 } else {
-                    throw new Error("Failed to fetch data from server");
+                    console.warn("Initial data fetch returned status:", res.status);
                 }
             }
         } catch (error) {
             console.warn("Backend offline or error, using mock data.", error);
-            // Fallback to mock data
+            // Fallback to mock data to prevent white screen
             setAllStudents(STUDENTS);
             setAllUsers(USERS);
             setAllAcademies(ACADEMIES);
@@ -172,7 +176,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshData();
     }, []);
 
-    // Derived State: Effective Theme Settings
     const effectiveThemeSettings = useMemo(() => {
         if (user && user.role !== 'general_admin' && user.academyId) {
             const myAcademy = allAcademies.find(a => a.id === user.academyId);
@@ -183,7 +186,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return globalThemeSettings;
     }, [user, allAcademies, globalThemeSettings]);
 
-    // Memoized, filtered data exposed to the app (STRICT ISOLATION)
     const filteredData = useMemo(() => {
         const academyIdToFilter = user?.role === 'general_admin' ? globalAcademyFilter : user?.academyId;
 
@@ -212,45 +214,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const attendanceRecords = allAttendance.filter(ar => studentIdsInAcademy.has(ar.studentId));
 
         const users = allUsers.filter(u => u.academyId === academyIdToFilter);
-        
         const validActorIds = new Set(users.map(u => u.id));
         const activityLogs = allActivityLogs.filter(log => validActorIds.has(log.actorId));
 
-        return { 
-            students, 
-            professors, 
-            schedules, 
-            attendanceRecords, 
-            users, 
-            academies, 
-            activityLogs,
-            events,
-            expenses
-        };
+        return { students, professors, schedules, attendanceRecords, users, academies, activityLogs, events, expenses };
 
     }, [user, globalAcademyFilter, allStudents, allProfessors, allSchedules, allAttendance, allUsers, allAcademies, allActivityLogs, allEvents, allExpenses]);
 
-    // Apply Theme (CSS Variables) - Always Force Light/Configured Theme
     useEffect(() => {
         const root = document.documentElement;
-        
-        // Always apply settings from database/mock (Light mode essentially)
         root.style.setProperty('--theme-primary', effectiveThemeSettings.primaryColor);
         root.style.setProperty('--theme-secondary', effectiveThemeSettings.secondaryColor);
         root.style.setProperty('--theme-accent', effectiveThemeSettings.primaryColor);
         root.style.setProperty('--theme-bg', effectiveThemeSettings.backgroundColor);
         root.style.setProperty('--theme-card-bg', effectiveThemeSettings.cardBackgroundColor);
         root.style.setProperty('--theme-text-primary', effectiveThemeSettings.secondaryColor);
-        
-        // Ensure no dark class is present
         root.classList.remove('dark');
-
     }, [effectiveThemeSettings]);
 
     const handleLoginSuccess = async (userData: User) => {
         localStorage.setItem('jiujitsu-user', JSON.stringify(userData));
         setUser(userData);
-        // Force full refresh on login to fetch private data
         await refreshData(true);
         setNotification({ message: `Bem-vindo, ${userData.name.split(' ')[0]}!`, details: 'Login realizado com sucesso.', type: 'success' });
     };
@@ -262,15 +246,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password: pass })
             });
-            if (res.ok) {
-                const data = await res.json();
+            
+            const data = await safeJson(res);
+            
+            if (res.ok && data) {
                 await handleLoginSuccess(data.user);
             } else {
-                const err = await res.json();
-                throw new Error(err.message || 'Login falhou');
+                throw new Error(data?.message || `Falha no login (Status ${res.status})`);
             }
         } catch(e: any) {
-             // Mock Login Fallback (For offline dev only)
              const mockUser = USERS.find(u => u.email === email);
              if (mockUser) { await handleLoginSuccess(mockUser); return; }
              const mockStudent = STUDENTS.find(s => s.email === email);
@@ -302,19 +286,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
+            const responseData = await safeJson(res);
             if (res.ok) {
-                const result = await res.json();
-                // Do NOT auto login for registration anymore, wait for approval
-                // await login(data.email, data.password); 
-                setNotification({ message: 'Cadastro Recebido', details: result.message || 'Sua academia foi cadastrada. Aguarde aprovação.', type: 'success' });
+                setNotification({ message: 'Cadastro Recebido', details: responseData?.message || 'Sua academia foi cadastrada. Aguarde aprovação.', type: 'success' });
                 return { success: true };
             } else {
-                 const err = await res.json();
-                 throw new Error(err.message || 'Erro no cadastro');
+                 throw new Error(responseData?.message || 'Erro no cadastro');
             }
         } catch (e: any) {
             console.warn("Mocking registration success");
-            // Mock logic
             setNotification({ message: 'Erro no Cadastro', details: 'Servidor offline. Cadastro indisponível.', type: 'error' });
             return { success: false, message: e.message };
         }
@@ -325,7 +305,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUser(null);
         setGlobalAcademyFilter('all');
         setNotification({ message: 'Até logo!', details: 'Você saiu do sistema com segurança.', type: 'success' });
-        // Refresh to switch back to public data only
         refreshData(false);
     };
 
@@ -336,13 +315,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 headers: { 'Content-Type': 'application/json' },
                 body: body ? JSON.stringify(body) : null
             });
+            
+            const data = await safeJson(res);
+
             if (!res.ok) {
-                // If response is not OK, try to parse error message
-                const errData = await res.json().catch(() => ({ message: 'Erro desconhecido' }));
-                throw new Error(errData.message || 'Erro na requisição');
+                throw new Error(data?.message || 'Erro na requisição');
             }
             setNotification({ message: 'Sucesso!', details: successMessage, type: 'success' });
-            // Always force full refresh when modifying data to ensure consistency
             await refreshData(true); 
         } catch (e: any) {
              console.error(`Error in ${endpoint}:`, e);
@@ -382,9 +361,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return handleApiCall(`/api/academies/${id}/status`, 'POST', { status }, `Academia ${action} com sucesso.`);
     };
 
-    // Event Functions
     const saveEvent = (event: Omit<SystemEvent, 'id'> & { id?: string }) => {
-        // Enforce academy ID for non-general admins
         const eventData = { ...event };
         if (user && user.role !== 'general_admin') {
             eventData.academyId = user.academyId;
@@ -394,7 +371,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const deleteEvent = (id: string) => handleApiCall(`/api/events/${id}`, 'DELETE', null, 'Evento excluído com sucesso.');
     const toggleEventStatus = (id: string, active: boolean) => handleApiCall(`/api/events/${id}/status`, 'POST', { active }, `Evento ${active ? 'ativado' : 'desativado'} com sucesso.`);
 
-    // Expense Functions
     const saveExpense = (expense: Omit<Expense, 'id'> & { id?: string }) => {
         const expenseData = { ...expense };
         if (user && user.role !== 'general_admin') {
@@ -402,37 +378,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else if (!expenseData.academyId && user?.role === 'academy_admin') {
              expenseData.academyId = user.academyId || '';
         }
-        
-        if (!expenseData.id) {
-            expenseData.id = `exp_${Date.now()}`;
-        }
-
+        if (!expenseData.id) expenseData.id = `exp_${Date.now()}`;
         return handleApiCall('/api/expenses', 'POST', expenseData, 'Despesa registrada com sucesso.');
     };
 
     return (
         <AppContext.Provider value={{
-            user, 
-            graduations, 
-            themeSettings: effectiveThemeSettings, 
-            loading, notification, setNotification,
+            user, graduations, themeSettings: effectiveThemeSettings, loading, notification, setNotification,
             globalAcademyFilter, setGlobalAcademyFilter,
             saveStudent, deleteStudent, updateStudentPayment, promoteStudentToInstructor, demoteInstructor, updateStudentStatus, setThemeSettings,
             saveSchedule, deleteSchedule, saveProfessor, deleteProfessor, updateProfessorStatus,
             saveGraduation, deleteGraduation, updateGraduationRanks, saveAttendanceRecord, saveAcademy, updateAcademyStatus,
-            saveEvent, deleteEvent, toggleEventStatus,
-            saveExpense,
+            saveEvent, deleteEvent, toggleEventStatus, saveExpense,
             login, loginGoogle, registerAcademy, logout,
-            
-            users: filteredData.users, 
-            academies: filteredData.academies,
-            activityLogs: filteredData.activityLogs,
-            students: filteredData.students, 
-            professors: filteredData.professors,
-            schedules: filteredData.schedules,
-            attendanceRecords: filteredData.attendanceRecords,
-            events: filteredData.events,
-            expenses: filteredData.expenses
+            users: filteredData.users, academies: filteredData.academies, activityLogs: filteredData.activityLogs,
+            students: filteredData.students, professors: filteredData.professors, schedules: filteredData.schedules,
+            attendanceRecords: filteredData.attendanceRecords, events: filteredData.events, expenses: filteredData.expenses
         }}>
             {children}
         </AppContext.Provider>
