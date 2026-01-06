@@ -57,7 +57,7 @@ const pool = mysql.createPool({
     queueLimit: 0,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
-    connectTimeout: 10000 // 10s timeout to prevent hanging
+    connectTimeout: 15000 // Aumentado para 15s
 });
 
 // Test DB Connection on Startup
@@ -199,7 +199,12 @@ app.get('/api/public-data', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
+    console.log(`[Login Attempt] Email: ${email}`);
+
     try {
+        if (!email) throw new Error('Email obrigatório');
+
+        // 1. Check Users (Admin/Staff)
         const [users] = await pool.query('SELECT id, name, email, role, academyId, studentId, birthDate FROM users WHERE email = ?', [email]);
         
         const checkAcademyStatus = async (academyId) => {
@@ -215,52 +220,65 @@ app.post('/api/login', async (req, res) => {
         };
 
         if (users.length > 0) {
+            console.log(`[Login] User found: ${users[0].id}`);
             const user = users[0];
             if (user.role !== 'general_admin') {
                 await checkAcademyStatus(user.academyId);
             }
 
+            // Log activity asynchronously to prevent blocking login
             pool.query('INSERT INTO activity_logs (id, actorId, action, timestamp, details) VALUES (?, ?, ?, ?, ?)', 
-                [`log_${Date.now()}`, users[0].id, 'Login', new Date(), 'Login successful.']).catch(console.error);
+                [`log_${Date.now()}`, users[0].id, 'Login', new Date(), 'Login successful.']).catch(err => console.error("Log error:", err.message));
             
             if (users[0].studentId) {
-                pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [users[0].studentId]).catch(console.error);
+                pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [users[0].studentId]).catch(err => console.error("LastSeen error:", err.message));
             }
 
             return res.json({ user: users[0] });
         }
 
+        // 2. Check Students
         const [students] = await pool.query('SELECT id, name, email, academyId, status, password, birthDate, imageUrl FROM students WHERE email = ? OR cpf = ?', [email, email]);
-        if (students.length > 0 && (students[0].password === password || !students[0].password)) {
-            const student = students[0];
-            if (student.status === 'blocked') return res.status(403).json({ message: 'Seu acesso foi temporariamente bloqueado. Contate a administração.' });
-            if (student.status === 'pending') return res.status(403).json({ message: 'Seu cadastro está aguardando aprovação da academia.' });
+        
+        if (students.length > 0) {
+            // Password Check (Simple)
+            if (students[0].password === password || (!students[0].password && password === '')) {
+                console.log(`[Login] Student found: ${students[0].id}`);
+                const student = students[0];
+                
+                if (student.status === 'blocked') return res.status(403).json({ message: 'Seu acesso foi temporariamente bloqueado. Contate a administração.' });
+                if (student.status === 'pending') return res.status(403).json({ message: 'Seu cadastro está aguardando aprovação da academia.' });
 
-            await checkAcademyStatus(student.academyId);
+                await checkAcademyStatus(student.academyId);
 
-            let imgUrl = undefined;
-            if (student.imageUrl) {
-                imgUrl = `/api/images/student/${student.id}`;
+                let imgUrl = undefined;
+                if (student.imageUrl) {
+                    imgUrl = `/api/images/student/${student.id}`;
+                }
+
+                const userObj = { 
+                    id: `user_${student.id}`, 
+                    name: student.name, 
+                    email: student.email, 
+                    role: 'student', 
+                    academyId: student.academyId, 
+                    studentId: student.id, 
+                    birthDate: student.birthDate,
+                    imageUrl: imgUrl
+                };
+                
+                pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [student.id]).catch(err => console.error("LastSeen error:", err.message));
+
+                return res.json({ user: userObj });
+            } else {
+                console.log(`[Login] Student password mismatch for ${email}`);
             }
-
-            const userObj = { 
-                id: `user_${student.id}`, 
-                name: student.name, 
-                email: student.email, 
-                role: 'student', 
-                academyId: student.academyId, 
-                studentId: student.id, 
-                birthDate: student.birthDate,
-                imageUrl: imgUrl
-            };
-            
-            pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [student.id]).catch(console.error);
-
-            return res.json({ user: userObj });
         }
         
+        // 3. Check Academies (Legacy login)
         const [academies] = await pool.query('SELECT id, status FROM academies WHERE email = ? AND password = ?', [email, password]);
         if (academies.length > 0) {
+            console.log(`[Login] Academy admin found: ${academies[0].id}`);
             const academy = academies[0];
             if (academy.status === 'pending') return res.status(403).json({ message: 'Sua academia está em análise. Aguarde a aprovação.' });
             if (academy.status === 'rejected') return res.status(403).json({ message: 'O cadastro da sua academia foi recusado.' });
@@ -270,11 +288,21 @@ app.post('/api/login', async (req, res) => {
             if (adminUser.length > 0) return res.json({ user: adminUser[0] });
         }
 
-        res.status(401).json({ message: 'User or password invalid' });
+        console.log(`[Login] No match found for ${email}`);
+        res.status(401).json({ message: 'Usuário ou senha incorretos' });
+
     } catch (error) {
-        console.error(error);
-        const status = error.message.includes('em análise') || error.message.includes('recusado') || error.message.includes('suspenso') || error.message.includes('bloqueado') || error.message.includes('aprovação') ? 403 : 500;
-        res.status(status).json({ message: error.message || 'Server error' });
+        console.error('[Login Error]', error);
+        // Robust Error Handling to prevent 502/Crash
+        const msg = error && error.message ? error.message : 'Erro desconhecido no servidor';
+        
+        const status = msg.includes('em análise') || 
+                       msg.includes('recusado') || 
+                       msg.includes('suspenso') || 
+                       msg.includes('bloqueado') || 
+                       msg.includes('aprovação') ? 403 : 500;
+                       
+        res.status(status).json({ message: msg });
     }
 });
 

@@ -70,9 +70,13 @@ const safeJson = async (res: Response) => {
     }
     // If not JSON (likely HTML error from Nginx/Vite), throw readable error
     if (!res.ok) {
+        // Handle 502/504 specifically as "Server Maintenance"
+        if (res.status === 502 || res.status === 504) {
+            throw new Error('Servidor reiniciando ou em manutenção. Tente novamente em 1 minuto.');
+        }
         const text = await res.text();
-        console.error(`Non-JSON Error Response (${res.status}):`, text.substring(0, 200)); // Log part of HTML for debug
-        throw new Error(`Erro no Servidor (${res.status}). Tente novamente mais tarde.`);
+        console.error(`Non-JSON Error Response (${res.status}):`, text.substring(0, 200)); 
+        throw new Error(`Erro no Servidor (${res.status}).`);
     }
     return null;
 };
@@ -255,6 +259,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 throw new Error(data?.message || `Falha no login (Status ${res.status})`);
             }
         } catch(e: any) {
+             // Check if it's a server maintenance error
+             if (e.message && (e.message.includes('Servidor') || e.message.includes('502'))) {
+                 setNotification({ 
+                     message: 'Servidor Indisponível', 
+                     details: 'O servidor está reiniciando ou em manutenção. Tente novamente em 1 minuto.', 
+                     type: 'error' 
+                 });
+                 return; // Stop here, do not fallback to mocks if server is explicitly 500ing
+             }
+
              const mockUser = USERS.find(u => u.email === email);
              if (mockUser) { await handleLoginSuccess(mockUser); return; }
              const mockStudent = STUDENTS.find(s => s.email === email);
