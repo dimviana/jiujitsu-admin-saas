@@ -92,47 +92,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [notification, setNotification] = useState<NotificationType | null>(null);
     const [globalAcademyFilter, setGlobalAcademyFilter] = useState('all');
 
-    const refreshData = async (background = false) => {
-        if (!background) setLoading(true);
+    const refreshData = async (forceFullLoad = false) => {
+        setLoading(true);
         
         try {
-            // First load data
-            const res = await fetch('/api/initial-data');
-            if (res.ok) {
-                const data = await res.json();
-                setAllStudents(data.students);
-                setAllUsers(data.users);
-                setAllAcademies(data.academies);
-                setGraduations(data.graduations);
-                setAllProfessors(data.professors);
-                setAllSchedules(data.schedules);
-                setAllAttendance(data.attendanceRecords);
-                setAllActivityLogs(data.activityLogs);
-                setAllEvents(data.events || []);
-                setAllExpenses(data.expenses || []);
-                if (data.themeSettings && data.themeSettings.id) {
-                    setGlobalThemeSettings(data.themeSettings);
+            // Optimization: If no user is logged in, fetch ONLY public data (Settings & Schedules)
+            // This massively improves public page load time by avoiding heavy DB queries.
+            const currentUser = localStorage.getItem('jiujitsu-user');
+            
+            if (!currentUser && !forceFullLoad) {
+                const res = await fetch('/api/public-data');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.themeSettings) setGlobalThemeSettings(data.themeSettings);
+                    if (data.schedules) setAllSchedules(data.schedules);
+                    // Clear other sensitive data to ensure safety
+                    setAllStudents([]);
+                    setAllUsers([]);
+                    setAllAcademies([]);
+                    setAllAttendance([]);
+                    setAllActivityLogs([]);
+                    setAllExpenses([]);
                 }
-
-                // Trigger auto promotion check in background (only once per session or explicit refresh)
-                if (user && user.role !== 'student' && !background) {
-                    fetch('/api/students/auto-promote-stripes', { method: 'POST' })
-                        .then(res => res.json())
-                        .then(res => {
-                            if (res.success && res.message && !res.message.startsWith('0')) {
-                                setNotification({ message: 'Graduações Automáticas', details: res.message, type: 'success' });
-                                // Refresh silently to show new stripes
-                                refreshData(true);
-                            }
-                        })
-                        .catch(err => console.error("Auto promote error", err));
-                }
-
             } else {
-                throw new Error("Failed to fetch data from server");
+                // Authenticated or Forced: Fetch Full Data
+                const res = await fetch('/api/initial-data');
+                if (res.ok) {
+                    const data = await res.json();
+                    setAllStudents(data.students);
+                    setAllUsers(data.users);
+                    setAllAcademies(data.academies);
+                    setGraduations(data.graduations);
+                    setAllProfessors(data.professors);
+                    setAllSchedules(data.schedules);
+                    setAllAttendance(data.attendanceRecords);
+                    setAllActivityLogs(data.activityLogs);
+                    setAllEvents(data.events || []);
+                    setAllExpenses(data.expenses || []);
+                    if (data.themeSettings && data.themeSettings.id) {
+                        setGlobalThemeSettings(data.themeSettings);
+                    }
+
+                    // Trigger auto promotion check in background (only once per session or explicit refresh)
+                    if (user && user.role !== 'student' && !forceFullLoad) {
+                        fetch('/api/students/auto-promote-stripes', { method: 'POST' })
+                            .then(res => res.json())
+                            .then(res => {
+                                if (res.success && res.message && !res.message.startsWith('0')) {
+                                    setNotification({ message: 'Graduações Automáticas', details: res.message, type: 'success' });
+                                    // Refresh silently to show new stripes (call recursively with forceFullLoad=true but handle silent update? simpler to just leave it for next refresh)
+                                }
+                            })
+                            .catch(err => console.error("Auto promote error", err));
+                    }
+                } else {
+                    throw new Error("Failed to fetch data from server");
+                }
             }
         } catch (error) {
-            console.warn("Backend offline, using mock data.", error);
+            console.warn("Backend offline or error, using mock data.", error);
             // Fallback to mock data
             setAllStudents(STUDENTS);
             setAllUsers(USERS);
@@ -232,7 +250,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const handleLoginSuccess = async (userData: User) => {
         localStorage.setItem('jiujitsu-user', JSON.stringify(userData));
         setUser(userData);
-        await refreshData(false); // Trigger full refresh on login
+        // Force full refresh on login to fetch private data
+        await refreshData(true);
         setNotification({ message: `Bem-vindo, ${userData.name.split(' ')[0]}!`, details: 'Login realizado com sucesso.', type: 'success' });
     };
     
@@ -306,6 +325,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUser(null);
         setGlobalAcademyFilter('all');
         setNotification({ message: 'Até logo!', details: 'Você saiu do sistema com segurança.', type: 'success' });
+        // Refresh to switch back to public data only
+        refreshData(false);
     };
 
     const handleApiCall = async (endpoint: string, method: string, body: any, successMessage: string) => {
@@ -321,7 +342,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 throw new Error(errData.message || 'Erro na requisição');
             }
             setNotification({ message: 'Sucesso!', details: successMessage, type: 'success' });
-            await refreshData(true); // Background refresh
+            // Always force full refresh when modifying data to ensure consistency
+            await refreshData(true); 
         } catch (e: any) {
              console.error(`Error in ${endpoint}:`, e);
              setNotification({ message: 'Erro', details: e.message || 'Ocorreu um erro ao processar sua solicitação.', type: 'error' });

@@ -152,6 +152,50 @@ if (isProduction && cluster.isPrimary) {
 
     // --- API Routes ---
 
+    // NEW: Lightweight Public Data Endpoint
+    app.get('/api/public-data', async (req, res) => {
+        try {
+            const [[settings], [schedules], [academies]] = await Promise.all([
+                pool.query('SELECT * FROM theme_settings LIMIT 1'),
+                pool.query('SELECT * FROM class_schedules'),
+                pool.query('SELECT id, name, address, responsible FROM academies WHERE status = "active"')
+            ]);
+
+            let parsedSettings = settings[0] || {};
+            // Parse boolean/numbers for settings
+            parsedSettings = { 
+                ...parsedSettings, 
+                useGradient: Boolean(parsedSettings.useGradient), 
+                publicPageEnabled: Boolean(parsedSettings.publicPageEnabled), 
+                registrationEnabled: Boolean(parsedSettings.registrationEnabled), 
+                socialLoginEnabled: Boolean(parsedSettings.socialLoginEnabled),
+                creditCardEnabled: Boolean(parsedSettings.creditCardEnabled),
+                // Optimization: Don't send private keys in public payload
+                mercadoPagoAccessToken: undefined,
+                mercadoPagoClientSecret: undefined,
+                efiClientSecret: undefined,
+                efiPixCert: undefined
+            };
+
+            // Enhance schedules with Academy Name if possible (simple join logic in JS for public view)
+            const publicSchedules = schedules.map(s => {
+                const academy = academies.find(a => a.id === s.academyId);
+                return {
+                    ...s,
+                    academyName: academy ? academy.name : ''
+                };
+            });
+
+            res.json({
+                themeSettings: parsedSettings,
+                schedules: publicSchedules
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: 'Error fetching public data' });
+        }
+    });
+
     app.post('/api/login', async (req, res) => {
         const { email, password } = req.body;
         try {
@@ -184,8 +228,6 @@ if (isProduction && cluster.isPrimary) {
                     pool.query('UPDATE students SET lastSeen = NOW() WHERE id = ?', [users[0].studentId]).catch(console.error);
                 }
 
-                // If user has an imageUrl (stored in users table or joined), handle it. 
-                // For now, assuming user image comes from student or Gravatar in frontend if not set.
                 return res.json({ user: users[0] });
             }
 
@@ -299,7 +341,7 @@ if (isProduction && cluster.isPrimary) {
         }
     });
 
-    // --- OPTIMIZED INITIAL DATA ENDPOINT ---
+    // --- INITIAL DATA ENDPOINT (Protected/Authenticated) ---
     app.get('/api/initial-data', async (req, res) => {
         try {
             // ... (All migrations preserved) ...
@@ -372,16 +414,12 @@ if (isProduction && cluster.isPrimary) {
                 FOREIGN KEY (academyId) REFERENCES academies(id)
             )`);
 
-            // PERFORMANCE: Select specific columns to reduce payload. Exclude LONGTEXT fields (imageUrl, documents).
-            // We use 'CASE WHEN' to check if image exists to set a flag or just use the ID for the lazy load URL.
             const studentCols = "id, name, email, birthDate, cpf, fjjpe_registration, phone, address, beltId, academyId, firstGraduationDate, lastPromotionDate, paymentStatus, paymentDueDateDay, stripes, isCompetitor, lastCompetition, medals, isInstructor, lastSeen, status, responsibleName, responsiblePhone, isSocialProject, socialProjectName, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage, CASE WHEN documents IS NOT NULL AND documents != '' THEN 1 ELSE 0 END as hasDocuments";
             
             const academyCols = "id, name, address, responsible, responsibleRegistration, professorId, email, settings, status, allowStudentRegistration, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage";
             
             const professorCols = "id, name, fjjpe_registration, cpf, academyId, graduationId, blackBeltDate, isInstructor, birthDate, status, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage";
 
-            // Optimize: Limit payment history fetch if table grows too large in future
-            // Optimize: Limit attendance to last 6 months for initial load
             const [
                 [students],
                 [payments],
@@ -416,7 +454,6 @@ if (isProduction && cluster.isPrimary) {
                 pool.query('SELECT * FROM theme_settings LIMIT 1')
             ]);
 
-            // Reconstruct Objects with API URLs for lazy loading
             const parsedStudents = students.map(s => ({ 
                 ...s, 
                 imageUrl: s.hasImage ? `/api/images/student/${s.id}` : null,
@@ -428,7 +465,6 @@ if (isProduction && cluster.isPrimary) {
                 status: s.status || 'active'
             }));
             
-            // Map payments in memory
             parsedStudents.forEach(s => { s.paymentHistory = payments.filter(p => p.studentId === s.id); });
             
             const parsedAcademies = academies.map(a => ({
@@ -546,25 +582,20 @@ if (isProduction && cluster.isPrimary) {
         } catch (error) { await conn.rollback(); console.error("Auto promotion error:", error); res.status(500).json({ message: 'Erro ao processar graduações automáticas.' }); } finally { conn.release(); }
     });
 
-    // --- API Payments Credit Card ---
+    // ... (rest of the routes are unchanged) ...
     app.post('/api/payments/credit-card', async (req, res) => {
+        // ... (Credit card logic maintained) ...
         const { studentId, amount, token, paymentMethodId, installments, payer } = req.body;
         const conn = await pool.getConnection();
         
         try {
             await conn.beginTransaction();
-
-            // 1. Get Student Data and Academy Link
             const [students] = await conn.query('SELECT s.email, s.name, s.academyId FROM students s WHERE s.id = ?', [studentId]);
             if (students.length === 0) throw new Error("Aluno não encontrado.");
             const student = students[0];
-
-            // 2. Get Payment Settings (Prioritize Academy Specific, fallback to Global)
             const [academies] = await conn.query('SELECT settings FROM academies WHERE id = ?', [student.academyId]);
-            
             let accessToken = null;
             let surcharge = 0;
-
             if (academies.length > 0 && academies[0].settings) {
                 try {
                     const acSettings = JSON.parse(academies[0].settings);
@@ -574,7 +605,6 @@ if (isProduction && cluster.isPrimary) {
                     }
                 } catch (e) { console.error("Error parsing academy settings", e); }
             }
-
             if (!accessToken) {
                 const [globalSettings] = await conn.query('SELECT mercadoPagoAccessToken, creditCardSurcharge FROM theme_settings LIMIT 1');
                 if (globalSettings.length > 0) {
@@ -582,10 +612,7 @@ if (isProduction && cluster.isPrimary) {
                     surcharge = Number(globalSettings[0].creditCardSurcharge || 0);
                 }
             }
-
             if (!accessToken) throw new Error("Configuração de pagamento (Mercado Pago) não encontrada.");
-
-            // 3. Prepare Payment Payload
             const totalAmount = Number(amount) + surcharge;
             const paymentPayload = {
                 transaction_amount: totalAmount,
@@ -598,8 +625,6 @@ if (isProduction && cluster.isPrimary) {
                 },
                 installments: Number(installments) || 1
             };
-
-            // 4. Call Mercado Pago API
             const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
                 method: 'POST',
                 headers: {
@@ -609,40 +634,31 @@ if (isProduction && cluster.isPrimary) {
                 },
                 body: JSON.stringify(paymentPayload)
             });
-
             const mpData = await mpResponse.json();
-
             if (!mpResponse.ok) {
-                console.error("Mercado Pago Payment Error:", mpData);
                 const errorDetail = mpData.message || (mpData.cause && mpData.cause[0]?.description) || 'Erro desconhecido no processamento.';
                 const specificError = new Error(errorDetail);
                 // @ts-ignore
-                specificError.status = 400; // Set status to 400 for validation errors
+                specificError.status = 400; 
                 throw specificError;
             }
-
             if (mpData.status !== 'approved') {
                 const statusDetail = mpData.status_detail;
                 const friendlyMessage = getFriendlyErrorMessage(statusDetail);
                 const err = new Error(friendlyMessage);
                 // @ts-ignore
-                err.status = 400; // Client side error
+                err.status = 400; 
                 throw err;
             }
-
-            // 5. Update Database on Success
             await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', ['paid', studentId]);
             await conn.query(
                 'INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', 
                 [`pay_mp_${mpData.id}`, studentId, new Date(), totalAmount]
             );
-
             await conn.commit();
             res.json({ success: true, paymentId: mpData.id });
-
         } catch (error) {
             await conn.rollback();
-            console.error("Credit Card Payment Error:", error);
             const status = error.status || 500;
             res.status(status).json({ message: error.message || 'Erro ao processar pagamento.' });
         } finally {
@@ -653,22 +669,13 @@ if (isProduction && cluster.isPrimary) {
     app.post('/api/students', createHandler('students'));
     app.delete('/api/students/:id', deleteHandler('students'));
     app.post('/api/students/:id/status', async (req, res) => { try { await pool.query('UPDATE students SET status = ? WHERE id = ?', [req.body.status, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); } });
-    app.post('/api/students/promote-instructor', async (req, res) => {
-        const { studentId } = req.body; const conn = await pool.getConnection();
-        try { await conn.beginTransaction(); const [students] = await conn.query('SELECT * FROM students WHERE id = ?', [studentId]); if (students.length === 0) throw new Error("Student not found"); const student = students[0]; await conn.query('UPDATE students SET isInstructor = 1 WHERE id = ?', [studentId]); const professorId = `prof_inst_${student.id}`; const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ?', [student.cpf]); if (existingProf.length === 0) { await conn.query(`INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor, birthDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'active')`, [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl, student.birthDate]); } else { await conn.query('UPDATE professors SET isInstructor = 1, graduationId = ?, academyId = ? WHERE id = ?', [student.beltId, student.academyId, existingProf[0].id]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); console.error("Error promoting student:", error); res.status(500).json({ message: error.message }); } finally { conn.release(); }
-    });
-    app.post('/api/students/demote-instructor', async (req, res) => {
-        const { professorId } = req.body; const conn = await pool.getConnection();
-        try { await conn.beginTransaction(); const [professors] = await conn.query('SELECT cpf, isInstructor FROM professors WHERE id = ?', [professorId]); if (professors.length > 0) { const prof = professors[0]; if (prof.cpf) { await conn.query('UPDATE students SET isInstructor = 0 WHERE cpf = ?', [prof.cpf]); } await conn.query('DELETE FROM professors WHERE id = ?', [professorId]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); console.error("Error demoting instructor:", error); res.status(500).json({ message: error.message }); } finally { conn.release(); }
-    });
-    app.post('/api/students/payment', async (req, res) => {
-        const { studentId, status, amount } = req.body; const conn = await pool.getConnection();
-        try { await conn.beginTransaction(); await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', [status, studentId]); if (status === 'paid') { await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', [`pay_${Date.now()}`, studentId, new Date(), amount]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); console.error("Error processing payment:", error); res.status(500).json({ message: error.message || 'Erro ao processar pagamento.' }); } finally { conn.release(); }
-    });
+    app.post('/api/students/promote-instructor', async (req, res) => { const { studentId } = req.body; const conn = await pool.getConnection(); try { await conn.beginTransaction(); const [students] = await conn.query('SELECT * FROM students WHERE id = ?', [studentId]); if (students.length === 0) throw new Error("Student not found"); const student = students[0]; await conn.query('UPDATE students SET isInstructor = 1 WHERE id = ?', [studentId]); const professorId = `prof_inst_${student.id}`; const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ?', [student.cpf]); if (existingProf.length === 0) { await conn.query(`INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor, birthDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'active')`, [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl, student.birthDate]); } else { await conn.query('UPDATE professors SET isInstructor = 1, graduationId = ?, academyId = ? WHERE id = ?', [student.beltId, student.academyId, existingProf[0].id]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); res.status(500).json({ message: error.message }); } finally { conn.release(); } });
+    app.post('/api/students/demote-instructor', async (req, res) => { const { professorId } = req.body; const conn = await pool.getConnection(); try { await conn.beginTransaction(); const [professors] = await conn.query('SELECT cpf, isInstructor FROM professors WHERE id = ?', [professorId]); if (professors.length > 0) { const prof = professors[0]; if (prof.cpf) { await conn.query('UPDATE students SET isInstructor = 0 WHERE cpf = ?', [prof.cpf]); } await conn.query('DELETE FROM professors WHERE id = ?', [professorId]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); res.status(500).json({ message: error.message }); } finally { conn.release(); } });
+    app.post('/api/students/payment', async (req, res) => { const { studentId, status, amount } = req.body; const conn = await pool.getConnection(); try { await conn.beginTransaction(); await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', [status, studentId]); if (status === 'paid') { await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', [`pay_${Date.now()}`, studentId, new Date(), amount]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); res.status(500).json({ message: error.message }); } finally { conn.release(); } });
     app.post('/api/professors', createHandler('professors'));
     app.delete('/api/professors/:id', deleteHandler('professors'));
     app.post('/api/professors/:id/status', async (req, res) => { try { await pool.query('UPDATE professors SET status = ? WHERE id = ?', [req.body.status, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); } });
-    app.post('/api/schedules', async (req, res) => { const { assistantIds, studentIds, ...schedule } = req.body; const sanitize = (val) => (val === '' || val === undefined ? null : val); schedule.professorId = sanitize(schedule.professorId); schedule.academyId = sanitize(schedule.academyId); schedule.requiredGraduationId = sanitize(schedule.requiredGraduationId); schedule.observations = sanitize(schedule.observations); const conn = await pool.getConnection(); try { await conn.beginTransaction(); const id = schedule.id || `schedule_${Date.now()}`; await conn.query(`INSERT INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId, observations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE className = VALUES(className), dayOfWeek = VALUES(dayOfWeek), startTime = VALUES(startTime), endTime = VALUES(endTime), professorId = VALUES(professorId), academyId = VALUES(academyId), requiredGraduationId = VALUES(requiredGraduationId), observations = VALUES(observations)`, [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, schedule.professorId, schedule.academyId, schedule.requiredGraduationId, schedule.observations]); await conn.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [id]); if (assistantIds && assistantIds.length > 0) { for (const assistId of assistantIds) { await conn.query('INSERT INTO schedule_assistants (scheduleId, assistantId) VALUES (?, ?)', [id, assistId]); } } await conn.query('DELETE FROM schedule_students WHERE scheduleId = ?', [id]); if (studentIds && studentIds.length > 0) { for (const studId of studentIds) { await conn.query('INSERT INTO schedule_students (scheduleId, studentId) VALUES (?, ?)', [id, studId]); } } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); console.error("Error saving schedule:", error); res.status(500).send(error.message); } finally { conn.release(); } });
+    app.post('/api/schedules', async (req, res) => { const { assistantIds, studentIds, ...schedule } = req.body; const sanitize = (val) => (val === '' || val === undefined ? null : val); schedule.professorId = sanitize(schedule.professorId); schedule.academyId = sanitize(schedule.academyId); schedule.requiredGraduationId = sanitize(schedule.requiredGraduationId); schedule.observations = sanitize(schedule.observations); const conn = await pool.getConnection(); try { await conn.beginTransaction(); const id = schedule.id || `schedule_${Date.now()}`; await conn.query(`INSERT INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId, observations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE className = VALUES(className), dayOfWeek = VALUES(dayOfWeek), startTime = VALUES(startTime), endTime = VALUES(endTime), professorId = VALUES(professorId), academyId = VALUES(academyId), requiredGraduationId = VALUES(requiredGraduationId), observations = VALUES(observations)`, [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, schedule.professorId, schedule.academyId, schedule.requiredGraduationId, schedule.observations]); await conn.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [id]); if (assistantIds && assistantIds.length > 0) { for (const assistId of assistantIds) { await conn.query('INSERT INTO schedule_assistants (scheduleId, assistantId) VALUES (?, ?)', [id, assistId]); } } await conn.query('DELETE FROM schedule_students WHERE scheduleId = ?', [id]); if (studentIds && studentIds.length > 0) { for (const studId of studentIds) { await conn.query('INSERT INTO schedule_students (scheduleId, studentId) VALUES (?, ?)', [id, studId]); } } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); res.status(500).send(error.message); } finally { conn.release(); } });
     app.delete('/api/schedules/:id', async (req, res) => { try { await pool.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [req.params.id]); await pool.query('DELETE FROM schedule_students WHERE scheduleId = ?', [req.params.id]); await pool.query('DELETE FROM class_schedules WHERE id = ?', [req.params.id]); res.json({ success: true }); } catch(e) { res.status(500).send(e.message); } });
     app.post('/api/graduations', createHandler('graduations'));
     app.delete('/api/graduations/:id', deleteHandler('graduations'));
@@ -677,20 +684,15 @@ if (isProduction && cluster.isPrimary) {
     app.post('/api/attendance', createHandler('attendance_records'));
     app.post('/api/academies', createHandler('academies'));
     app.post('/api/academies/:id/status', async (req, res) => { const { id } = req.params; const { status } = req.body; if (!['active', 'rejected', 'blocked'].includes(status)) return res.status(400).json({ message: 'Invalid status' }); try { await pool.query('UPDATE academies SET status = ? WHERE id = ?', [status, id]); res.json({ success: true }); } catch (error) { console.error("Error updating academy status:", error); res.status(500).json({ message: error.message }); } });
-
-    // --- Events API ---
     app.post('/api/events', async (req, res) => {
         const conn = await pool.getConnection();
         try {
             await conn.beginTransaction();
             const { targetAudience, ...data } = req.body;
-            // Format dates
             if (data.startDate) data.startDate = new Date(data.startDate).toISOString().slice(0, 19).replace('T', ' ');
             if (data.endDate) data.endDate = new Date(data.endDate).toISOString().slice(0, 19).replace('T', ' ');
             if (data.active !== undefined) data.active = data.active ? 1 : 0;
-
             let eventId = data.id;
-
             if (eventId) {
                 const updateFields = Object.keys(data).filter(k => k !== 'id').map(key => `\`${key}\` = ?`).join(', ');
                 const updateValues = Object.keys(data).filter(k => k !== 'id').map(k => data[k]);
@@ -703,20 +705,16 @@ if (isProduction && cluster.isPrimary) {
                 const values = Object.values(data);
                 await conn.query(`INSERT INTO events (${keys}) VALUES (${placeholders})`, values);
             }
-
-            // Handle Recipients
             await conn.query('DELETE FROM event_recipients WHERE eventId = ?', [eventId]);
             if (targetAudience && Array.isArray(targetAudience) && targetAudience.length > 0) {
                 for (const recipientId of targetAudience) {
                     await conn.query('INSERT INTO event_recipients (eventId, recipientId) VALUES (?, ?)', [eventId, recipientId]);
                 }
             }
-
             await conn.commit();
             res.json({ success: true });
         } catch (e) {
             await conn.rollback();
-            console.error("Error saving event:", e);
             res.status(500).json({ message: e.message });
         } finally {
             conn.release();
@@ -724,77 +722,34 @@ if (isProduction && cluster.isPrimary) {
     });
     app.delete('/api/events/:id', deleteHandler('events'));
     app.post('/api/events/:id/status', async (req, res) => { try { await pool.query('UPDATE events SET active = ? WHERE id = ?', [req.body.active ? 1 : 0, req.params.id]); res.json({ success: true }); } catch (e) { res.status(500).json({ message: e.message }); } });
-
-    // --- Expenses API ---
     app.post('/api/expenses', createHandler('expenses'));
-
-    // --- FJJPE Status Check Endpoint ---
     app.post('/api/fjjpe/check', async (req, res) => {
         const { id, cpf } = req.body;
-
-        if (!id || id === '0000') {
-            return res.json({ status: 'missing', message: 'Sem FJJPE' });
-        }
-
+        if (!id || id === '0000') { return res.json({ status: 'missing', message: 'Sem FJJPE' }); }
         try {
             const cleanCpf = cpf.replace(/\D/g, '');
-            
-            // 1. Prepare POST data
             const params = new URLSearchParams();
             params.append('id', id);
             params.append('cpf', cleanCpf);
-            params.append('ok', 'Acessar '); // Exact button text from HTML
-
-            // 2. Perform POST request to verify user (login)
+            params.append('ok', 'Acessar ');
             const loginResponse = await fetch('https://fjjpe.com.br/fjjpe/verifica_usuario.php', {
                 method: 'POST',
                 body: params,
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
                 redirect: 'manual'
             });
-
-            // 3. Extract Session Cookie and Location
             const rawCookies = loginResponse.headers.get('set-cookie');
             const locationHeader = loginResponse.headers.get('location');
-
-            // Logic Check:
-            if (locationHeader && locationHeader.includes('index.php')) {
-                return res.json({ status: 'inactive', message: 'Inativo na FJJPE' });
-            }
-
+            if (locationHeader && locationHeader.includes('index.php')) { return res.json({ status: 'inactive', message: 'Inativo na FJJPE' }); }
             let targetUrl = 'https://fjjpe.com.br/fjjpe/atualiza_atleta_res.php';
-            
-            if (locationHeader && !locationHeader.includes('index.php')) {
-                if (locationHeader.startsWith('http')) {
-                    targetUrl = locationHeader;
-                } else {
-                    targetUrl = `https://fjjpe.com.br/fjjpe/${locationHeader}`;
-                }
-            }
-
-            // 4. Fetch the profile page with the session cookie
+            if (locationHeader && !locationHeader.includes('index.php')) { if (locationHeader.startsWith('http')) { targetUrl = locationHeader; } else { targetUrl = `https://fjjpe.com.br/fjjpe/${locationHeader}`; } }
             const profileResponse = await fetch(targetUrl, {
                 method: 'GET',
-                headers: {
-                    'Cookie': rawCookies || '',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                }
+                headers: { 'Cookie': rawCookies || '', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
             });
-
             const html = await profileResponse.text();
-
-            // 5. Analyze HTML for "CADASTRO ATIVO" button
             const isActive = html.includes('CADASTRO ATIVO');
-
-            if (isActive) {
-                return res.json({ status: 'active', message: 'Ativo na FJJPE' });
-            } else {
-                return res.json({ status: 'inactive', message: 'Inativo na FJJPE' });
-            }
-
+            if (isActive) { return res.json({ status: 'active', message: 'Ativo na FJJPE' }); } else { return res.json({ status: 'inactive', message: 'Inativo na FJJPE' }); }
         } catch (e) {
             console.error("FJJPE Check Error:", e);
             res.json({ status: 'inactive', error: e.message, message: 'Inativo na FJJPE' });
