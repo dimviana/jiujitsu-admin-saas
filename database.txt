@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS theme_settings (
     id INTEGER PRIMARY KEY AUTO_INCREMENT,
-    logoUrl TEXT,
+    logoUrl LONGTEXT,
     systemName TEXT,
     primaryColor TEXT,
     secondaryColor TEXT,
@@ -34,7 +34,32 @@ CREATE TABLE IF NOT EXISTS theme_settings (
     pixHolderName TEXT,
     copyrightText TEXT,
     systemVersion TEXT,
-    studentProfileEditEnabled BOOLEAN DEFAULT FALSE
+    studentProfileEditEnabled BOOLEAN DEFAULT FALSE,
+    mercadoPagoAccessToken TEXT,
+    mercadoPagoPublicKey TEXT,
+    mercadoPagoClientId TEXT,
+    mercadoPagoClientSecret TEXT,
+    creditCardEnabled BOOLEAN DEFAULT TRUE,
+    creditCardSurcharge REAL DEFAULT 0,
+    efiEnabled BOOLEAN DEFAULT FALSE,
+    efiPixKey VARCHAR(255),
+    efiPixCert LONGTEXT,
+    whatsappMessageTemplate TEXT,
+    mobileNavShowDashboard BOOLEAN DEFAULT TRUE,
+    mobileNavShowSchedule BOOLEAN DEFAULT TRUE,
+    mobileNavShowStudents BOOLEAN DEFAULT TRUE,
+    mobileNavShowProfile BOOLEAN DEFAULT TRUE,
+    mobileNavBgColor VARCHAR(50),
+    mobileNavActiveColor VARCHAR(50),
+    mobileNavInactiveColor VARCHAR(50),
+    mobileNavHeight INTEGER,
+    mobileNavIconSize INTEGER,
+    mobileNavBorderRadius INTEGER,
+    mobileNavBottomMargin INTEGER,
+    mobileNavFloating BOOLEAN,
+    mobileNavVisible BOOLEAN DEFAULT TRUE,
+    appName TEXT,
+    appIcon LONGTEXT
 );
 
 CREATE TABLE IF NOT EXISTS academies (
@@ -48,7 +73,8 @@ CREATE TABLE IF NOT EXISTS academies (
     email VARCHAR(255) UNIQUE,
     password TEXT,
     settings LONGTEXT,
-    status VARCHAR(50) DEFAULT 'pending'
+    status VARCHAR(50) DEFAULT 'pending',
+    allowStudentRegistration BOOLEAN DEFAULT TRUE
 );
 
 CREATE TABLE IF NOT EXISTS graduations (
@@ -73,6 +99,7 @@ CREATE TABLE IF NOT EXISTS professors (
     blackBeltDate DATE,
     isInstructor BOOLEAN DEFAULT FALSE,
     birthDate DATE,
+    status VARCHAR(50) DEFAULT 'active',
     FOREIGN KEY (academyId) REFERENCES academies(id),
     FOREIGN KEY (graduationId) REFERENCES graduations(id)
 );
@@ -91,7 +118,7 @@ CREATE TABLE IF NOT EXISTS students (
     academyId VARCHAR(255),
     firstGraduationDate DATE,
     lastPromotionDate DATE,
-    paymentStatus VARCHAR(255) CHECK(paymentStatus IN ('paid', 'unpaid')),
+    paymentStatus VARCHAR(255) CHECK(paymentStatus IN ('paid', 'unpaid', 'scholarship')),
     paymentDueDateDay INTEGER,
     imageUrl LONGTEXT,
     stripes INTEGER DEFAULT 0,
@@ -100,9 +127,20 @@ CREATE TABLE IF NOT EXISTS students (
     medals TEXT,
     isInstructor BOOLEAN DEFAULT FALSE,
     lastSeen DATETIME,
+    status VARCHAR(50) DEFAULT 'active',
+    documents LONGTEXT,
+    responsibleName VARCHAR(255),
+    responsiblePhone VARCHAR(255),
+    isSocialProject BOOLEAN DEFAULT FALSE,
+    socialProjectName VARCHAR(255),
     FOREIGN KEY (beltId) REFERENCES graduations(id),
     FOREIGN KEY (academyId) REFERENCES academies(id)
 );
+
+-- Indexes for performance
+CREATE INDEX idx_students_academy ON students(academyId);
+CREATE INDEX idx_students_email ON students(email);
+CREATE INDEX idx_students_cpf ON students(cpf);
 
 CREATE TABLE IF NOT EXISTS payment_history (
     id VARCHAR(255) PRIMARY KEY,
@@ -111,6 +149,9 @@ CREATE TABLE IF NOT EXISTS payment_history (
     amount REAL NOT NULL,
     FOREIGN KEY (studentId) REFERENCES students(id)
 );
+
+CREATE INDEX idx_payment_history_date ON payment_history(date);
+CREATE INDEX idx_payment_history_student ON payment_history(studentId);
 
 CREATE TABLE IF NOT EXISTS class_schedules (
     id VARCHAR(255) PRIMARY KEY,
@@ -134,7 +175,14 @@ CREATE TABLE IF NOT EXISTS schedule_assistants (
     FOREIGN KEY (assistantId) REFERENCES professors(id)
 );
 
--- FIX: Changed primary key to composite key to ensure unique records and allow updates
+CREATE TABLE IF NOT EXISTS schedule_students (
+    scheduleId VARCHAR(255),
+    studentId VARCHAR(255),
+    PRIMARY KEY (scheduleId, studentId),
+    FOREIGN KEY (scheduleId) REFERENCES class_schedules(id),
+    FOREIGN KEY (studentId) REFERENCES students(id)
+);
+
 CREATE TABLE IF NOT EXISTS attendance_records (
     studentId VARCHAR(255),
     scheduleId VARCHAR(255),
@@ -145,6 +193,8 @@ CREATE TABLE IF NOT EXISTS attendance_records (
     FOREIGN KEY (scheduleId) REFERENCES class_schedules(id)
 );
 
+CREATE INDEX idx_attendance_date ON attendance_records(date);
+CREATE INDEX idx_attendance_student ON attendance_records(studentId);
 
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(255) PRIMARY KEY,
@@ -165,3 +215,39 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     `timestamp` DATETIME NOT NULL,
     details TEXT
 );
+
+CREATE INDEX idx_logs_timestamp ON activity_logs(timestamp);
+
+CREATE TABLE IF NOT EXISTS events (
+    id VARCHAR(255) PRIMARY KEY,
+    academyId VARCHAR(255),
+    title TEXT NOT NULL,
+    description TEXT,
+    imageUrl LONGTEXT,
+    footerType VARCHAR(50) DEFAULT 'text',
+    footerContent LONGTEXT,
+    htmlContent LONGTEXT,
+    startDate DATETIME,
+    endDate DATETIME,
+    active BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (academyId) REFERENCES academies(id)
+);
+
+CREATE TABLE IF NOT EXISTS event_recipients (
+    eventId VARCHAR(255),
+    recipientId VARCHAR(255),
+    PRIMARY KEY (eventId, recipientId),
+    FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
+    id VARCHAR(255) PRIMARY KEY,
+    academyId VARCHAR(255),
+    description TEXT,
+    amount REAL,
+    date DATE,
+    FOREIGN KEY (academyId) REFERENCES academies(id)
+);
+
+CREATE INDEX idx_expenses_date ON expenses(date);
+CREATE INDEX idx_expenses_academy ON expenses(academyId);
