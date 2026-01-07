@@ -129,20 +129,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 }
 
             } else {
-                throw new Error(`Failed to fetch data from server. Status: ${res.status}`);
+                throw new Error("Failed to fetch data from server");
             }
         } catch (error) {
-            console.warn("Backend offline or error, using mock data.", error);
-            
-            // NOTIFICAÇÃO DE ERRO DE CONEXÃO - Exibida APENAS se houver erro
-            if (!background) {
-                setNotification({ 
-                    message: 'Erro de Conexão', 
-                    details: 'Não foi possível comunicar com o servidor. O sistema está em modo offline com dados de demonstração.', 
-                    type: 'error' 
-                });
-            }
-
+            console.warn("Backend offline, using mock data.", error);
             // Fallback to mock data
             setAllStudents(STUDENTS);
             setAllUsers(USERS);

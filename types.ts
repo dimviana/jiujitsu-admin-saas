@@ -21,7 +21,6 @@ export interface ThemeSettings {
 
   // HTML Content
   heroHtml: string;
-  heroJson?: string; // New field for JSON configuration
   aboutHtml: string;
   branchesHtml: string;
   footerHtml: string;

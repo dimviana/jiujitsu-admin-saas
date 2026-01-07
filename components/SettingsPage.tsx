@@ -5,7 +5,7 @@ import Card from './ui/Card';
 import Input from './ui/Input';
 import Button from './ui/Button';
 import { ThemeSettings, SystemEvent } from '../types';
-import { Image as ImageIcon, Calendar, Trash2, Edit, Search, CheckSquare, Square, Users, ShieldCheck, AlertTriangle, Loader, XCircle, Layout } from 'lucide-react';
+import { Image as ImageIcon, Calendar, Trash2, Edit, Search, CheckSquare, Square, Users, ShieldCheck, AlertTriangle, Loader, XCircle } from 'lucide-react';
 import Modal from './ui/Modal';
 
 // --- Sub-Component: Audience Selection Modal ---
@@ -108,7 +108,7 @@ const SelectAudienceModal: React.FC<SelectAudienceModalProps> = ({ isOpen, onClo
 
 const SettingsPage: React.FC = () => {
     const { themeSettings, setThemeSettings, events, saveEvent, deleteEvent, toggleEventStatus } = useContext(AppContext);
-    const [activeTab, setActiveTab] = useState<'geral' | 'hero' | 'cores' | 'financeiro' | 'conteudo' | 'midia' | 'direitos' | 'eventos'>('geral');
+    const [activeTab, setActiveTab] = useState<'geral' | 'cores' | 'conteudo' | 'financeiro' | 'midia' | 'direitos' | 'eventos'>('geral');
     const [settings, setSettings] = useState<ThemeSettings>(themeSettings);
     
     // Event State
@@ -121,9 +121,6 @@ const SettingsPage: React.FC = () => {
     const [testFjjpeCpf, setTestFjjpeCpf] = useState('');
     const [testFjjpeStatus, setTestFjjpeStatus] = useState<'idle' | 'loading' | 'active' | 'inactive' | 'missing' | 'error'>('idle');
     const [testFjjpeMessage, setTestFjjpeMessage] = useState('');
-
-    // JSON Validation State for Hero
-    const [jsonError, setJsonError] = useState<string | null>(null);
 
     useEffect(() => {
         setSettings(themeSettings);
@@ -139,55 +136,14 @@ const SettingsPage: React.FC = () => {
              finalValue = value === '' ? 0 : parseFloat(value);
         }
         
-        // Validate JSON on change for heroJson
-        if (name === 'heroJson') {
-            try {
-                if (value) {
-                    JSON.parse(value);
-                    setJsonError(null);
-                } else {
-                    setJsonError(null);
-                }
-            } catch (e) {
-                setJsonError("JSON inválido");
-            }
-        }
-        
         setSettings(prev => ({
             ...prev,
             [name]: finalValue
         }));
     };
 
-    const handleLoadSampleJson = () => {
-        const sample = [
-            {
-                "type": "slide",
-                "title": "Jiu-Jitsu: Arte, Disciplina, Respeito",
-                "subtitle": "Transforme sua vida dentro e fora do tatame.",
-                "backgroundImage": "https://images.unsplash.com/photo-1581009137052-c40971b51c69?q=80&w=2070&auto=format&fit=crop",
-                "ctaText": "Encontre uma Aula",
-                "ctaLink": "#schedule"
-            },
-            {
-                "type": "slide",
-                "title": "Defesa Pessoal Feminina",
-                "subtitle": "Empoderamento e técnica para todas.",
-                "backgroundImage": "https://images.unsplash.com/photo-1599058945522-28d584b6f0ff?q=80&w=2069&auto=format&fit=crop",
-                "ctaText": "Saiba Mais",
-                "ctaLink": "#contact"
-            }
-        ];
-        setSettings(prev => ({ ...prev, heroJson: JSON.stringify(sample, null, 2) }));
-        setJsonError(null);
-    };
-
     const handleSave = (e: React.FormEvent) => {
         e.preventDefault();
-        if (jsonError) {
-            alert("Corrija o erro no JSON antes de salvar.");
-            return;
-        }
         setThemeSettings(settings);
     };
 
@@ -205,6 +161,7 @@ const SettingsPage: React.FC = () => {
             active: true,
             targetAudience: [],
             ...event,
+            // Format dates for input datetime-local: YYYY-MM-DDTHH:mm
             startDate: event.startDate ? new Date(event.startDate).toISOString().slice(0, 16) : now.toISOString().slice(0, 16),
             endDate: event.endDate ? new Date(event.endDate).toISOString().slice(0, 16) : nextWeek.toISOString().slice(0, 16)
         });
@@ -230,6 +187,7 @@ const SettingsPage: React.FC = () => {
         }
     };
 
+    // --- FJJPE Test Handler ---
     const handleTestFjjpe = async () => {
         if (!testFjjpeId || !testFjjpeCpf) {
             alert("Preencha o ID e o CPF.");
@@ -253,7 +211,6 @@ const SettingsPage: React.FC = () => {
 
     const tabs = [
         { id: 'geral', label: 'Geral' },
-        { id: 'hero', label: 'Hero (Home)' },
         { id: 'cores', label: 'Cores' },
         { id: 'financeiro', label: 'Financeiro' },
         { id: 'conteudo', label: 'Conteúdo' },
@@ -266,7 +223,7 @@ const SettingsPage: React.FC = () => {
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-slate-800">Configurações do Sistema</h1>
             
-            <div className="flex overflow-x-auto border-b border-slate-200 custom-scrollbar pb-1">
+            <div className="flex overflow-x-auto border-b border-slate-200">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
@@ -348,35 +305,6 @@ const SettingsPage: React.FC = () => {
                             </div>
                         )}
 
-                        {activeTab === 'hero' && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-lg font-bold text-slate-800 flex items-center">
-                                        <Layout className="w-5 h-5 mr-2 text-primary" />
-                                        Hero da Página Principal
-                                    </h2>
-                                    <Button type="button" size="sm" variant="secondary" onClick={handleLoadSampleJson}>Carregar Exemplo JSON</Button>
-                                </div>
-                                <p className="text-sm text-slate-500">Configure os slides da página principal usando JSON. Se preenchido e válido, substituirá o "Hero HTML" da aba Conteúdo.</p>
-                                
-                                <div className="relative">
-                                    <textarea
-                                        name="heroJson"
-                                        value={settings.heroJson || ''}
-                                        onChange={handleChange}
-                                        className={`w-full border rounded-lg p-4 font-mono text-xs h-96 focus:ring-2 focus:outline-none ${jsonError ? 'border-red-500 focus:ring-red-200' : 'border-slate-200 focus:ring-primary'}`}
-                                        placeholder='[ { "type": "slide", "title": "...", "backgroundImage": "..." } ]'
-                                    />
-                                    {jsonError && (
-                                        <div className="absolute bottom-4 right-4 bg-red-100 text-red-600 px-3 py-1 rounded text-xs font-bold flex items-center shadow-sm">
-                                            <AlertTriangle className="w-3 h-3 mr-1" />
-                                            {jsonError}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
                         {activeTab === 'cores' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <Input label="Cor Primária" name="primaryColor" type="color" value={settings.primaryColor} onChange={handleChange} />
@@ -386,7 +314,6 @@ const SettingsPage: React.FC = () => {
                             </div>
                         )}
 
-                        {/* ... (Other tabs remain the same) ... */}
                         {activeTab === 'financeiro' && (
                             <div className="space-y-4">
                                 <Input label="Chave PIX" name="pixKey" value={settings.pixKey} onChange={handleChange} />
@@ -416,7 +343,7 @@ const SettingsPage: React.FC = () => {
                         {activeTab === 'conteudo' && (
                             <div className="space-y-4">
                                 <p className="text-xs text-slate-500">Cole aqui o código HTML para as seções da página pública.</p>
-                                <div><label className="block text-sm font-medium mb-1">Hero HTML (Legacy)</label><textarea name="heroHtml" value={settings.heroHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
+                                <div><label className="block text-sm font-medium mb-1">Hero HTML</label><textarea name="heroHtml" value={settings.heroHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
                                 <div><label className="block text-sm font-medium mb-1">Sobre HTML</label><textarea name="aboutHtml" value={settings.aboutHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
                                 <div><label className="block text-sm font-medium mb-1">Contato (Texto Simples)</label><textarea name="contactHtml" value={settings.contactHtml} onChange={handleChange} className="w-full border rounded p-2 h-24" /></div>
                             </div>
