@@ -134,7 +134,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (error) {
             console.warn("Backend offline or error, using mock data.", error);
             
-            // NOTIFICAÇÃO DE ERRO DE CONEXÃO
+            // NOTIFICAÇÃO DE ERRO DE CONEXÃO - Exibida APENAS se houver erro
             if (!background) {
                 setNotification({ 
                     message: 'Erro de Conexão', 

@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// --- CRITICAL ERROR HANDLING TO PREVENT CRASHES ---
+// --- TRATAMENTO DE ERROS CRÍTICOS (EVITA QUEDA DO SERVIDOR) ---
 process.on('uncaughtException', (err) => {
     console.error('CRITICAL ERROR (Uncaught Exception):', err);
 });
@@ -29,11 +29,11 @@ process.on('unhandledRejection', (reason, promise) => {
 app.use(cors());
 app.use(compression());
 
-// Increase payload limit for images/docs
+// Aumento do limite de payload para uploads de imagens/PDFs
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Serve static files (Frontend build)
+// Servir arquivos estáticos (Build do React)
 app.use(express.static(path.join(__dirname, 'dist'), {
     maxAge: '1y', 
     immutable: true,
@@ -46,46 +46,47 @@ app.use(express.static(path.join(__dirname, 'dist'), {
     }
 }));
 
-// --- DATABASE CONNECTION POOL ---
+// --- POOL DE CONEXÃO COM BANCO DE DADOS ---
 const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'paulocarecateam',
     password: process.env.DB_PASS || 'E6uoXi34ZwwAINCD5T25',
     database: process.env.DB_NAME || 'paulocarecateam',
     waitForConnections: true,
-    connectionLimit: 50, // Increased for stability
+    connectionLimit: 50, // Alto limite para suportar picos de carga
     queueLimit: 0,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
-    connectTimeout: 30000, // 30s timeout
+    connectTimeout: 60000, // Timeout generoso de 60s
     dateStrings: true 
 });
 
-// Pool Error Handler
+// Tratamento de erro do Pool
 pool.on('error', (err) => {
-    console.error('Unexpected error on idle database client', err);
+    console.error('Erro inesperado no cliente de banco de dados ocioso', err);
 });
 
-// --- SCHEMA MIGRATIONS (RUN ONCE ON START) ---
+// --- MIGRAÇÕES DE ESQUEMA (EXECUTA AO INICIAR) ---
 const runMigrations = async () => {
     let conn;
     try {
         conn = await pool.getConnection();
-        console.log('🔄 Running database migrations...');
+        console.log('🔄 Verificando e atualizando esquema do banco...');
 
-        // Helper to add column if missing
+        // Helper para adicionar coluna se não existir
         const addColumnIfMissing = async (table, column, definition) => {
             try {
                 await conn.query(`SELECT ${column} FROM ${table} LIMIT 1`);
             } catch (err) {
+                // ER_BAD_FIELD_ERROR significa que a coluna não existe
                 if (err.code === 'ER_BAD_FIELD_ERROR') {
-                    console.log(`[Migration] Adding ${column} to ${table}...`);
+                    console.log(`[Migração] Adicionando ${column} em ${table}...`);
                     await conn.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
                 }
             }
         };
 
-        // Theme Settings Migrations
+        // Migrações - Configurações do Tema
         await addColumnIfMissing('theme_settings', 'mobileNavVisible', 'BOOLEAN DEFAULT TRUE');
         await addColumnIfMissing('theme_settings', 'heroJson', 'LONGTEXT');
         await addColumnIfMissing('theme_settings', 'mobileNavShowDashboard', 'BOOLEAN DEFAULT TRUE');
@@ -112,44 +113,42 @@ const runMigrations = async () => {
         await addColumnIfMissing('theme_settings', 'appName', 'TEXT');
         await addColumnIfMissing('theme_settings', 'appIcon', 'LONGTEXT');
 
-        // Academies
+        // Academias
         await addColumnIfMissing('academies', 'allowStudentRegistration', 'BOOLEAN DEFAULT TRUE');
 
-        // Students
+        // Alunos
         await addColumnIfMissing('students', 'responsibleName', 'VARCHAR(255)');
         await addColumnIfMissing('students', 'responsiblePhone', 'VARCHAR(255)');
         await addColumnIfMissing('students', 'isSocialProject', 'BOOLEAN DEFAULT FALSE');
         await addColumnIfMissing('students', 'socialProjectName', 'VARCHAR(255)');
         
-        // Ensure Tables Exist
+        // Garantir Existência de Tabelas
         await conn.query(`CREATE TABLE IF NOT EXISTS events (id VARCHAR(255) PRIMARY KEY, academyId VARCHAR(255), title TEXT NOT NULL, description TEXT, imageUrl LONGTEXT, footerType VARCHAR(50) DEFAULT 'text', footerContent LONGTEXT, htmlContent LONGTEXT, startDate DATETIME, endDate DATETIME, active BOOLEAN DEFAULT TRUE, FOREIGN KEY (academyId) REFERENCES academies(id))`);
         await conn.query(`CREATE TABLE IF NOT EXISTS event_recipients (eventId VARCHAR(255), recipientId VARCHAR(255), PRIMARY KEY (eventId, recipientId), FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE)`);
         await conn.query(`CREATE TABLE IF NOT EXISTS schedule_students (scheduleId VARCHAR(255), studentId VARCHAR(255), PRIMARY KEY (scheduleId, studentId), FOREIGN KEY (scheduleId) REFERENCES class_schedules(id), FOREIGN KEY (studentId) REFERENCES students(id))`);
         await conn.query(`CREATE TABLE IF NOT EXISTS expenses (id VARCHAR(255) PRIMARY KEY, academyId VARCHAR(255), description TEXT, amount REAL, date DATE, FOREIGN KEY (academyId) REFERENCES academies(id))`);
 
-        console.log('✅ Migrations completed successfully');
+        console.log('✅ Migrações concluídas com sucesso.');
     } catch (err) {
-        console.error('❌ Migration failed:', err);
+        console.error('❌ Falha na migração:', err);
     } finally {
         if (conn) conn.release();
     }
 };
 
-// Check DB Connection & Start Migrations
+// Verificar Conexão ao Iniciar
 pool.getConnection()
     .then(connection => {
-        // Success case: Silent or standard log
-        console.log('✅ Database connected successfully');
+        console.log('✅ Banco de dados conectado com sucesso!');
         connection.release();
         runMigrations();
     })
     .catch(err => {
-        // Failure case: Explicit notification log as requested
-        console.error('❌ [CRITICAL] DATABASE CONNECTION FAILED:', err.message);
-        console.error('   Please check your .env configuration and ensure MySQL is running.');
+        console.error('❌ [CRÍTICO] FALHA NA CONEXÃO COM BANCO DE DADOS:', err.message);
+        console.error('   Verifique as credenciais no arquivo .env');
     });
 
-// --- HELPER FUNCTIONS ---
+// --- FUNÇÕES AUXILIARES ---
 
 const getFriendlyErrorMessage = (statusDetail) => {
     const errors = {
@@ -171,7 +170,7 @@ const getFriendlyErrorMessage = (statusDetail) => {
     return errors[statusDetail] || `Pagamento recusado: ${statusDetail}`;
 };
 
-// Generic Handlers
+// Handlers Genéricos
 const createHandler = (table) => async (req, res, next) => {
     try {
         const data = req.body;
@@ -194,12 +193,12 @@ const deleteHandler = (table) => async (req, res, next) => {
     } catch (error) { next(error); }
 };
 
-// --- ROUTES ---
+// --- ROTAS DA API ---
 
 // Health Check
 app.get('/api/health', (req, res) => res.status(200).send('OK'));
 
-// Image Serving
+// Servir Imagens do Banco
 app.get('/api/images/:type/:id', async (req, res) => {
     const { type, id } = req.params;
     let table = '';
@@ -229,7 +228,7 @@ app.get('/api/images/:type/:id', async (req, res) => {
     } catch (e) { console.error("Image Error:", e); res.status(500).send('Error serving image'); }
 });
 
-// Public Data
+// Dados Públicos (Landing Page)
 app.get('/api/public-data', async (req, res, next) => {
     try {
         const [[settings], [schedules], [academies]] = await Promise.all([
@@ -305,7 +304,7 @@ app.post('/api/login', async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
-// Register
+// Registro de Academia
 app.post('/api/register', async (req, res, next) => {
     const conn = await pool.getConnection();
     try {
@@ -320,17 +319,18 @@ app.post('/api/register', async (req, res, next) => {
     } catch (error) { await conn.rollback(); next(error); } finally { conn.release(); }
 });
 
-// Initial Data - Optimized with Batching to prevent 502
+// --- ROTA OPTIMIZADA: INITIAL DATA (BATCHING) ---
+// Resolve o problema de 502 Bad Gateway ao dividir as queries em lotes sequenciais
 app.get('/api/initial-data', async (req, res, next) => {
     try {
-        // Fast fail check
+        // 1. Verificação rápida de conexão
         await pool.query('SELECT 1');
 
         const studentCols = "id, name, email, birthDate, cpf, fjjpe_registration, phone, address, beltId, academyId, firstGraduationDate, lastPromotionDate, paymentStatus, paymentDueDateDay, stripes, isCompetitor, lastCompetition, medals, isInstructor, lastSeen, status, responsibleName, responsiblePhone, isSocialProject, socialProjectName, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage, CASE WHEN documents IS NOT NULL AND documents != '' THEN 1 ELSE 0 END as hasDocuments";
         const academyCols = "id, name, address, responsible, responsibleRegistration, professorId, email, settings, status, allowStudentRegistration, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage";
         const professorCols = "id, name, fjjpe_registration, cpf, academyId, graduationId, blackBeltDate, isInstructor, birthDate, status, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage";
 
-        // BATCH 1: Critical Config (Small Data)
+        // LOTE 1: Configurações e Dados Leves (Essencial para renderizar a UI base)
         const [
             [settings],
             [users],
@@ -343,7 +343,7 @@ app.get('/api/initial-data', async (req, res, next) => {
             pool.query('SELECT * FROM graduations'),
         ]);
 
-        // BATCH 2: Operational Data
+        // LOTE 2: Dados Operacionais (Pessoas e Eventos)
         const [
             [students],
             [professors],
@@ -362,7 +362,7 @@ app.get('/api/initial-data', async (req, res, next) => {
             pool.query('SELECT * FROM schedule_students'),
         ]);
 
-        // BATCH 3: Heavy History Data
+        // LOTE 3: Históricos Pesados (Logs, Pagamentos, Frequência)
         const [
             [payments],
             [attendance],
@@ -375,6 +375,7 @@ app.get('/api/initial-data', async (req, res, next) => {
             pool.query('SELECT * FROM expenses WHERE date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)'),
         ]);
 
+        // Processamento de Dados
         const parsedStudents = students.map(s => ({ ...s, imageUrl: s.hasImage ? `/api/images/student/${s.id}` : null, documents: s.hasDocuments ? [] : [], isCompetitor: Boolean(s.isCompetitor), isInstructor: Boolean(s.isInstructor), isSocialProject: Boolean(s.isSocialProject), medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 }, status: s.status || 'active' }));
         parsedStudents.forEach(s => { s.paymentHistory = payments.filter(p => p.studentId === s.id); });
         
@@ -390,7 +391,7 @@ app.get('/api/initial-data', async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
-// --- RESTORED EXPANDED ENDPOINTS ---
+// --- RESTAURAÇÃO DE ENDPOINTS ---
 
 app.post('/api/students', createHandler('students'));
 app.delete('/api/students/:id', deleteHandler('students'));
@@ -783,7 +784,7 @@ app.post('/api/fjjpe/check', async (req, res, next) => {
     }
 });
 
-// Wildcard handler for single page app (React Router)
+// Wildcard para SPA (React Router)
 app.get('*', (req, res) => {
     const indexPath = path.join(__dirname, 'dist', 'index.html');
     if (fs.existsSync(indexPath)) {
@@ -793,7 +794,7 @@ app.get('*', (req, res) => {
     }
 });
 
-// --- GLOBAL ERROR HANDLER TO FORCE JSON ---
+// --- GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
     console.error('Express Global Error:', err);
     res.status(err.status || 500).json({
@@ -806,6 +807,6 @@ const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
-// Keep-Alive Settings to avoid 502 with Nginx
+// Keep-Alive Settings para evitar 502 com Nginx
 server.keepAliveTimeout = 120 * 1000;
 server.headersTimeout = 120 * 1000;
