@@ -53,7 +53,7 @@ const pool = mysql.createPool({
     password: process.env.DB_PASS || 'E6uoXi34ZwwAINCD5T25',
     database: process.env.DB_NAME || 'paulocarecateam',
     waitForConnections: true,
-    connectionLimit: 50, // Increased to handle parallel queries in initial-data
+    connectionLimit: 50, // Increased for stability
     queueLimit: 0,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
@@ -64,7 +64,6 @@ const pool = mysql.createPool({
 // Pool Error Handler
 pool.on('error', (err) => {
     console.error('Unexpected error on idle database client', err);
-    // Don't exit process, pool typically reconnects
 });
 
 // --- SCHEMA MIGRATIONS (RUN ONCE ON START) ---
@@ -79,7 +78,6 @@ const runMigrations = async () => {
             try {
                 await conn.query(`SELECT ${column} FROM ${table} LIMIT 1`);
             } catch (err) {
-                // ER_BAD_FIELD_ERROR means column doesn't exist
                 if (err.code === 'ER_BAD_FIELD_ERROR') {
                     console.log(`[Migration] Adding ${column} to ${table}...`);
                     await conn.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
@@ -137,15 +135,18 @@ const runMigrations = async () => {
     }
 };
 
-// Start Server and Run Migrations
+// Check DB Connection & Start Migrations
 pool.getConnection()
     .then(connection => {
+        // Success case: Silent or standard log
         console.log('✅ Database connected successfully');
         connection.release();
-        runMigrations(); // Run migrations asynchronously
+        runMigrations();
     })
     .catch(err => {
-        console.error('❌ Database connection failed:', err.message);
+        // Failure case: Explicit notification log as requested
+        console.error('❌ [CRITICAL] DATABASE CONNECTION FAILED:', err.message);
+        console.error('   Please check your .env configuration and ensure MySQL is running.');
     });
 
 // --- HELPER FUNCTIONS ---
@@ -362,31 +363,398 @@ app.get('/api/initial-data', async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
+// --- RESTORED EXPANDED ENDPOINTS ---
+
 app.post('/api/students', createHandler('students'));
 app.delete('/api/students/:id', deleteHandler('students'));
-app.post('/api/students/:id/status', async (req, res, next) => { try { await pool.query('UPDATE students SET status = ? WHERE id = ?', [req.body.status, req.params.id]); res.json({ success: true }); } catch (e) { next(e); } });
-app.post('/api/students/promote-instructor', async (req, res, next) => { const { studentId } = req.body; const conn = await pool.getConnection(); try { await conn.beginTransaction(); const [students] = await conn.query('SELECT * FROM students WHERE id = ?', [studentId]); if (students.length === 0) throw new Error("Student not found"); const student = students[0]; await conn.query('UPDATE students SET isInstructor = 1 WHERE id = ?', [studentId]); const professorId = `prof_inst_${student.id}`; const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ?', [student.cpf]); if (existingProf.length === 0) { await conn.query(`INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor, birthDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'active')`, [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl, student.birthDate]); } else { await conn.query('UPDATE professors SET isInstructor = 1, graduationId = ?, academyId = ? WHERE id = ?', [student.beltId, student.academyId, existingProf[0].id]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); next(error); } finally { conn.release(); } });
-app.post('/api/students/demote-instructor', async (req, res, next) => { const { professorId } = req.body; const conn = await pool.getConnection(); try { await conn.beginTransaction(); const [professors] = await conn.query('SELECT cpf, isInstructor FROM professors WHERE id = ?', [professorId]); if (professors.length > 0) { const prof = professors[0]; if (prof.cpf) { await conn.query('UPDATE students SET isInstructor = 0 WHERE cpf = ?', [prof.cpf]); } await conn.query('DELETE FROM professors WHERE id = ?', [professorId]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); next(error); } finally { conn.release(); } });
-app.post('/api/students/payment', async (req, res, next) => { const { studentId, status, amount } = req.body; const conn = await pool.getConnection(); try { await conn.beginTransaction(); await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', [status, studentId]); if (status === 'paid') { await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', [`pay_${Date.now()}`, studentId, new Date(), amount]); } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); next(error); } finally { conn.release(); } });
-app.post('/api/students/auto-promote-stripes', async (req, res, next) => { const conn = await pool.getConnection(); try { await conn.beginTransaction(); const [students] = await conn.query("SELECT * FROM students WHERE status = 'active'"); const [attendance] = await conn.query("SELECT * FROM attendance_records WHERE date >= DATE_SUB(NOW(), INTERVAL 2 YEAR)"); const [graduations] = await conn.query("SELECT * FROM graduations"); let promotedCount = 0; for (const student of students) { const belt = graduations.find(g => g.id === student.beltId); if (!belt) continue; const isBlackBelt = belt.name.toLowerCase().includes('preta') || belt.name.toLowerCase().includes('black'); let monthsThreshold = 6; let maxStripes = 4; if (isBlackBelt) { monthsThreshold = 36; maxStripes = 6; } if (student.stripes >= maxStripes) continue; const lastDateStr = student.lastPromotionDate || student.firstGraduationDate; if (!lastDateStr) continue; const lastDate = new Date(lastDateStr); const today = new Date(); const thresholdDate = new Date(today.getFullYear(), today.getMonth() - monthsThreshold, today.getDate()); if (lastDate <= thresholdDate) { const relevantRecords = attendance.filter(r => r.studentId === student.id && new Date(r.date) >= lastDate); const totalRecords = relevantRecords.length; if (totalRecords === 0) continue; const presentCount = relevantRecords.filter(r => r.status === 'present').length; const attendanceRate = presentCount / totalRecords; if (attendanceRate >= 0.70) { await conn.query('UPDATE students SET stripes = stripes + 1, lastPromotionDate = ? WHERE id = ?', [today.toISOString().split('T')[0], student.id]); promotedCount++; } } } await conn.commit(); res.json({ success: true, message: `${promotedCount} graduados.` }); } catch (error) { await conn.rollback(); next(error); } finally { conn.release(); } });
-app.post('/api/payments/credit-card', async (req, res, next) => { const { studentId, amount, token, paymentMethodId, installments, payer } = req.body; const conn = await pool.getConnection(); try { await conn.beginTransaction(); const [students] = await conn.query('SELECT s.email, s.name, s.academyId FROM students s WHERE s.id = ?', [studentId]); if (students.length === 0) throw new Error("Aluno não encontrado."); const student = students[0]; const [academies] = await conn.query('SELECT settings FROM academies WHERE id = ?', [student.academyId]); let accessToken = null; let surcharge = 0; if (academies.length > 0 && academies[0].settings) { try { const acSettings = JSON.parse(academies[0].settings); if (acSettings.mercadoPagoAccessToken) { accessToken = acSettings.mercadoPagoAccessToken; surcharge = Number(acSettings.creditCardSurcharge || 0); } } catch (e) { } } if (!accessToken) { const [globalSettings] = await conn.query('SELECT mercadoPagoAccessToken, creditCardSurcharge FROM theme_settings LIMIT 1'); if (globalSettings.length > 0) { accessToken = globalSettings[0].mercadoPagoAccessToken; surcharge = Number(globalSettings[0].creditCardSurcharge || 0); } } if (!accessToken) throw new Error("Configuração de pagamento não encontrada."); const totalAmount = Number(amount) + surcharge; const paymentPayload = { transaction_amount: totalAmount, token: token, description: `Mensalidade - ${student.name}`, payment_method_id: paymentMethodId, payer: { email: payer.email || student.email || 'email@naoinformado.com', identification: payer.identification }, installments: Number(installments) || 1 }; const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'X-Idempotency-Key': `pay_${Date.now()}_${studentId}` }, body: JSON.stringify(paymentPayload) }); const mpData = await mpResponse.json(); if (!mpResponse.ok) throw new Error(mpData.message || 'Erro no processamento.'); if (mpData.status !== 'approved') throw new Error(getFriendlyErrorMessage(mpData.status_detail)); await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', ['paid', studentId]); await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', [`pay_mp_${mpData.id}`, studentId, new Date(), totalAmount]); await conn.commit(); res.json({ success: true, paymentId: mpData.id }); } catch (error) { await conn.rollback(); next(error); } finally { conn.release(); } });
+
+app.post('/api/students/:id/status', async (req, res, next) => {
+    try {
+        await pool.query('UPDATE students SET status = ? WHERE id = ?', [req.body.status, req.params.id]);
+        res.json({ success: true });
+    } catch (e) {
+        next(e);
+    }
+});
+
+app.post('/api/students/promote-instructor', async (req, res, next) => {
+    const { studentId } = req.body;
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const [students] = await conn.query('SELECT * FROM students WHERE id = ?', [studentId]);
+        if (students.length === 0) throw new Error("Student not found");
+        const student = students[0];
+        
+        await conn.query('UPDATE students SET isInstructor = 1 WHERE id = ?', [studentId]);
+        
+        const professorId = `prof_inst_${student.id}`;
+        const [existingProf] = await conn.query('SELECT id FROM professors WHERE cpf = ?', [student.cpf]);
+        
+        if (existingProf.length === 0) {
+            await conn.query(
+                `INSERT INTO professors (id, name, fjjpe_registration, cpf, academyId, graduationId, imageUrl, isInstructor, birthDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'active')`, 
+                [professorId, student.name, student.fjjpe_registration, student.cpf, student.academyId, student.beltId, student.imageUrl, student.birthDate]
+            );
+        } else {
+            await conn.query('UPDATE professors SET isInstructor = 1, graduationId = ?, academyId = ? WHERE id = ?', [student.beltId, student.academyId, existingProf[0].id]);
+        }
+        await conn.commit();
+        res.json({ success: true });
+    } catch (error) {
+        await conn.rollback();
+        next(error);
+    } finally {
+        conn.release();
+    }
+});
+
+app.post('/api/students/demote-instructor', async (req, res, next) => {
+    const { professorId } = req.body;
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const [professors] = await conn.query('SELECT cpf, isInstructor FROM professors WHERE id = ?', [professorId]);
+        if (professors.length > 0) {
+            const prof = professors[0];
+            if (prof.cpf) {
+                await conn.query('UPDATE students SET isInstructor = 0 WHERE cpf = ?', [prof.cpf]);
+            }
+            await conn.query('DELETE FROM professors WHERE id = ?', [professorId]);
+        }
+        await conn.commit();
+        res.json({ success: true });
+    } catch (error) {
+        await conn.rollback();
+        next(error);
+    } finally {
+        conn.release();
+    }
+});
+
+app.post('/api/students/payment', async (req, res, next) => {
+    const { studentId, status, amount } = req.body;
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', [status, studentId]);
+        if (status === 'paid') {
+            await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', [`pay_${Date.now()}`, studentId, new Date(), amount]);
+        }
+        await conn.commit();
+        res.json({ success: true });
+    } catch (error) {
+        await conn.rollback();
+        next(error);
+    } finally {
+        conn.release();
+    }
+});
+
+app.post('/api/students/auto-promote-stripes', async (req, res, next) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const [students] = await conn.query("SELECT * FROM students WHERE status = 'active'");
+        const [attendance] = await conn.query("SELECT * FROM attendance_records WHERE date >= DATE_SUB(NOW(), INTERVAL 2 YEAR)");
+        const [graduations] = await conn.query("SELECT * FROM graduations");
+        let promotedCount = 0;
+        
+        for (const student of students) {
+            const belt = graduations.find(g => g.id === student.beltId);
+            if (!belt) continue;
+            
+            const isBlackBelt = belt.name.toLowerCase().includes('preta') || belt.name.toLowerCase().includes('black');
+            let monthsThreshold = 6;
+            let maxStripes = 4;
+            
+            if (isBlackBelt) { monthsThreshold = 36; maxStripes = 6; }
+            if (student.stripes >= maxStripes) continue;
+            
+            const lastDateStr = student.lastPromotionDate || student.firstGraduationDate;
+            if (!lastDateStr) continue;
+            
+            const lastDate = new Date(lastDateStr);
+            const today = new Date();
+            const thresholdDate = new Date(today.getFullYear(), today.getMonth() - monthsThreshold, today.getDate());
+            
+            if (lastDate <= thresholdDate) {
+                const relevantRecords = attendance.filter(r => r.studentId === student.id && new Date(r.date) >= lastDate);
+                const totalRecords = relevantRecords.length;
+                if (totalRecords === 0) continue;
+                
+                const presentCount = relevantRecords.filter(r => r.status === 'present').length;
+                const attendanceRate = presentCount / totalRecords;
+                
+                if (attendanceRate >= 0.70) {
+                    await conn.query('UPDATE students SET stripes = stripes + 1, lastPromotionDate = ? WHERE id = ?', [today.toISOString().split('T')[0], student.id]);
+                    promotedCount++;
+                }
+            }
+        }
+        await conn.commit();
+        res.json({ success: true, message: `${promotedCount} graduados.` });
+    } catch (error) {
+        await conn.rollback();
+        next(error);
+    } finally {
+        conn.release();
+    }
+});
+
+app.post('/api/payments/credit-card', async (req, res, next) => {
+    const { studentId, amount, token, paymentMethodId, installments, payer } = req.body;
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const [students] = await conn.query('SELECT s.email, s.name, s.academyId FROM students s WHERE s.id = ?', [studentId]);
+        if (students.length === 0) throw new Error("Aluno não encontrado.");
+        const student = students[0];
+        
+        const [academies] = await conn.query('SELECT settings FROM academies WHERE id = ?', [student.academyId]);
+        let accessToken = null;
+        let surcharge = 0;
+        
+        if (academies.length > 0 && academies[0].settings) {
+            try {
+                const acSettings = JSON.parse(academies[0].settings);
+                if (acSettings.mercadoPagoAccessToken) {
+                    accessToken = acSettings.mercadoPagoAccessToken;
+                    surcharge = Number(acSettings.creditCardSurcharge || 0);
+                }
+            } catch (e) { }
+        }
+        
+        if (!accessToken) {
+            const [globalSettings] = await conn.query('SELECT mercadoPagoAccessToken, creditCardSurcharge FROM theme_settings LIMIT 1');
+            if (globalSettings.length > 0) {
+                accessToken = globalSettings[0].mercadoPagoAccessToken;
+                surcharge = Number(globalSettings[0].creditCardSurcharge || 0);
+            }
+        }
+        
+        if (!accessToken) throw new Error("Configuração de pagamento não encontrada.");
+        
+        const totalAmount = Number(amount) + surcharge;
+        const paymentPayload = {
+            transaction_amount: totalAmount,
+            token: token,
+            description: `Mensalidade - ${student.name}`,
+            payment_method_id: paymentMethodId,
+            payer: { email: payer.email || student.email || 'email@naoinformado.com', identification: payer.identification },
+            installments: Number(installments) || 1
+        };
+        
+        const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'X-Idempotency-Key': `pay_${Date.now()}_${studentId}` },
+            body: JSON.stringify(paymentPayload)
+        });
+        
+        const mpData = await mpResponse.json();
+        if (!mpResponse.ok) throw new Error(mpData.message || 'Erro no processamento.');
+        if (mpData.status !== 'approved') throw new Error(getFriendlyErrorMessage(mpData.status_detail));
+        
+        await conn.query('UPDATE students SET paymentStatus = ? WHERE id = ?', ['paid', studentId]);
+        await conn.query('INSERT INTO payment_history (id, studentId, date, amount) VALUES (?, ?, ?, ?)', [`pay_mp_${mpData.id}`, studentId, new Date(), totalAmount]);
+        await conn.commit();
+        res.json({ success: true, paymentId: mpData.id });
+    } catch (error) {
+        await conn.rollback();
+        next(error);
+    } finally {
+        conn.release();
+    }
+});
+
 app.post('/api/professors', createHandler('professors'));
 app.delete('/api/professors/:id', deleteHandler('professors'));
-app.post('/api/professors/:id/status', async (req, res, next) => { try { await pool.query('UPDATE professors SET status = ? WHERE id = ?', [req.body.status, req.params.id]); res.json({ success: true }); } catch (e) { next(e); } });
-app.post('/api/schedules', async (req, res, next) => { const { assistantIds, studentIds, ...schedule } = req.body; const sanitize = (val) => (val === '' || val === undefined ? null : val); const conn = await pool.getConnection(); try { await conn.beginTransaction(); const id = schedule.id || `schedule_${Date.now()}`; await conn.query(`INSERT INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId, observations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE className = VALUES(className), dayOfWeek = VALUES(dayOfWeek), startTime = VALUES(startTime), endTime = VALUES(endTime), professorId = VALUES(professorId), academyId = VALUES(academyId), requiredGraduationId = VALUES(requiredGraduationId), observations = VALUES(observations)`, [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, sanitize(schedule.professorId), sanitize(schedule.academyId), sanitize(schedule.requiredGraduationId), sanitize(schedule.observations)]); await conn.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [id]); if (assistantIds && assistantIds.length > 0) { for (const assistId of assistantIds) { await conn.query('INSERT INTO schedule_assistants (scheduleId, assistantId) VALUES (?, ?)', [id, assistId]); } } await conn.query('DELETE FROM schedule_students WHERE scheduleId = ?', [id]); if (studentIds && studentIds.length > 0) { for (const studId of studentIds) { await conn.query('INSERT INTO schedule_students (scheduleId, studentId) VALUES (?, ?)', [id, studId]); } } await conn.commit(); res.json({ success: true }); } catch (error) { await conn.rollback(); next(error); } finally { conn.release(); } });
-app.delete('/api/schedules/:id', async (req, res, next) => { try { await pool.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [req.params.id]); await pool.query('DELETE FROM schedule_students WHERE scheduleId = ?', [req.params.id]); await pool.query('DELETE FROM class_schedules WHERE id = ?', [req.params.id]); res.json({ success: true }); } catch(e) { next(e); } });
+
+app.post('/api/professors/:id/status', async (req, res, next) => {
+    try {
+        await pool.query('UPDATE professors SET status = ? WHERE id = ?', [req.body.status, req.params.id]);
+        res.json({ success: true });
+    } catch (e) {
+        next(e);
+    }
+});
+
+app.post('/api/schedules', async (req, res, next) => {
+    const { assistantIds, studentIds, ...schedule } = req.body;
+    const sanitize = (val) => (val === '' || val === undefined ? null : val);
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const id = schedule.id || `schedule_${Date.now()}`;
+        
+        await conn.query(
+            `INSERT INTO class_schedules (id, className, dayOfWeek, startTime, endTime, professorId, academyId, requiredGraduationId, observations) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE className = VALUES(className), dayOfWeek = VALUES(dayOfWeek), startTime = VALUES(startTime), endTime = VALUES(endTime), professorId = VALUES(professorId), academyId = VALUES(academyId), requiredGraduationId = VALUES(requiredGraduationId), observations = VALUES(observations)`, 
+            [id, schedule.className, schedule.dayOfWeek, schedule.startTime, schedule.endTime, sanitize(schedule.professorId), sanitize(schedule.academyId), sanitize(schedule.requiredGraduationId), sanitize(schedule.observations)]
+        );
+        
+        await conn.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [id]);
+        if (assistantIds && assistantIds.length > 0) {
+            for (const assistId of assistantIds) {
+                await conn.query('INSERT INTO schedule_assistants (scheduleId, assistantId) VALUES (?, ?)', [id, assistId]);
+            }
+        }
+        
+        await conn.query('DELETE FROM schedule_students WHERE scheduleId = ?', [id]);
+        if (studentIds && studentIds.length > 0) {
+            for (const studId of studentIds) {
+                await conn.query('INSERT INTO schedule_students (scheduleId, studentId) VALUES (?, ?)', [id, studId]);
+            }
+        }
+        
+        await conn.commit();
+        res.json({ success: true });
+    } catch (error) {
+        await conn.rollback();
+        next(error);
+    } finally {
+        conn.release();
+    }
+});
+
+app.delete('/api/schedules/:id', async (req, res, next) => {
+    try {
+        await pool.query('DELETE FROM schedule_assistants WHERE scheduleId = ?', [req.params.id]);
+        await pool.query('DELETE FROM schedule_students WHERE scheduleId = ?', [req.params.id]);
+        await pool.query('DELETE FROM class_schedules WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch(e) {
+        next(e);
+    }
+});
+
 app.post('/api/graduations', createHandler('graduations'));
 app.delete('/api/graduations/:id', deleteHandler('graduations'));
-app.post('/api/graduations/reorder', async (req, res, next) => { const items = req.body; const conn = await pool.getConnection(); try { await conn.beginTransaction(); for (const item of items) { await conn.query('UPDATE graduations SET `rank` = ? WHERE id = ?', [item.rank, item.id]); } await conn.commit(); res.json({ success: true }); } catch(e) { await conn.rollback(); next(e); } finally { conn.release(); } });
-app.post('/api/settings', async (req, res, next) => { const s = req.body; const academyId = req.query.academyId; try { if (academyId) { const settingsJson = JSON.stringify(s); await pool.query('UPDATE academies SET settings = ? WHERE id = ?', [settingsJson, academyId]); } else { await pool.query(`UPDATE theme_settings SET systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?, useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?, publicPageEnabled=?, registrationEnabled=?, heroHtml=?, heroJson=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?, socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?, mercadoPagoAccessToken=?, mercadoPagoPublicKey=?, mercadoPagoClientId=?, mercadoPagoClientSecret=?, efiClientId=?, efiClientSecret=?, whatsappMessageTemplate=?, mobileNavShowDashboard=?, mobileNavShowSchedule=?, mobileNavShowStudents=?, mobileNavShowProfile=?, mobileNavBgColor=?, mobileNavActiveColor=?, mobileNavInactiveColor=?, mobileNavHeight=?, mobileNavIconSize=?, mobileNavBorderRadius=?, mobileNavBottomMargin=?, mobileNavFloating=?, mobileNavVisible=?, creditCardEnabled=?, efiEnabled=?, efiPixKey=?, efiPixCert=?, creditCardSurcharge=?, appName=?, appIcon=? WHERE id = 1`, [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2, s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount, s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.heroJson, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs, s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled, s.mercadoPagoAccessToken, s.mercadoPagoPublicKey, s.mercadoPagoClientId, s.mercadoPagoClientSecret, s.efiClientId, s.efiClientSecret, s.whatsappMessageTemplate, s.mobileNavShowDashboard, s.mobileNavShowSchedule, s.mobileNavShowStudents, s.mobileNavShowProfile, s.mobileNavBgColor, s.mobileNavActiveColor, s.mobileNavInactiveColor, s.mobileNavHeight, s.mobileNavIconSize, s.mobileNavBorderRadius, s.mobileNavBottomMargin, s.mobileNavFloating, s.mobileNavVisible, s.creditCardEnabled, s.efiEnabled, s.efiPixKey, s.efiPixCert, s.creditCardSurcharge, s.appName, s.appIcon]); } res.json({ success: true }); } catch(e) { next(e); } });
+
+app.post('/api/graduations/reorder', async (req, res, next) => {
+    const items = req.body;
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        for (const item of items) {
+            await conn.query('UPDATE graduations SET `rank` = ? WHERE id = ?', [item.rank, item.id]);
+        }
+        await conn.commit();
+        res.json({ success: true });
+    } catch(e) {
+        await conn.rollback();
+        next(e);
+    } finally {
+        conn.release();
+    }
+});
+
+app.post('/api/settings', async (req, res, next) => {
+    const s = req.body;
+    const academyId = req.query.academyId;
+    try {
+        if (academyId) {
+            const settingsJson = JSON.stringify(s);
+            await pool.query('UPDATE academies SET settings = ? WHERE id = ?', [settingsJson, academyId]);
+        } else {
+            await pool.query(
+                `UPDATE theme_settings SET systemName=?, logoUrl=?, primaryColor=?, secondaryColor=?, backgroundColor=?, cardBackgroundColor=?, buttonColor=?, buttonTextColor=?, iconColor=?, chartColor1=?, chartColor2=?, useGradient=?, reminderDaysBeforeDue=?, overdueDaysAfterDue=?, theme=?, monthlyFeeAmount=?, publicPageEnabled=?, registrationEnabled=?, heroHtml=?, heroJson=?, aboutHtml=?, branchesHtml=?, footerHtml=?, customCss=?, customJs=?, socialLoginEnabled=?, googleClientId=?, facebookAppId=?, pixKey=?, pixHolderName=?, copyrightText=?, systemVersion=?, studentProfileEditEnabled=?, mercadoPagoAccessToken=?, mercadoPagoPublicKey=?, mercadoPagoClientId=?, mercadoPagoClientSecret=?, efiClientId=?, efiClientSecret=?, whatsappMessageTemplate=?, mobileNavShowDashboard=?, mobileNavShowSchedule=?, mobileNavShowStudents=?, mobileNavShowProfile=?, mobileNavBgColor=?, mobileNavActiveColor=?, mobileNavInactiveColor=?, mobileNavHeight=?, mobileNavIconSize=?, mobileNavBorderRadius=?, mobileNavBottomMargin=?, mobileNavFloating=?, mobileNavVisible=?, creditCardEnabled=?, efiEnabled=?, efiPixKey=?, efiPixCert=?, creditCardSurcharge=?, appName=?, appIcon=? WHERE id = 1`, 
+                [s.systemName, s.logoUrl, s.primaryColor, s.secondaryColor, s.backgroundColor, s.cardBackgroundColor, s.buttonColor, s.buttonTextColor, s.iconColor, s.chartColor1, s.chartColor2, s.useGradient, s.reminderDaysBeforeDue, s.overdueDaysAfterDue, s.theme, s.monthlyFeeAmount, s.publicPageEnabled, s.registrationEnabled, s.heroHtml, s.heroJson, s.aboutHtml, s.branchesHtml, s.footerHtml, s.customCss, s.customJs, s.socialLoginEnabled, s.googleClientId, s.facebookAppId, s.pixKey, s.pixHolderName, s.copyrightText, s.systemVersion, s.studentProfileEditEnabled, s.mercadoPagoAccessToken, s.mercadoPagoPublicKey, s.mercadoPagoClientId, s.mercadoPagoClientSecret, s.efiClientId, s.efiClientSecret, s.whatsappMessageTemplate, s.mobileNavShowDashboard, s.mobileNavShowSchedule, s.mobileNavShowStudents, s.mobileNavShowProfile, s.mobileNavBgColor, s.mobileNavActiveColor, s.mobileNavInactiveColor, s.mobileNavHeight, s.mobileNavIconSize, s.mobileNavBorderRadius, s.mobileNavBottomMargin, s.mobileNavFloating, s.mobileNavVisible, s.creditCardEnabled, s.efiEnabled, s.efiPixKey, s.efiPixCert, s.creditCardSurcharge, s.appName, s.appIcon]
+            );
+        }
+        res.json({ success: true });
+    } catch(e) {
+        next(e);
+    }
+});
+
 app.post('/api/attendance', createHandler('attendance_records'));
 app.post('/api/academies', createHandler('academies'));
-app.post('/api/academies/:id/status', async (req, res, next) => { try { await pool.query('UPDATE academies SET status = ? WHERE id = ?', [req.body.status, req.params.id]); res.json({ success: true }); } catch (e) { next(e); } });
-app.post('/api/events', async (req, res, next) => { const conn = await pool.getConnection(); try { await conn.beginTransaction(); const { targetAudience, ...data } = req.body; if (data.startDate) data.startDate = new Date(data.startDate).toISOString().slice(0, 19).replace('T', ' '); if (data.endDate) data.endDate = new Date(data.endDate).toISOString().slice(0, 19).replace('T', ' '); if (data.active !== undefined) data.active = data.active ? 1 : 0; let eventId = data.id; if (eventId) { const updateFields = Object.keys(data).filter(k => k !== 'id').map(key => `\`${key}\` = ?`).join(', '); const updateValues = Object.keys(data).filter(k => k !== 'id').map(k => data[k]); await conn.query(`UPDATE events SET ${updateFields} WHERE id = ?`, [...updateValues, eventId]); } else { eventId = `evt_${Date.now()}`; data.id = eventId; const keys = Object.keys(data).map(key => `\`${key}\``).join(','); const placeholders = Object.keys(data).map(() => '?').join(','); const values = Object.values(data); await conn.query(`INSERT INTO events (${keys}) VALUES (${placeholders})`, values); } await conn.query('DELETE FROM event_recipients WHERE eventId = ?', [eventId]); if (targetAudience && Array.isArray(targetAudience) && targetAudience.length > 0) { for (const recipientId of targetAudience) { await conn.query('INSERT INTO event_recipients (eventId, recipientId) VALUES (?, ?)', [eventId, recipientId]); } } await conn.commit(); res.json({ success: true }); } catch (e) { await conn.rollback(); next(e); } finally { conn.release(); } });
+
+app.post('/api/academies/:id/status', async (req, res, next) => {
+    try {
+        await pool.query('UPDATE academies SET status = ? WHERE id = ?', [req.body.status, req.params.id]);
+        res.json({ success: true });
+    } catch (e) {
+        next(e);
+    }
+});
+
+app.post('/api/events', async (req, res, next) => {
+    const conn = await pool.getConnection();
+    try {
+        await conn.beginTransaction();
+        const { targetAudience, ...data } = req.body;
+        if (data.startDate) data.startDate = new Date(data.startDate).toISOString().slice(0, 19).replace('T', ' ');
+        if (data.endDate) data.endDate = new Date(data.endDate).toISOString().slice(0, 19).replace('T', ' ');
+        if (data.active !== undefined) data.active = data.active ? 1 : 0;
+        
+        let eventId = data.id;
+        if (eventId) {
+            const updateFields = Object.keys(data).filter(k => k !== 'id').map(key => `\`${key}\` = ?`).join(', ');
+            const updateValues = Object.keys(data).filter(k => k !== 'id').map(k => data[k]);
+            await conn.query(`UPDATE events SET ${updateFields} WHERE id = ?`, [...updateValues, eventId]);
+        } else {
+            eventId = `evt_${Date.now()}`;
+            data.id = eventId;
+            const keys = Object.keys(data).map(key => `\`${key}\``).join(',');
+            const placeholders = Object.keys(data).map(() => '?').join(',');
+            const values = Object.values(data);
+            await conn.query(`INSERT INTO events (${keys}) VALUES (${placeholders})`, values);
+        }
+        
+        await conn.query('DELETE FROM event_recipients WHERE eventId = ?', [eventId]);
+        if (targetAudience && Array.isArray(targetAudience) && targetAudience.length > 0) {
+            for (const recipientId of targetAudience) {
+                await conn.query('INSERT INTO event_recipients (eventId, recipientId) VALUES (?, ?)', [eventId, recipientId]);
+            }
+        }
+        await conn.commit();
+        res.json({ success: true });
+    } catch (e) {
+        await conn.rollback();
+        next(e);
+    } finally {
+        conn.release();
+    }
+});
+
 app.delete('/api/events/:id', deleteHandler('events'));
-app.post('/api/events/:id/status', async (req, res, next) => { try { await pool.query('UPDATE events SET active = ? WHERE id = ?', [req.body.active ? 1 : 0, req.params.id]); res.json({ success: true }); } catch (e) { next(e); } });
+
+app.post('/api/events/:id/status', async (req, res, next) => {
+    try {
+        await pool.query('UPDATE events SET active = ? WHERE id = ?', [req.body.active ? 1 : 0, req.params.id]);
+        res.json({ success: true });
+    } catch (e) {
+        next(e);
+    }
+});
+
 app.post('/api/expenses', createHandler('expenses'));
-app.post('/api/fjjpe/check', async (req, res, next) => { const { id, cpf } = req.body; if (!id || id === '0000') { return res.json({ status: 'missing', message: 'Sem FJJPE' }); } try { const cleanCpf = cpf.replace(/\D/g, ''); const params = new URLSearchParams(); params.append('id', id); params.append('cpf', cleanCpf); params.append('ok', 'Acessar '); const loginResponse = await fetch('https://fjjpe.com.br/fjjpe/verifica_usuario.php', { method: 'POST', body: params, headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, redirect: 'manual' }); const locationHeader = loginResponse.headers.get('location'); if (locationHeader && locationHeader.includes('index.php')) { return res.json({ status: 'inactive', message: 'Inativo na FJJPE' }); } return res.json({ status: 'active', message: 'Ativo na FJJPE' }); } catch (e) { next(e); } });
+
+app.post('/api/fjjpe/check', async (req, res, next) => {
+    const { id, cpf } = req.body;
+    if (!id || id === '0000') { return res.json({ status: 'missing', message: 'Sem FJJPE' }); }
+    try {
+        const cleanCpf = cpf.replace(/\D/g, '');
+        const params = new URLSearchParams();
+        params.append('id', id);
+        params.append('cpf', cleanCpf);
+        params.append('ok', 'Acessar ');
+        const loginResponse = await fetch('https://fjjpe.com.br/fjjpe/verifica_usuario.php', {
+            method: 'POST',
+            body: params,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' },
+            redirect: 'manual'
+        });
+        const locationHeader = loginResponse.headers.get('location');
+        if (locationHeader && locationHeader.includes('index.php')) {
+            return res.json({ status: 'inactive', message: 'Inativo na FJJPE' });
+        }
+        return res.json({ status: 'active', message: 'Ativo na FJJPE' });
+    } catch (e) {
+        next(e);
+    }
+});
 
 // Wildcard handler for single page app (React Router)
 app.get('*', (req, res) => {
