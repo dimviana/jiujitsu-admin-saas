@@ -320,32 +320,59 @@ app.post('/api/register', async (req, res, next) => {
     } catch (error) { await conn.rollback(); next(error); } finally { conn.release(); }
 });
 
-// Initial Data
+// Initial Data - Optimized with Batching to prevent 502
 app.get('/api/initial-data', async (req, res, next) => {
     try {
+        // Fast fail check
+        await pool.query('SELECT 1');
+
         const studentCols = "id, name, email, birthDate, cpf, fjjpe_registration, phone, address, beltId, academyId, firstGraduationDate, lastPromotionDate, paymentStatus, paymentDueDateDay, stripes, isCompetitor, lastCompetition, medals, isInstructor, lastSeen, status, responsibleName, responsiblePhone, isSocialProject, socialProjectName, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage, CASE WHEN documents IS NOT NULL AND documents != '' THEN 1 ELSE 0 END as hasDocuments";
         const academyCols = "id, name, address, responsible, responsibleRegistration, professorId, email, settings, status, allowStudentRegistration, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage";
         const professorCols = "id, name, fjjpe_registration, cpf, academyId, graduationId, blackBeltDate, isInstructor, birthDate, status, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage";
 
-        // Execute queries in parallel
+        // BATCH 1: Critical Config (Small Data)
         const [
-            [students], [payments], [users], [academies], [graduations], [professors], [schedules], [assistants], [enrolledStudents], [attendance], [logs], [expenses], [events], [recipients], [settings]
+            [settings],
+            [users],
+            [academies],
+            [graduations]
         ] = await Promise.all([
-            pool.query(`SELECT ${studentCols} FROM students`),
-            pool.query('SELECT * FROM payment_history WHERE date >= DATE_SUB(NOW(), INTERVAL 1 YEAR)'), 
+            pool.query('SELECT * FROM theme_settings LIMIT 1'),
             pool.query('SELECT id, name, email, role, academyId, studentId, birthDate FROM users'),
             pool.query(`SELECT ${academyCols} FROM academies`),
             pool.query('SELECT * FROM graduations'),
+        ]);
+
+        // BATCH 2: Operational Data
+        const [
+            [students],
+            [professors],
+            [events],
+            [recipients],
+            [schedules],
+            [assistants],
+            [enrolledStudents]
+        ] = await Promise.all([
+            pool.query(`SELECT ${studentCols} FROM students`),
             pool.query(`SELECT ${professorCols} FROM professors`),
+            pool.query('SELECT id, academyId, title, description, footerType, footerContent, startDate, endDate, active, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage FROM events'),
+            pool.query('SELECT * FROM event_recipients'),
             pool.query('SELECT * FROM class_schedules'),
             pool.query('SELECT * FROM schedule_assistants'),
             pool.query('SELECT * FROM schedule_students'),
+        ]);
+
+        // BATCH 3: Heavy History Data
+        const [
+            [payments],
+            [attendance],
+            [logs],
+            [expenses]
+        ] = await Promise.all([
+            pool.query('SELECT * FROM payment_history WHERE date >= DATE_SUB(NOW(), INTERVAL 1 YEAR)'), 
             pool.query('SELECT * FROM attendance_records WHERE date >= DATE_SUB(NOW(), INTERVAL 6 MONTH)'),
             pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 50'), 
             pool.query('SELECT * FROM expenses WHERE date >= DATE_SUB(NOW(), INTERVAL 12 MONTH)'),
-            pool.query('SELECT id, academyId, title, description, footerType, footerContent, startDate, endDate, active, CASE WHEN imageUrl IS NOT NULL AND imageUrl != '' THEN 1 ELSE 0 END as hasImage FROM events'),
-            pool.query('SELECT * FROM event_recipients'),
-            pool.query('SELECT * FROM theme_settings LIMIT 1')
         ]);
 
         const parsedStudents = students.map(s => ({ ...s, imageUrl: s.hasImage ? `/api/images/student/${s.id}` : null, documents: s.hasDocuments ? [] : [], isCompetitor: Boolean(s.isCompetitor), isInstructor: Boolean(s.isInstructor), isSocialProject: Boolean(s.isSocialProject), medals: s.medals ? JSON.parse(s.medals) : { gold: 0, silver: 0, bronze: 0 }, status: s.status || 'active' }));
